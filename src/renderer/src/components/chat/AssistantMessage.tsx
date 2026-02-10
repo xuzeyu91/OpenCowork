@@ -211,6 +211,8 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults }: A
                     output={liveTc?.output ?? result?.content}
                     status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
                     error={liveTc?.error}
+                    startedAt={liveTc?.startedAt}
+                    completedAt={liveTc?.completedAt}
                   />
                 )
               }

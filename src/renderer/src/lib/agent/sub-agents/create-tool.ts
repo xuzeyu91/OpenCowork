@@ -83,7 +83,22 @@ export function createSubAgentTool(
         onEvent,
       })
 
-      // Build metadata for historical rendering
+      // Build metadata for historical rendering (truncate large outputs to prevent bloat)
+      const MAX_OUTPUT = 4000
+      const MAX_INPUT_VALUE = 2000
+      const truncStr = (s: string | undefined, max: number): string | undefined => {
+        if (!s || s.length <= max) return s
+        return s.slice(0, max) + `\n... [truncated, ${s.length} chars total]`
+      }
+      const truncInput = (inp: Record<string, unknown>): Record<string, unknown> => {
+        const out: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(inp)) {
+          out[k] = typeof v === 'string' && v.length > MAX_INPUT_VALUE
+            ? v.slice(0, MAX_INPUT_VALUE) + `... [${v.length} chars]`
+            : v
+        }
+        return out
+      }
       const meta: SubAgentMeta = {
         iterations: result.iterations,
         elapsed: Date.now() - startedAt,
@@ -91,9 +106,9 @@ export function createSubAgentTool(
         toolCalls: Array.from(collectedToolCalls.values()).map((tc) => ({
           id: tc.id,
           name: tc.name,
-          input: tc.input,
+          input: truncInput(tc.input),
           status: tc.status,
-          output: tc.output,
+          output: truncStr(tc.output, MAX_OUTPUT),
           error: tc.error,
           startedAt: tc.startedAt,
           completedAt: tc.completedAt,

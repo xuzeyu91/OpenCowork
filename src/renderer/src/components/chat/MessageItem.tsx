@@ -17,14 +17,24 @@ function formatTime(ts: number): string {
 export function MessageItem({ message, isStreaming, isLastUserMessage, onEditUserMessage, toolResults }: MessageItemProps): React.JSX.Element | null {
   const inner = (() => {
     switch (message.role) {
-      case 'user':
+      case 'user': {
+        // Extract user text from complex content (ignore tool_result blocks)
+        let userText: string
+        if (typeof message.content === 'string') {
+          userText = message.content
+        } else {
+          const textBlocks = message.content.filter((b) => b.type === 'text')
+          userText = textBlocks.length > 0 ? textBlocks.map((b) => b.text).join('\n') : ''
+        }
+        if (!userText) return null
         return (
           <UserMessage
-            content={typeof message.content === 'string' ? message.content : '[complex content]'}
+            content={userText}
             isLast={isLastUserMessage}
             onEdit={onEditUserMessage}
           />
         )
+      }
       case 'assistant':
         return <AssistantMessage content={message.content} isStreaming={isStreaming} usage={message.usage} toolResults={toolResults} />
       default:

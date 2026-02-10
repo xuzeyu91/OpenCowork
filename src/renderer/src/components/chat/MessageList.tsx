@@ -165,8 +165,17 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
           </div>
         )}
         {messages.map((msg, idx) => {
-          const isLastUser = !streamingMessageId && msg.role === 'user' &&
-            !messages.slice(idx + 1).some((m) => m.role === 'user')
+          // Hide intermediate user messages that only contain tool_result blocks
+          // (they are API-level responses, not real user input — output already shown in ToolCallCard)
+          if (msg.role === 'user' && Array.isArray(msg.content)) {
+            const hasOnlyToolResults = msg.content.every((b) => b.type === 'tool_result')
+            if (hasOnlyToolResults) return null
+          }
+          // Check if this is the last *real* user message (exclude tool_result-only messages)
+          const isRealUserMsg = (m: typeof msg): boolean =>
+            m.role === 'user' && (typeof m.content === 'string' || m.content.some((b) => b.type === 'text'))
+          const isLastUser = !streamingMessageId && isRealUserMsg(msg) &&
+            !messages.slice(idx + 1).some((m) => isRealUserMsg(m))
           // Build tool results map for assistant messages (from next user message)
           let toolResults: Map<string, { content: string; isError?: boolean }> | undefined
           if (msg.role === 'assistant' && Array.isArray(msg.content)) {

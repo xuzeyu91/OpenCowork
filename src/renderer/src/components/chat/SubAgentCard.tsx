@@ -200,6 +200,8 @@ export function SubAgentCard({ name, input, output, isLive = false }: SubAgentCa
                     output={tc.output}
                     status={tc.status}
                     error={tc.error}
+                    startedAt={tc.startedAt}
+                    completedAt={tc.completedAt}
                   />
                 ))}
               </div>
@@ -231,6 +233,8 @@ export function SubAgentCard({ name, input, output, isLive = false }: SubAgentCa
                     output={tc.output}
                     status={tc.status === 'error' ? 'error' : 'completed'}
                     error={tc.error}
+                    startedAt={tc.startedAt}
+                    completedAt={tc.completedAt}
                   />
                 ))}
               </div>

@@ -13,6 +13,8 @@ interface ToolCallCardProps {
   output?: string
   status: ToolCallStatus | 'completed'
   error?: string
+  startedAt?: number
+  completedAt?: number
 }
 
 function StatusIcon({ status }: { status: ToolCallCardProps['status'] }): React.JSX.Element {
@@ -199,7 +201,31 @@ function BashOutputBlock({ command, output }: { command: string; output: string 
   )
 }
 
-function GrepOutputBlock({ output }: { output: string; pattern?: string }): React.JSX.Element {
+function HighlightText({ text, pattern }: { text: string; pattern?: string }): React.JSX.Element {
+  if (!pattern) return <>{text}</>
+  try {
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`(${escaped})`, 'gi')
+    const parts = text.split(re)
+    if (parts.length <= 1) return <>{text}</>
+    // split with capture group: odd indices are matched groups
+    return (
+      <>
+        {parts.map((part, i) =>
+          i % 2 === 1 ? (
+            <span key={i} className="bg-amber-500/25 text-amber-300 rounded-sm px-px">{part}</span>
+          ) : (
+            <span key={i}>{part}</span>
+          )
+        )}
+      </>
+    )
+  } catch {
+    return <>{text}</>
+  }
+}
+
+function GrepOutputBlock({ output, pattern }: { output: string; pattern?: string }): React.JSX.Element {
   const parsed = React.useMemo(() => {
     try { return JSON.parse(output) as Array<{ file: string; line: number; text: string }> } catch { return null }
   }, [output])
@@ -221,6 +247,7 @@ function GrepOutputBlock({ output }: { output: string; pattern?: string }): Reac
       <div className="mb-1 flex items-center gap-1.5">
         <Search className="size-3 text-amber-400" />
         <p className="text-xs font-medium text-muted-foreground">Grep Results</p>
+        {pattern && <span className="text-[9px] font-mono text-amber-400/50">/{pattern}/</span>}
         <span className="text-[9px] text-muted-foreground/40">{parsed.length} matches in {groups.length} files</span>
         <CopyBtn text={output} />
       </div>
@@ -240,7 +267,7 @@ function GrepOutputBlock({ output }: { output: string; pattern?: string }): Reac
             {matches.map((m, i) => (
               <div key={i} className="flex gap-2 text-zinc-400">
                 <span className="select-none text-zinc-600 w-5 text-right shrink-0">{m.line}</span>
-                <span className="truncate">{m.text}</span>
+                <span className="truncate"><HighlightText text={m.text} pattern={pattern} /></span>
               </div>
             ))}
           </div>
@@ -575,18 +602,25 @@ function DiffBlock({ oldStr, newStr, filePath }: { oldStr: string; newStr: strin
   )
 }
 
+// Tools that auto-expand when they have output (mutation/action tools)
+const EXPAND_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'Delete', 'Bash', 'TodoWrite'])
+
 export function ToolCallCard({
   name,
   input,
   output,
   status,
   error,
+  startedAt,
+  completedAt,
 }: ToolCallCardProps): React.JSX.Element {
-  const [open, setOpen] = React.useState(status === 'error')
+  // Auto-expand for errors and mutation tools with output; keep read-heavy tools collapsed
+  const shouldAutoExpand = status === 'error' || (!!output && EXPAND_TOOLS.has(name))
+  const [open, setOpen] = React.useState(shouldAutoExpand)
 
   React.useEffect(() => {
-    if (status === 'error') setOpen(true)
-  }, [status])
+    if (shouldAutoExpand) setOpen(true)
+  }, [shouldAutoExpand])
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -603,9 +637,19 @@ export function ToolCallCard({
           <Badge variant="outline" className="font-mono text-xs">
             {name}
           </Badge>
+          {startedAt && completedAt && (
+            <span className="text-[9px] text-muted-foreground/40 tabular-nums shrink-0">
+              {((completedAt - startedAt) / 1000).toFixed(1)}s
+            </span>
+          )}
           {!open && (
             <span className="flex-1 truncate text-xs text-muted-foreground/60 font-mono">
               {inputSummary(name, input)}
+            </span>
+          )}
+          {!open && output && (
+            <span className="text-[9px] text-muted-foreground/30 shrink-0">
+              {output.length > 1000 ? `${Math.round(output.length / 1000)}k` : output.length} chars
             </span>
           )}
           {open && <span className="flex-1" />}
