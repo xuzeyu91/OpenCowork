@@ -1,8 +1,9 @@
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import { nanoid } from 'nanoid'
 import { toast } from 'sonner'
 import { useChatStore } from '@renderer/stores/chat-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
+import { useProviderStore } from '@renderer/stores/provider-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 import { runAgentLoop } from '@renderer/lib/agent/agent-loop'
@@ -13,23 +14,45 @@ import { abortAllTeammates } from '@renderer/lib/agent/teams/teammate-runner'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { createProvider } from '@renderer/lib/api/provider'
 import { generateSessionTitle } from '@renderer/lib/api/generate-title'
-import type { UnifiedMessage, ProviderConfig, TokenUsage } from '@renderer/lib/api/types'
+import type { UnifiedMessage, ProviderConfig, TokenUsage, RequestDebugInfo } from '@renderer/lib/api/types'
 import type { AgentLoopConfig } from '@renderer/lib/agent/types'
+import { ApiStreamError } from '@renderer/lib/ipc/api-stream'
+
+/** Per-session abort controllers — module-level so concurrent sessions don't overwrite each other */
+const sessionAbortControllers = new Map<string, AbortController>()
 
 export function useChatActions() {
-  const abortRef = useRef<AbortController | null>(null)
-
   const sendMessage = useCallback(async (text: string) => {
     const chatStore = useChatStore.getState()
     const settings = useSettingsStore.getState()
     const agentStore = useAgentStore.getState()
     const uiStore = useUIStore.getState()
 
-    // Check API key before proceeding
-    if (!settings.apiKey) {
+    // Build provider config from provider-store (new system) with fallback to settings-store
+    const providerConfig = useProviderStore.getState().getActiveProviderConfig()
+    const baseProviderConfig: ProviderConfig | null = providerConfig
+      ? {
+          ...providerConfig,
+          maxTokens: settings.maxTokens,
+          temperature: settings.temperature,
+          systemPrompt: settings.systemPrompt || undefined,
+        }
+      : settings.apiKey
+        ? {
+            type: settings.provider,
+            apiKey: settings.apiKey,
+            baseUrl: settings.baseUrl || undefined,
+            model: settings.model,
+            maxTokens: settings.maxTokens,
+            temperature: settings.temperature,
+            systemPrompt: settings.systemPrompt || undefined,
+          }
+        : null
+
+    if (!baseProviderConfig || !baseProviderConfig.apiKey) {
       toast.error('API key required', {
-        description: 'Please set your API key in Settings (Ctrl+,)',
-        action: { label: 'Open Settings', onClick: () => uiStore.setSettingsOpen(true) },
+        description: 'Please configure an AI provider in Settings',
+        action: { label: 'Open Settings', onClick: () => uiStore.openSettingsPage('provider') },
       })
       return
     }
@@ -50,7 +73,7 @@ export function useChatActions() {
     chatStore.addMessage(sessionId, userMsg)
 
     // Auto-title: fire-and-forget AI title generation for the first message
-    const session = chatStore.sessions.find((s) => s.id === sessionId)
+    const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)
     if (session && session.title === 'New Conversation') {
       const capturedSessionId = sessionId
       generateSessionTitle(text).then((aiTitle) => {
@@ -69,21 +92,14 @@ export function useChatActions() {
       createdAt: Date.now(),
     }
     chatStore.addMessage(sessionId, assistantMsg)
-    chatStore.setStreamingMessageId(assistantMsgId)
+    chatStore.setStreamingMessageId(sessionId, assistantMsgId)
 
-    // Setup abort controller
+    // Setup abort controller (per-session)
+    // If this session already has a running agent, abort it first
+    const existingAc = sessionAbortControllers.get(sessionId)
+    if (existingAc) existingAc.abort()
     const abortController = new AbortController()
-    abortRef.current = abortController
-
-    const providerConfig: ProviderConfig = {
-      type: settings.provider,
-      apiKey: settings.apiKey,
-      baseUrl: settings.baseUrl || undefined,
-      model: settings.model,
-      maxTokens: settings.maxTokens,
-      temperature: settings.temperature,
-      systemPrompt: settings.systemPrompt || undefined,
-    }
+    sessionAbortControllers.set(sessionId, abortController)
 
     const mode = uiStore.mode
 
@@ -94,8 +110,14 @@ export function useChatActions() {
         'Use markdown formatting in your responses. Use code blocks with language identifiers for code.',
         settings.systemPrompt ? `\n## Additional Instructions\n${settings.systemPrompt}` : '',
       ].filter(Boolean).join('\n')
-      const chatConfig: ProviderConfig = { ...providerConfig, systemPrompt: chatSystemPrompt }
-      await runSimpleChat(sessionId, assistantMsgId, chatConfig, abortController.signal)
+      const chatConfig: ProviderConfig = { ...baseProviderConfig, systemPrompt: chatSystemPrompt }
+      agentStore.setSessionStatus(sessionId, 'running')
+      try {
+        await runSimpleChat(sessionId, assistantMsgId, chatConfig, abortController.signal)
+      } finally {
+        agentStore.setSessionStatus(sessionId, 'completed')
+        sessionAbortControllers.delete(sessionId)
+      }
     } else {
       // Cowork / Code mode: agent loop with tools
       const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)
@@ -109,7 +131,7 @@ export function useChatActions() {
         skills: Array.isArray(skills) ? skills : [],
       })
       const agentProviderConfig: ProviderConfig = {
-        ...providerConfig,
+        ...baseProviderConfig,
         systemPrompt: agentSystemPrompt,
       }
       const loopConfig: AgentLoopConfig = {
@@ -122,11 +144,20 @@ export function useChatActions() {
       }
 
       agentStore.setRunning(true)
+      agentStore.setSessionStatus(sessionId, 'running')
       agentStore.clearToolCalls()
+
+      // Accumulate usage across all iterations + SubAgent runs
+      const accumulatedUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
 
       // Subscribe to SubAgent events during agent loop
       const unsubSubAgent = subAgentEvents.on((event) => {
         useAgentStore.getState().handleSubAgentEvent(event)
+        // Accumulate SubAgent token usage into the parent message
+        if (event.type === 'sub_agent_end' && event.result?.usage) {
+          mergeUsage(accumulatedUsage, event.result.usage)
+          useChatStore.getState().updateMessage(sessionId!, assistantMsgId, { usage: { ...accumulatedUsage } })
+        }
       })
 
       // NOTE: Team events are handled by a persistent global subscription
@@ -156,9 +187,6 @@ export function useChatActions() {
         )
 
         let thinkingDone = false
-        // Accumulate usage across all iterations — each API call reports its own
-        // input/output tokens; we sum them for accurate cost tracking.
-        const accumulatedUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
         for await (const event of loop) {
           if (abortController.signal.aborted) break
 
@@ -261,6 +289,8 @@ export function useChatActions() {
               if (!thinkingDone) { thinkingDone = true; useChatStore.getState().completeThinking(sessionId!, assistantMsgId) }
               if (event.usage) {
                 mergeUsage(accumulatedUsage, event.usage)
+                // contextTokens = last API call's input tokens (overwrite, not accumulate)
+                accumulatedUsage.contextTokens = event.usage.inputTokens
                 useChatStore.getState().updateMessage(sessionId!, assistantMsgId, { usage: { ...accumulatedUsage } })
               }
               break
@@ -277,12 +307,18 @@ export function useChatActions() {
           console.error('[Agent Loop Exception]', err)
           toast.error('Agent failed', { description: errMsg })
           useChatStore.getState().appendTextDelta(sessionId!, assistantMsgId, `\n\n> **Error:** ${errMsg}`)
+          if (err instanceof ApiStreamError) {
+            useChatStore.getState().updateMessage(sessionId!, assistantMsgId, { debugInfo: err.debugInfo as RequestDebugInfo })
+          }
         }
       } finally {
         unsubSubAgent()
-        agentStore.setRunning(false)
-        chatStore.setStreamingMessageId(null)
-        abortRef.current = null
+        agentStore.setSessionStatus(sessionId, 'completed')
+        chatStore.setStreamingMessageId(sessionId, null)
+        sessionAbortControllers.delete(sessionId)
+        // Derive global isRunning from remaining running sessions
+        const hasOtherRunning = Object.values(useAgentStore.getState().runningSessions).some((s) => s === 'running')
+        agentStore.setRunning(hasOtherRunning)
         // Notify when agent finishes and window is not focused
         if (!document.hasFocus() && Notification.permission === 'granted') {
           new Notification('OpenCowork', { body: 'Agent finished working', silent: true })
@@ -292,10 +328,25 @@ export function useChatActions() {
   }, [])
 
   const stopStreaming = useCallback(() => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    useChatStore.getState().setStreamingMessageId(null)
-    useAgentStore.getState().abort()
+    // Stop the active session's agent
+    const activeId = useChatStore.getState().activeSessionId
+    if (activeId) {
+      const ac = sessionAbortControllers.get(activeId)
+      if (ac) {
+        ac.abort()
+        sessionAbortControllers.delete(activeId)
+      }
+      useChatStore.getState().setStreamingMessageId(activeId, null)
+      useAgentStore.getState().setSessionStatus(activeId, null)
+    }
+    // Only do global abort (which denies ALL pending approvals) when
+    // no other sessions are still running — prevents cross-session interference.
+    const otherRunning = Object.entries(useAgentStore.getState().runningSessions)
+      .some(([id, s]) => id !== activeId && s === 'running')
+    if (!otherRunning) {
+      useAgentStore.getState().setRunning(false)
+      useAgentStore.getState().abort()
+    }
     // Also stop all running teammate agent loops
     abortAllTeammates()
   }, [])
@@ -372,7 +423,7 @@ async function runSimpleChat(
         case 'message_end':
           if (!thinkingDone) { thinkingDone = true; useChatStore.getState().completeThinking(sessionId, assistantMsgId) }
           if (event.usage) {
-            useChatStore.getState().updateMessage(sessionId, assistantMsgId, { usage: event.usage })
+            useChatStore.getState().updateMessage(sessionId, assistantMsgId, { usage: { ...event.usage, contextTokens: event.usage.inputTokens } })
           }
           break
         case 'error':
@@ -387,9 +438,12 @@ async function runSimpleChat(
       console.error('[Chat Exception]', err)
       toast.error('Chat failed', { description: errMsg })
       useChatStore.getState().appendTextDelta(sessionId, assistantMsgId, `\n\n> **Error:** ${errMsg}`)
+      if (err instanceof ApiStreamError) {
+        useChatStore.getState().updateMessage(sessionId, assistantMsgId, { debugInfo: err.debugInfo as RequestDebugInfo })
+      }
     }
   } finally {
-    useChatStore.getState().setStreamingMessageId(null)
+    useChatStore.getState().setStreamingMessageId(sessionId, null)
   }
 }
 

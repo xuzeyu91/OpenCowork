@@ -3,9 +3,13 @@ import { useChatStore } from '@renderer/stores/chat-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { MessageItem } from './MessageItem'
-import { MessageSquare, Briefcase, Code2, RefreshCw, ArrowDown, ClipboardCopy, Check } from 'lucide-react'
+import { MessageSquare, Briefcase, Code2, RefreshCw, ArrowDown, ClipboardCopy, Check, ImageDown, Loader2 } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { sessionToMarkdown } from '@renderer/lib/utils/export-chat'
+import { toPng } from 'html-to-image'
+import type { ToolResultContent } from '@renderer/lib/api/types'
+import { toast } from 'sonner'
+import appIconUrl from '../../../../../resources/icon.png'
 
 const modeHints = {
   chat: {
@@ -44,6 +48,8 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const messages = activeSession?.messages ?? []
   const [copiedAll, setCopiedAll] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
+  const contentRef = React.useRef<HTMLDivElement>(null)
 
   // Derive a scroll trigger from streaming content length
   const streamingMsg = streamingMessageId ? messages.find((m) => m.id === streamingMessageId) : null
@@ -203,23 +209,94 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
     setTimeout(() => setCopiedAll(false), 2000)
   }
 
+  const handleExportImage = async (): Promise<void> => {
+    const node = contentRef.current
+    if (!node || !activeSession) return
+    setExporting(true)
+
+    // Convert app icon to base64 data URL for embedding in the footer
+    let iconDataUrl = ''
+    try {
+      const resp = await fetch(appIconUrl)
+      const blob = await resp.blob()
+      iconDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+    } catch {
+      // Silently skip icon if it fails to load
+    }
+
+    // Build and inject footer DOM element
+    const footer = document.createElement('div')
+    footer.setAttribute('data-export-footer', '1')
+    footer.style.cssText = 'margin-top:24px;padding:20px 0 8px;border-top:1px solid rgba(128,128,128,0.2);display:flex;align-items:center;justify-content:center;gap:14px;'
+    footer.innerHTML = [
+      iconDataUrl
+        ? `<img src="${iconDataUrl}" style="width:40px;height:40px;border-radius:8px;flex-shrink:0;" />`
+        : '',
+      '<div style="display:flex;flex-direction:column;justify-content:center;gap:2px;">',
+      '  <span style="font-weight:600;font-size:14px;color:rgba(128,128,128,0.75);">OpenCowork</span>',
+      '  <span style="font-size:11px;color:rgba(128,128,128,0.5);">AI-Powered Collaborative Development Platform</span>',
+      '  <span style="font-size:11px;color:rgba(128,128,128,0.45);">github.com/AIDotNet/OpenCowork</span>',
+      '</div>',
+    ].join('\n')
+    node.appendChild(footer)
+
+    try {
+      // Wait for browser to layout the footer before capturing
+      await new Promise((r) => setTimeout(r, 150))
+
+      const bgRaw = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
+      const bgColor = bgRaw ? `hsl(${bgRaw})` : '#ffffff'
+      const dataUrl = await toPng(node, { backgroundColor: bgColor, pixelRatio: 2 })
+
+      const base64 = dataUrl.split(',')[1]
+      const binary = atob(base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: 'image/png' })
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      toast.success('图片已复制到剪贴板', { description: '可直接粘贴到聊天或文档中' })
+    } catch (err) {
+      console.error('Export image failed:', err)
+      toast.error('导出图片失败', { description: String(err) })
+    } finally {
+      if (node.contains(footer)) node.removeChild(footer)
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="relative flex-1">
+      {/* Floating action bar — always visible at top-right, icons only until hovered */}
+      {messages.length > 1 && !streamingMessageId && (
+        <div className="absolute top-2 right-4 z-10 flex items-center gap-0.5 rounded-lg border bg-background/80 backdrop-blur-sm shadow-sm px-0.5 py-0.5">
+          <button
+            className="group/btn flex h-6 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-200 disabled:opacity-50"
+            onClick={handleExportImage}
+            disabled={exporting}
+          >
+            {exporting ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <ImageDown className="size-3.5 shrink-0" />}
+            <span className="overflow-hidden max-w-0 group-hover/btn:max-w-[80px] transition-all duration-200 text-[10px] whitespace-nowrap">
+              {exporting ? 'Exporting...' : 'Export Image'}
+            </span>
+          </button>
+          <button
+            className="group/btn flex h-6 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-200"
+            onClick={handleCopyAll}
+          >
+            {copiedAll ? <Check className="size-3.5 shrink-0" /> : <ClipboardCopy className="size-3.5 shrink-0" />}
+            <span className="overflow-hidden max-w-0 group-hover/btn:max-w-[60px] transition-all duration-200 text-[10px] whitespace-nowrap">
+              {copiedAll ? 'Copied!' : 'Copy All'}
+            </span>
+          </button>
+        </div>
+      )}
       <div ref={scrollContainerRef} className="absolute inset-0 overflow-y-auto">
-        <div className="mx-auto max-w-3xl space-y-6 p-4">
-          {messages.length > 1 && !streamingMessageId && (
-            <div className="flex justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 gap-1.5 text-[10px] text-muted-foreground"
-                onClick={handleCopyAll}
-              >
-                {copiedAll ? <Check className="size-3" /> : <ClipboardCopy className="size-3" />}
-                {copiedAll ? 'Copied!' : 'Copy All'}
-              </Button>
-            </div>
-          )}
+        <div ref={contentRef} className="mx-auto max-w-3xl space-y-6 p-4">
           {messages.map((msg, idx) => {
             // Hide intermediate user messages that only contain tool_result blocks
             // (they are API-level responses, not real user input — output already shown in ToolCallCard)
@@ -233,7 +310,7 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
             const isLastUser = !streamingMessageId && isRealUserMsg(msg) &&
               !messages.slice(idx + 1).some((m) => isRealUserMsg(m))
             // Build tool results map for assistant messages (from next user message)
-            let toolResults: Map<string, { content: string; isError?: boolean }> | undefined
+            let toolResults: Map<string, { content: ToolResultContent; isError?: boolean }> | undefined
             if (msg.role === 'assistant' && Array.isArray(msg.content)) {
               const nextMsg = messages[idx + 1]
               if (nextMsg && nextMsg.role === 'user' && Array.isArray(nextMsg.content)) {

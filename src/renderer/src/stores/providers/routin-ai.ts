@@ -1,0 +1,32 @@
+import type { BuiltinProviderPreset } from './types'
+
+export const routinAiPreset: BuiltinProviderPreset = {
+  builtinId: 'routin-ai',
+  name: 'Routin AI',
+  type: 'openai-chat',
+  defaultBaseUrl: 'https://api.routin.ai/v1',
+  defaultEnabled: true,
+  defaultModels: [
+    // ── OpenAI — GPT-4o family (cache: 50% off input) ──
+    { id: 'gpt-4o', name: 'GPT-4o', enabled: true, contextLength: 128_000, inputPrice: 2.5, outputPrice: 10, cacheCreationPrice: 2.5, cacheHitPrice: 1.25 },
+    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', enabled: true, contextLength: 128_000, inputPrice: 0.15, outputPrice: 0.6, cacheCreationPrice: 0.15, cacheHitPrice: 0.075 },
+    // ── OpenAI — O-series reasoning (cache: 50% off input) ──
+    { id: 'o3-mini', name: 'o3 Mini', enabled: true, contextLength: 200_000, inputPrice: 1.1, outputPrice: 4.4, cacheCreationPrice: 1.1, cacheHitPrice: 0.55 },
+    // ── OpenAI — GPT-4.1 family (cache: 75% off input) ──
+    { id: 'gpt-4.1', name: 'GPT-4.1', enabled: true, contextLength: 1_048_576, inputPrice: 2, outputPrice: 8, cacheCreationPrice: 2, cacheHitPrice: 0.5 },
+    { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', enabled: true, contextLength: 1_048_576, inputPrice: 0.4, outputPrice: 1.6, cacheCreationPrice: 0.4, cacheHitPrice: 0.1 },
+    { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', enabled: true, contextLength: 1_048_576, inputPrice: 0.1, outputPrice: 0.4, cacheCreationPrice: 0.1, cacheHitPrice: 0.025 },
+    // ── MiniMax ──
+    { id: 'MiniMax-M2.1', name: 'MiniMax M2.1', enabled: true, contextLength: 196_608, inputPrice: 0.27, outputPrice: 0.95, cacheHitPrice: 0.03 },
+    { id: 'MiniMax-M2.1-lightning', name: 'MiniMax M2.1 Lightning', enabled: true, contextLength: 196_608, inputPrice: 0.14, outputPrice: 0.48 },
+    // ── DeepSeek ──
+    { id: 'deepseek-v3.2', name: 'DeepSeek V3.2', enabled: true, contextLength: 163_840, inputPrice: 0.28, outputPrice: 0.42, cacheCreationPrice: 0.28, cacheHitPrice: 0.028 },
+    // ── Google Gemini ──
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview', enabled: true, contextLength: 1_048_576, inputPrice: 0.5, outputPrice: 3 },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview', enabled: true, contextLength: 1_048_576, inputPrice: 2, outputPrice: 12 },
+    // ── Z.AI / GLM (智谱) ──
+    { id: 'glm-4.5', name: 'GLM 4.5', enabled: true, contextLength: 1_048_576, inputPrice: 0.07, outputPrice: 0.28 },
+    { id: 'glm-4.7', name: 'GLM 4.7', enabled: true, contextLength: 1_048_576, inputPrice: 0.28, outputPrice: 1.12 },
+    { id: 'glm-4.7-flash', name: 'GLM 4.7 Flash', enabled: true, contextLength: 202_752, inputPrice: 0.14, outputPrice: 0.56 },
+  ],
+}

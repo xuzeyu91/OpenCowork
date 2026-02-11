@@ -15,98 +15,163 @@ export function registerApiProxyHandlers(): void {
   // Handle non-streaming API requests (e.g., test connection)
   ipcMain.handle('api:request', async (_event, req: Omit<APIStreamRequest, 'requestId'>) => {
     const { url, method, headers, body } = req
-    const parsedUrl = new URL(url)
-    const isHttps = parsedUrl.protocol === 'https:'
-    const httpModule = isHttps ? https : http
+    try {
+      console.log(`[API Proxy] request ${method} ${url}`)
+      const parsedUrl = new URL(url)
+      const isHttps = parsedUrl.protocol === 'https:'
+      const httpModule = isHttps ? https : http
 
-    return new Promise((resolve) => {
-      const options = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port || (isHttps ? 443 : 80),
-        path: parsedUrl.pathname + parsedUrl.search,
-        method,
-        headers,
+      const bodyBuffer = body ? Buffer.from(body, 'utf-8') : null
+      const reqHeaders = { ...headers }
+      if (bodyBuffer) {
+        reqHeaders['Content-Length'] = String(bodyBuffer.byteLength)
       }
 
-      const httpReq = httpModule.request(options, (res) => {
-        let responseBody = ''
-        res.on('data', (chunk: Buffer) => { responseBody += chunk.toString() })
-        res.on('end', () => {
-          resolve({ statusCode: res.statusCode, body: responseBody.slice(0, 2000) })
+      return new Promise((resolve) => {
+        const options = {
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || (isHttps ? 443 : 80),
+          path: parsedUrl.pathname + parsedUrl.search,
+          method,
+          headers: reqHeaders,
+        }
+
+        const httpReq = httpModule.request(options, (res) => {
+          let responseBody = ''
+          res.on('data', (chunk: Buffer) => { responseBody += chunk.toString() })
+          res.on('end', () => {
+            resolve({ statusCode: res.statusCode, body: responseBody.slice(0, 2000) })
+          })
         })
-      })
 
-      httpReq.on('error', (err) => {
-        resolve({ statusCode: 0, error: err.message })
-      })
+        httpReq.on('error', (err) => {
+          console.error(`[API Proxy] request error: ${err.message}`)
+          resolve({ statusCode: 0, error: err.message })
+        })
 
-      httpReq.setTimeout(15000, () => {
-        httpReq.destroy()
-        resolve({ statusCode: 0, error: 'Request timed out (15s)' })
-      })
+        httpReq.setTimeout(15000, () => {
+          httpReq.destroy()
+          resolve({ statusCode: 0, error: 'Request timed out (15s)' })
+        })
 
-      if (body) httpReq.write(body)
-      httpReq.end()
-    })
+        if (bodyBuffer) httpReq.write(bodyBuffer)
+        httpReq.end()
+      })
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      console.error(`[API Proxy] request fatal error: ${errMsg}`)
+      return { statusCode: 0, error: errMsg }
+    }
   })
 
   // Handle streaming API requests from renderer
   ipcMain.on('api:stream-request', (event, req: APIStreamRequest) => {
     const { requestId, url, method, headers, body } = req
-    const parsedUrl = new URL(url)
-    const isHttps = parsedUrl.protocol === 'https:'
-    const httpModule = isHttps ? https : http
 
-    const options = {
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port || (isHttps ? 443 : 80),
-      path: parsedUrl.pathname + parsedUrl.search,
-      method,
-      headers,
-    }
+    try {
+      console.log(`[API Proxy] stream-request[${requestId}] ${method} ${url}`)
+      const parsedUrl = new URL(url)
+      const isHttps = parsedUrl.protocol === 'https:'
+      const httpModule = isHttps ? https : http
 
-    console.log(`[API Proxy] ${method} ${url}`)
+      const bodyBuffer = body ? Buffer.from(body, 'utf-8') : null
+      const reqHeaders = { ...headers }
+      if (bodyBuffer) {
+        reqHeaders['Content-Length'] = String(bodyBuffer.byteLength)
+      }
 
-    const httpReq = httpModule.request(options, (res) => {
-      const statusCode = res.statusCode || 0
+      const options = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method,
+        headers: reqHeaders,
+      }
 
-      // For non-2xx, collect full body and send as error
-      if (statusCode < 200 || statusCode >= 300) {
-        let errorBody = ''
+      // Timeouts (ms):
+      // - Connection: max wait for the server to start responding (first byte)
+      // - Idle: max gap between consecutive data chunks during streaming
+      const CONNECTION_TIMEOUT = 60_000
+      const IDLE_TIMEOUT = 30_000
+      let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+      const clearIdleTimer = (): void => {
+        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
+      }
+
+      const resetIdleTimer = (req: http.ClientRequest): void => {
+        clearIdleTimer()
+        idleTimer = setTimeout(() => {
+          console.warn(`[API Proxy] Idle timeout (${IDLE_TIMEOUT}ms) for ${requestId}`)
+          req.destroy(new Error(`Stream idle timeout (${IDLE_TIMEOUT / 1000}s with no data)`))
+        }, IDLE_TIMEOUT)
+      }
+
+      const httpReq = httpModule.request(options, (res) => {
+        const statusCode = res.statusCode || 0
+
+        // For non-2xx, collect full body and send as error
+        if (statusCode < 200 || statusCode >= 300) {
+          clearIdleTimer()
+          let errorBody = ''
+          res.on('data', (chunk: Buffer) => {
+            if (errorBody.length < 4000) errorBody += chunk.toString()
+          })
+          res.on('end', () => {
+            console.error(`[API Proxy] stream-request[${requestId}] HTTP ${statusCode}: ${errorBody.slice(0, 500)}`)
+            const sender = getSender(event)
+            if (sender) {
+              sender.send('api:stream-error', {
+                requestId,
+                error: `HTTP ${statusCode}: ${errorBody.slice(0, 2000)}`,
+              })
+            }
+          })
+          return
+        }
+
+        // Stream SSE chunks to renderer
         res.on('data', (chunk: Buffer) => {
-          errorBody += chunk.toString()
+          resetIdleTimer(httpReq)
+          const sender = getSender(event)
+          if (sender) {
+            sender.send('api:stream-chunk', {
+              requestId,
+              data: chunk.toString(),
+            })
+          }
         })
+
         res.on('end', () => {
+          clearIdleTimer()
+          const sender = getSender(event)
+          if (sender) {
+            sender.send('api:stream-end', { requestId })
+          }
+        })
+
+        res.on('error', (err) => {
+          clearIdleTimer()
+          console.error(`[API Proxy] stream-request[${requestId}] response error: ${err.message}`)
           const sender = getSender(event)
           if (sender) {
             sender.send('api:stream-error', {
               requestId,
-              error: `HTTP ${statusCode}: ${errorBody.slice(0, 2000)}`,
+              error: err.message,
             })
           }
         })
-        return
-      }
-
-      // Stream SSE chunks to renderer
-      res.on('data', (chunk: Buffer) => {
-        const sender = getSender(event)
-        if (sender) {
-          sender.send('api:stream-chunk', {
-            requestId,
-            data: chunk.toString(),
-          })
-        }
       })
 
-      res.on('end', () => {
-        const sender = getSender(event)
-        if (sender) {
-          sender.send('api:stream-end', { requestId })
-        }
+      // Connection timeout: abort if the server doesn't respond at all
+      httpReq.setTimeout(CONNECTION_TIMEOUT, () => {
+        console.warn(`[API Proxy] Connection timeout (${CONNECTION_TIMEOUT}ms) for ${requestId}`)
+        httpReq.destroy(new Error(`Connection timeout (${CONNECTION_TIMEOUT / 1000}s)`))
       })
 
-      res.on('error', (err) => {
+      httpReq.on('error', (err) => {
+        clearIdleTimer()
+        console.error(`[API Proxy] stream-request[${requestId}] request error: ${err.message}`)
         const sender = getSender(event)
         if (sender) {
           sender.send('api:stream-error', {
@@ -115,36 +180,38 @@ export function registerApiProxyHandlers(): void {
           })
         }
       })
-    })
 
-    httpReq.on('error', (err) => {
+      // Handle abort from renderer
+      const abortHandler = (_event: Electron.IpcMainEvent, data: { requestId: string }) => {
+        if (data.requestId === requestId) {
+          clearIdleTimer()
+          httpReq.destroy()
+          ipcMain.removeListener('api:abort', abortHandler)
+        }
+      }
+      ipcMain.on('api:abort', abortHandler)
+
+      // Clean up abort listener and timers when request completes
+      httpReq.on('close', () => {
+        clearIdleTimer()
+        ipcMain.removeListener('api:abort', abortHandler)
+      })
+
+      if (bodyBuffer) {
+        httpReq.write(bodyBuffer)
+      }
+      httpReq.end()
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      console.error(`[API Proxy] stream-request[${requestId}] fatal error: ${errMsg}`)
       const sender = getSender(event)
       if (sender) {
         sender.send('api:stream-error', {
           requestId,
-          error: err.message,
+          error: errMsg,
         })
       }
-    })
-
-    // Handle abort from renderer
-    const abortHandler = (_event: Electron.IpcMainEvent, data: { requestId: string }) => {
-      if (data.requestId === requestId) {
-        httpReq.destroy()
-        ipcMain.removeListener('api:abort', abortHandler)
-      }
     }
-    ipcMain.on('api:abort', abortHandler)
-
-    // Clean up abort listener when request completes
-    httpReq.on('close', () => {
-      ipcMain.removeListener('api:abort', abortHandler)
-    })
-
-    if (body) {
-      httpReq.write(body)
-    }
-    httpReq.end()
   })
 }
 

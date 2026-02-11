@@ -1,4 +1,4 @@
-import type { ProviderConfig, ToolDefinition, UnifiedMessage, TokenUsage } from '../api/types'
+import type { ProviderConfig, ToolDefinition, UnifiedMessage, TokenUsage, ToolResultContent } from '../api/types'
 
 // --- Tool Call Runtime State ---
 
@@ -9,7 +9,7 @@ export interface ToolCallState {
   name: string
   input: Record<string, unknown>
   status: ToolCallStatus
-  output?: string
+  output?: ToolResultContent
   error?: string
   requiresApproval: boolean
   startedAt?: number
@@ -72,7 +72,7 @@ export type AgentEvent =
   | { type: 'tool_call_start'; toolCall: ToolCallState }
   | { type: 'tool_call_approval_needed'; toolCall: ToolCallState }
   | { type: 'tool_call_result'; toolCall: ToolCallState }
-  | { type: 'iteration_end'; stopReason: string; toolResults?: { toolUseId: string; content: string; isError?: boolean }[] }
+  | { type: 'iteration_end'; stopReason: string; toolResults?: { toolUseId: string; content: ToolResultContent; isError?: boolean }[] }
   | { type: 'loop_end'; reason: 'completed' | 'max_iterations' | 'aborted' | 'error' }
   | { type: 'error'; error: Error }
 

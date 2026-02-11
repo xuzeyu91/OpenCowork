@@ -104,7 +104,7 @@ function MessageInput({ targetName }: { targetName: string }): React.JSX.Element
 
 // ── Member Detail Row (Expandable) ────────────────────────────────
 
-function MemberDetailRow({
+const MemberDetailRow = React.memo(function MemberDetailRow({
   member,
   task,
   defaultOpen,
@@ -116,7 +116,7 @@ function MemberDetailRow({
   onStop: (id: string) => void
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(defaultOpen)
-  const [toolsOpen, setToolsOpen] = React.useState(true)
+  const [toolsOpen, setToolsOpen] = React.useState(false)
   const isWorking = member.status === 'working'
 
   const [now, setNow] = React.useState(Date.now())
@@ -273,11 +273,11 @@ function MemberDetailRow({
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})
 
 // ── Task Detail Row (Expandable) ──────────────────────────────────
 
-function TaskDetailRow({
+const TaskDetailRow = React.memo(function TaskDetailRow({
   task,
   allTasks,
 }: {
@@ -323,11 +323,11 @@ function TaskDetailRow({
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})
 
 // ── Message Row ───────────────────────────────────────────────────
 
-function MessageRow({ msg }: { msg: TeamMessage }): React.JSX.Element {
+const MessageRow = React.memo(function MessageRow({ msg }: { msg: TeamMessage }): React.JSX.Element {
   const [expanded, setExpanded] = React.useState(false)
   const isLong = msg.content.length > 120
 
@@ -361,7 +361,7 @@ function MessageRow({ msg }: { msg: TeamMessage }): React.JSX.Element {
       )}
     </div>
   )
-}
+})
 
 // ── Section Header ────────────────────────────────────────────────
 
@@ -474,7 +474,7 @@ export function TeamPanel(): React.JSX.Element {
                   key={member.id}
                   member={member}
                   task={memberTask}
-                  defaultOpen={member.status === 'working'}
+                  defaultOpen={false}
                   onStop={handleStopMember}
                 />
               )

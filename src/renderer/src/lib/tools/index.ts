@@ -15,7 +15,12 @@ import { registerPreviewTools } from './preview-tool'
  * reference tool definitions from the registry.
  * Team tools are registered last.
  */
+let _allToolsRegistered = false
+
 export function registerAllTools(): void {
+  if (_allToolsRegistered) return
+  _allToolsRegistered = true
+
   registerTodoTools()
   registerFsTools()
   registerSearchTools()

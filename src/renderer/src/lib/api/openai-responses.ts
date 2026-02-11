@@ -31,8 +31,8 @@ class OpenAIResponsesProvider implements APIProvider {
     if (config.temperature !== undefined) body.temperature = config.temperature
     if (config.maxTokens) body.max_tokens = config.maxTokens
 
-    const baseUrl = (config.baseUrl || 'https://api.openai.com').trim().replace(/\/+$/, '')
-    const url = `${baseUrl}/v1/responses`
+    const baseUrl = (config.baseUrl || 'https://api.openai.com/v1').trim().replace(/\/+$/, '')
+    const url = `${baseUrl}/responses`
 
     const argBuffers = new Map<string, string>()
 
@@ -80,9 +80,9 @@ class OpenAIResponsesProvider implements APIProvider {
 
         case 'response.function_call_arguments.done':
           try {
-            yield { type: 'tool_call_end', toolCallInput: JSON.parse(data.arguments) }
+            yield { type: 'tool_call_end', toolCallId: data.call_id, toolName: data.name, toolCallInput: JSON.parse(data.arguments) }
           } catch {
-            yield { type: 'tool_call_end', toolCallInput: {} }
+            yield { type: 'tool_call_end', toolCallId: data.call_id, toolName: data.name, toolCallInput: {} }
           }
           break
 
@@ -141,13 +141,26 @@ class OpenAIResponsesProvider implements APIProvider {
               status: 'completed',
             })
             break
-          case 'tool_result':
+          case 'tool_result': {
+            // OpenAI Responses API function_call_output only supports string output
+            let output: string
+            if (Array.isArray(block.content)) {
+              const textParts = block.content.filter((cb) => cb.type === 'text').map((cb) => cb.type === 'text' ? cb.text : '')
+              const imageParts = block.content.filter((cb) => cb.type === 'image')
+              output = [
+                ...textParts,
+                ...imageParts.map(() => '[Image attached]'),
+              ].join('\n') || '[Image]'
+            } else {
+              output = block.content
+            }
             input.push({
               type: 'function_call_output',
               call_id: block.toolUseId,
-              output: block.content,
+              output,
             })
             break
+          }
         }
       }
     }

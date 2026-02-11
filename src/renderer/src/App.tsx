@@ -4,6 +4,8 @@ import { Toaster } from './components/ui/sonner'
 import { ThemeProvider } from './components/theme-provider'
 import { ErrorBoundary } from './components/error-boundary'
 import { useSettingsStore } from './stores/settings-store'
+import { initProviderStore } from './stores/provider-store'
+import { useChatStore } from './stores/chat-store'
 import { registerAllTools } from './lib/tools'
 import { registerAllProviders } from './lib/api'
 import { registerAllViewers } from './lib/preview/register-viewers'
@@ -13,12 +15,14 @@ import { toast } from 'sonner'
 registerAllTools()
 registerAllProviders()
 registerAllViewers()
+initProviderStore()
 
 function App(): React.JSX.Element {
   const theme = useSettingsStore((s) => s.theme)
 
-  // Load API key from secure main process storage on startup
+  // Load sessions from SQLite and API key from secure main process storage on startup
   useEffect(() => {
+    useChatStore.getState().loadFromDb()
     window.electron.ipcRenderer
       .invoke('settings:get', 'apiKey')
       .then((key) => {

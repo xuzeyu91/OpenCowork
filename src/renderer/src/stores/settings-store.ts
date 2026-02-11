@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ProviderType } from '../lib/api/types'
+import { ipcStorage } from '../lib/ipc/ipc-storage'
 
 interface SettingsStore {
   provider: ProviderType
@@ -14,6 +15,7 @@ interface SettingsStore {
   theme: 'light' | 'dark' | 'system'
   language: 'en' | 'zh'
   autoApprove: boolean
+  devMode: boolean
 
   updateSettings: (patch: Partial<Omit<SettingsStore, 'updateSettings'>>) => void
 }
@@ -32,12 +34,13 @@ export const useSettingsStore = create<SettingsStore>()(
       theme: 'system',
       language: 'en',
       autoApprove: false,
+      devMode: false,
 
       updateSettings: (patch) => set(patch),
     }),
     {
       name: 'opencowork-settings',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => ipcStorage),
       partialize: (state) => ({
         provider: state.provider,
         baseUrl: state.baseUrl,
@@ -49,6 +52,7 @@ export const useSettingsStore = create<SettingsStore>()(
         theme: state.theme,
         language: state.language,
         autoApprove: state.autoApprove,
+        devMode: state.devMode,
         // NOTE: apiKey is intentionally excluded from localStorage persistence.
         // In production, it should be stored securely in the main process.
       }),

@@ -22,6 +22,16 @@ const readHandler: ToolHandler = {
       offset: input.offset,
       limit: input.limit,
     })
+    // IPC returns { type: 'image', mediaType, data } for image files
+    if (result && typeof result === 'object' && (result as Record<string, unknown>).type === 'image') {
+      const img = result as { mediaType: string; data: string }
+      return [
+        {
+          type: 'image' as const,
+          source: { type: 'base64' as const, mediaType: img.mediaType, data: img.data },
+        },
+      ]
+    }
     return String(result)
   },
   requiresApproval: () => false,

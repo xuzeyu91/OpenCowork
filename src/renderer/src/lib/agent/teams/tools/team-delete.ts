@@ -1,7 +1,9 @@
 import type { ToolHandler } from '../../../tools/tool-types'
 import { teamEvents } from '../events'
 import { useTeamStore } from '../../../../stores/team-store'
+import { useAgentStore } from '../../../../stores/agent-store'
 import { abortAllTeammates } from '../teammate-runner'
+import { removeTeamLimiter } from './spawn-teammate'
 
 export const teamDeleteTool: ToolHandler = {
   definition: {
@@ -27,6 +29,13 @@ export const teamDeleteTool: ToolHandler = {
 
     // Stop all running teammate agent loops
     abortAllTeammates()
+
+    // Resolve any pending approval promises from aborted teammates
+    // so they don't block the PermissionDialog or leak memory
+    useAgentStore.getState().clearPendingApprovals()
+
+    // Clean up per-team concurrency limiter
+    removeTeamLimiter(teamName)
 
     teamEvents.emit({ type: 'team_end' })
 

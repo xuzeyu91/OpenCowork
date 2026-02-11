@@ -16,6 +16,13 @@ import { ipcClient } from '../../ipc/ipc-client'
 export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentResult> {
   const { definition, parentProvider, toolContext, input, toolUseId, onEvent, onApprovalNeeded } = config
 
+  // Create an inner AbortController linked to the parent signal.
+  // This allows us to immediately abort inner streams on error/exit,
+  // preventing cleanup hangs when ipcStreamRequest is still awaiting data.
+  const innerAbort = new AbortController()
+  const onParentAbort = (): void => innerAbort.abort()
+  toolContext.signal.addEventListener('abort', onParentAbort, { once: true })
+
   // Emit start event
   onEvent?.({ type: 'sub_agent_start', subAgentName: definition.name, toolUseId, input })
 
@@ -55,7 +62,7 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
     tools: innerTools,
     systemPrompt,
     workingFolder: toolContext.workingFolder,
-    signal: toolContext.signal,
+    signal: innerAbort.signal,
   }
 
   // 6. Run inner agent loop
@@ -79,7 +86,10 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
     )
 
     for await (const event of loop) {
-      if (toolContext.signal.aborted) break
+      if (toolContext.signal.aborted) {
+        innerAbort.abort()
+        break
+      }
 
       switch (event.type) {
         case 'text_delta':
@@ -115,6 +125,10 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
           break
 
         case 'error':
+          // Abort inner streams BEFORE return triggers .return() on the generator.
+          // This ensures ipcStreamRequest's waitForItem() resolves immediately,
+          // preventing the cleanup chain from hanging up to 30-60s.
+          innerAbort.abort()
           const result: SubAgentResult = {
             success: false,
             output: '',
@@ -128,6 +142,7 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
       }
     }
   } catch (err) {
+    innerAbort.abort()
     const errMsg = err instanceof Error ? err.message : String(err)
     const result: SubAgentResult = {
       success: false,
@@ -139,6 +154,10 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
     }
     onEvent?.({ type: 'sub_agent_end', subAgentName: definition.name, toolUseId, result })
     return result
+  } finally {
+    // Ensure inner streams are aborted for all exit paths (including normal completion)
+    innerAbort.abort()
+    toolContext.signal.removeEventListener('abort', onParentAbort)
   }
 
   // 7. Format output

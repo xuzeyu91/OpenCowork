@@ -18,12 +18,14 @@ import { Badge } from '@renderer/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@renderer/components/ui/collapsible'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useUIStore } from '@renderer/stores/ui-store'
+import { formatTokens } from '@renderer/lib/format-tokens'
 import { cn } from '@renderer/lib/utils'
 import { parseSubAgentMeta } from '@renderer/lib/agent/sub-agents/create-tool'
 import { ToolCallCard } from './ToolCallCard'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { MONO_FONT } from '@renderer/lib/constants'
+import type { ToolResultContent } from '@renderer/lib/api/types'
 
 // --- SubAgent icon mapping ---
 const subAgentIcons: Record<string, React.ReactNode> = {
@@ -61,7 +63,7 @@ interface SubAgentCardProps {
   /** Input passed by parent agent */
   input: Record<string, unknown>
   /** Final output (from completed tool_use result), undefined while running */
-  output?: string
+  output?: ToolResultContent
   /** Whether this is a historical/completed card (from message content) or live */
   isLive?: boolean
 }
@@ -77,18 +79,21 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
     ? (activeSubAgents[toolUseId] ?? completedSubAgents[toolUseId] ?? null)
     : null
 
+  // Extract string from ToolResultContent for backward-compat
+  const outputStr = typeof output === 'string' ? output : undefined
+
   // Parse embedded metadata from historical output
   const parsed = React.useMemo(() => {
-    if (!output) return { meta: null, text: '' }
-    return parseSubAgentMeta(output)
-  }, [output])
+    if (!outputStr) return { meta: null, text: '' }
+    return parseSubAgentMeta(outputStr)
+  }, [outputStr])
   const histMeta = parsed.meta
-  const histText = parsed.text || output || ''
+  const histText = parsed.text || outputStr || ''
 
   // Determine status
   const isRunning = live?.isRunning ?? false
   const isCompleted = !isRunning && (!!output || (live && !live.isRunning))
-  const isError = output ? (histText.startsWith('{"error"') || output.startsWith('{"error"')) : false
+  const isError = outputStr ? (histText.startsWith('{"error"') || outputStr.startsWith('{"error"')) : false
 
   // Auto-expand output when SubAgent completes
   const prevRunningRef = React.useRef(isRunning)
@@ -121,7 +126,7 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
   const handleOpenPreview = (): void => {
     // Get the best available text content
     const previewText = live?.streamingText || histText || ''
-    if (previewText) {
+    if (previewText && typeof previewText === 'string') {
       useUIStore.getState().openMarkdownPreview(`${name} — Result`, previewText)
     } else {
       useUIStore.getState().openDetailPanel({ type: 'subagent', toolUseId })
@@ -185,7 +190,7 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
           {histMeta && (
             <>
               <span>·</span>
-              <span className="tabular-nums">{(histMeta.usage.inputTokens + histMeta.usage.outputTokens).toLocaleString()} tok</span>
+              <span className="tabular-nums">{formatTokens(histMeta.usage.inputTokens + histMeta.usage.outputTokens)} tok</span>
             </>
           )}
         </div>
@@ -304,7 +309,7 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
       )}
 
       {/* Completed output (from tool result in message history) */}
-      {!live && output && histText && (
+      {!live && outputStr && histText && (
         <Collapsible open={outputExpanded} onOpenChange={setOutputExpanded}>
           <div className="border-t border-violet-500/10">
             <CollapsibleTrigger asChild>

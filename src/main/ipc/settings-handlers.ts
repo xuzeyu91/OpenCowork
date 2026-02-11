@@ -1,11 +1,13 @@
-import { ipcMain, app } from 'electron'
+import { ipcMain } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as os from 'os'
 
+const DATA_DIR = path.join(os.homedir(), '.open-cowork')
 const SETTINGS_FILE = 'settings.json'
 
 function getSettingsPath(): string {
-  return path.join(app.getPath('userData'), SETTINGS_FILE)
+  return path.join(DATA_DIR, SETTINGS_FILE)
 }
 
 function readSettings(): Record<string, unknown> {
@@ -22,6 +24,9 @@ function readSettings(): Record<string, unknown> {
 
 function writeSettings(settings: Record<string, unknown>): void {
   try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+    }
     const filePath = getSettingsPath()
     fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), 'utf-8')
   } catch (err) {

@@ -23,6 +23,8 @@ export interface PreviewPanelState {
 
 
 
+export type SettingsTab = 'general' | 'provider' | 'model' | 'about'
+
 export type DetailPanelContent =
 
   | { type: 'team' }
@@ -68,6 +70,12 @@ interface UIStore {
   settingsOpen: boolean
 
   setSettingsOpen: (open: boolean) => void
+
+  settingsPageOpen: boolean
+  settingsTab: SettingsTab
+  openSettingsPage: (tab?: SettingsTab) => void
+  closeSettingsPage: () => void
+  setSettingsTab: (tab: SettingsTab) => void
 
 
 
@@ -140,6 +148,12 @@ export const useUIStore = create<UIStore>((set) => ({
   settingsOpen: false,
 
   setSettingsOpen: (open) => set({ settingsOpen: open }),
+
+  settingsPageOpen: false,
+  settingsTab: 'general',
+  openSettingsPage: (tab) => set({ settingsPageOpen: true, settingsTab: tab ?? 'general', leftSidebarOpen: false }),
+  closeSettingsPage: () => set({ settingsPageOpen: false }),
+  setSettingsTab: (tab) => set({ settingsTab: tab }),
 
 
 

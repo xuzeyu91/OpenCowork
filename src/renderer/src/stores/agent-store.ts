@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ToolCallState } from '../lib/agent/types'
 import type { SubAgentEvent } from '../lib/agent/sub-agents/types'
+import { ipcStorage } from '../lib/ipc/ipc-storage'
 
 // Approval resolvers live outside the store — they hold non-serializable
 // callbacks and don't need to trigger React re-renders.
@@ -27,6 +28,9 @@ interface AgentStore {
   pendingToolCalls: ToolCallState[]
   executedToolCalls: ToolCallState[]
 
+  /** Per-session agent running state for sidebar indicators */
+  runningSessions: Record<string, 'running' | 'completed'>
+
   // SubAgent state keyed by toolUseId (supports multiple same-name SubAgent calls)
   activeSubAgents: Record<string, SubAgentState>
   /** Completed SubAgent results keyed by toolUseId — survives until clearToolCalls */
@@ -40,6 +44,8 @@ interface AgentStore {
 
   setRunning: (running: boolean) => void
   setCurrentLoopId: (id: string | null) => void
+  /** Update per-session status. 'completed' auto-clears after ~3 s. null removes entry. */
+  setSessionStatus: (sessionId: string, status: 'running' | 'completed' | null) => void
   addToolCall: (tc: ToolCallState) => void
   updateToolCall: (id: string, patch: Partial<ToolCallState>) => void
   clearToolCalls: () => void
@@ -51,6 +57,8 @@ interface AgentStore {
   // Approval flow
   requestApproval: (toolCallId: string) => Promise<boolean>
   resolveApproval: (toolCallId: string, approved: boolean) => void
+  /** Resolve all pending approvals as denied and clear pendingToolCalls (e.g. on team delete) */
+  clearPendingApprovals: () => void
 }
 
 export const useAgentStore = create<AgentStore>()(
@@ -60,6 +68,7 @@ export const useAgentStore = create<AgentStore>()(
     currentLoopId: null,
     pendingToolCalls: [],
     executedToolCalls: [],
+    runningSessions: {},
     activeSubAgents: {},
     completedSubAgents: {},
     subAgentHistory: [],
@@ -68,6 +77,26 @@ export const useAgentStore = create<AgentStore>()(
     setRunning: (running) => set({ isRunning: running }),
 
     setCurrentLoopId: (id) => set({ currentLoopId: id }),
+
+    setSessionStatus: (sessionId, status) => {
+      set((state) => {
+        if (status) {
+          state.runningSessions[sessionId] = status
+        } else {
+          delete state.runningSessions[sessionId]
+        }
+      })
+      // Auto-clear 'completed' after 3 seconds
+      if (status === 'completed') {
+        setTimeout(() => {
+          set((state) => {
+            if (state.runningSessions[sessionId] === 'completed') {
+              delete state.runningSessions[sessionId]
+            }
+          })
+        }, 3000)
+      }
+    },
 
     addToolCall: (tc) => {
       set((state) => {
@@ -213,17 +242,46 @@ export const useAgentStore = create<AgentStore>()(
       })
     },
 
+    clearPendingApprovals: () => {
+      // Resolve all pending approval promises as denied
+      for (const [, resolve] of approvalResolvers) {
+        resolve(false)
+      }
+      approvalResolvers.clear()
+      // Move all pending tool calls to executed
+      set((state) => {
+        for (const tc of state.pendingToolCalls) {
+          tc.status = 'error'
+          tc.error = 'Aborted (team deleted)'
+          state.executedToolCalls.push(tc)
+        }
+        state.pendingToolCalls = []
+      })
+    },
+
     resolveApproval: (toolCallId, approved) => {
       const resolve = approvalResolvers.get(toolCallId)
       if (resolve) {
         resolve(approved)
         approvalResolvers.delete(toolCallId)
       }
+      // Move tool call from pending → executed so the dialog advances
+      // to the next pending item. Without this, teammate tool calls
+      // stay in pendingToolCalls and block subsequent approvals.
+      set((state) => {
+        const idx = state.pendingToolCalls.findIndex((t) => t.id === toolCallId)
+        if (idx !== -1) {
+          const [moved] = state.pendingToolCalls.splice(idx, 1)
+          moved.status = approved ? 'running' : 'error'
+          if (!approved) moved.error = 'User denied permission'
+          state.executedToolCalls.push(moved)
+        }
+      })
     },
   })),
   {
     name: 'opencowork-agent',
-    storage: createJSONStorage(() => localStorage),
+    storage: createJSONStorage(() => ipcStorage),
     partialize: (state) => ({
       completedSubAgents: state.completedSubAgents,
       executedToolCalls: state.executedToolCalls,

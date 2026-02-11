@@ -17,6 +17,7 @@ import { abortTeammate } from '@renderer/lib/agent/teams/teammate-runner'
 import { ToolCallCard } from './ToolCallCard'
 import { cn } from '@renderer/lib/utils'
 import { useUIStore } from '@renderer/stores/ui-store'
+import type { ToolResultContent } from '@renderer/lib/api/types'
 
 
 function formatElapsed(ms: number): string {
@@ -30,11 +31,11 @@ interface InlineTeammateCardProps {
   /** Input from the SpawnTeammate tool call */
   input: Record<string, unknown>
   /** Tool result output (contains member_id) */
-  output?: string
+  output?: ToolResultContent
 }
 
-function parseOutput(output?: string): Record<string, unknown> | null {
-  if (!output) return null
+function parseOutput(output?: ToolResultContent): Record<string, unknown> | null {
+  if (!output || typeof output !== 'string') return null
   try {
     return JSON.parse(output)
   } catch {
@@ -42,8 +43,8 @@ function parseOutput(output?: string): Record<string, unknown> | null {
   }
 }
 
-export function InlineTeammateCard({ input, output }: InlineTeammateCardProps): React.JSX.Element {
-  const [toolsExpanded, setToolsExpanded] = React.useState(true)
+export const InlineTeammateCard = React.memo(function InlineTeammateCard({ input, output }: InlineTeammateCardProps): React.JSX.Element {
+  const [toolsExpanded, setToolsExpanded] = React.useState(false)
   const parsed = parseOutput(output)
   const memberId = parsed?.member_id ? String(parsed.member_id) : null
   const isError = parsed && 'error' in parsed
@@ -280,4 +281,4 @@ export function InlineTeammateCard({ input, output }: InlineTeammateCardProps): 
       )}
     </div>
   )
-}
+})

@@ -2,6 +2,7 @@ import { subAgentRegistry } from '../registry'
 import { createSubAgentTool } from '../create-tool'
 import { toolRegistry } from '../../tool-registry'
 import { useSettingsStore } from '@renderer/stores/settings-store'
+import { useProviderStore } from '@renderer/stores/provider-store'
 import type { ProviderConfig } from '../../../api/types'
 
 import { codeSearchAgent } from './code-search'
@@ -17,6 +18,14 @@ const builtinAgents = [codeSearchAgent, codeReviewAgent, plannerAgent]
 export function registerBuiltinSubAgents(): void {
   const providerGetter = (): ProviderConfig => {
     const s = useSettingsStore.getState()
+    const fastConfig = useProviderStore.getState().getFastProviderConfig()
+    if (fastConfig && fastConfig.apiKey) {
+      return {
+        ...fastConfig,
+        maxTokens: s.maxTokens,
+        temperature: s.temperature,
+      }
+    }
     return {
       type: s.provider,
       apiKey: s.apiKey,

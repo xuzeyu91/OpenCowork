@@ -1,10 +1,11 @@
 import { Users, ClipboardList, MessageSquare, Trash2, UserPlus, RefreshCw, List } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
+import type { ToolResultContent } from '@renderer/lib/api/types'
 
 interface TeamEventCardProps {
   name: string
   input: Record<string, unknown>
-  output?: string
+  output?: ToolResultContent
 }
 
 const toolConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -45,8 +46,8 @@ const toolConfig: Record<string, { icon: React.ReactNode; color: string; label: 
   },
 }
 
-function parseOutput(output?: string): Record<string, unknown> | null {
-  if (!output) return null
+function parseOutput(output?: ToolResultContent): Record<string, unknown> | null {
+  if (!output || typeof output !== 'string') return null
   try {
     return JSON.parse(output)
   } catch {

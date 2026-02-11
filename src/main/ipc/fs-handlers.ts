@@ -3,9 +3,36 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { globSync } from 'glob'
 
+const IMAGE_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.heic', '.heif',
+])
+
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.tiff': 'image/tiff',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+}
+
 export function registerFsHandlers(): void {
   ipcMain.handle('fs:read-file', async (_event, args: { path: string; offset?: number; limit?: number }) => {
     try {
+      const ext = path.extname(args.path).toLowerCase()
+      if (IMAGE_EXTENSIONS.has(ext)) {
+        const buffer = fs.readFileSync(args.path)
+        return {
+          type: 'image',
+          mediaType: IMAGE_MIME_TYPES[ext] || 'application/octet-stream',
+          data: buffer.toString('base64'),
+        }
+      }
       const content = fs.readFileSync(args.path, 'utf-8')
       if (args.offset !== undefined || args.limit !== undefined) {
         const lines = content.split('\n')
@@ -139,6 +166,26 @@ export function registerFsHandlers(): void {
       return { error: String(err) }
     }
   })
+
+  ipcMain.handle(
+    'fs:save-image',
+    async (_event, args: { defaultName: string; dataUrl: string }) => {
+      const win = BrowserWindow.getFocusedWindow()
+      if (!win) return { canceled: true }
+      const result = await dialog.showSaveDialog(win, {
+        defaultPath: args.defaultName,
+        filters: [{ name: 'PNG Image', extensions: ['png'] }],
+      })
+      if (result.canceled || !result.filePath) return { canceled: true }
+      try {
+        const base64 = args.dataUrl.replace(/^data:image\/\w+;base64,/, '')
+        fs.writeFileSync(result.filePath, Buffer.from(base64, 'base64'))
+        return { success: true, filePath: result.filePath }
+      } catch (err) {
+        return { error: String(err) }
+      }
+    }
+  )
 
   // File watching
   const watchers = new Map<string, fs.FSWatcher>()

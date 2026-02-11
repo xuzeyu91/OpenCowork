@@ -5,6 +5,8 @@ import { Separator } from '@renderer/components/ui/separator'
 import { useChatStore } from '@renderer/stores/chat-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
+import { useProviderStore } from '@renderer/stores/provider-store'
+import { formatTokens, calculateCost, formatCost } from '@renderer/lib/format-tokens'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 
 export function ContextPanel(): React.JSX.Element {
@@ -13,8 +15,10 @@ export function ContextPanel(): React.JSX.Element {
   const activeSessionId = useChatStore((s) => s.activeSessionId)
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const workingFolder = activeSession?.workingFolder
-  const provider = useSettingsStore((s) => s.provider)
-  const model = useSettingsStore((s) => s.model)
+  const activeProvider = useProviderStore((s) => s.getActiveProvider())
+  const activeModelCfg = useProviderStore((s) => s.getActiveModelConfig())
+  const provider = activeProvider?.name ?? useSettingsStore((s) => s.provider)
+  const model = activeModelCfg?.name ?? useSettingsStore((s) => s.model)
 
   const handleSelectFolder = async (): Promise<void> => {
     const result = (await ipcClient.invoke('fs:select-folder')) as {
@@ -178,60 +182,32 @@ export function ContextPanel(): React.JSX.Element {
                   { input: 0, output: 0, cacheCreation: 0, cacheRead: 0, reasoning: 0 }
                 )
                 if (totals.input + totals.output === 0) return null
-                // Pricing per million tokens (USD)
-                const pricing: Record<string, { input: number; output: number }> = {
-                  'claude-sonnet-4': { input: 3, output: 15 },
-                  'claude-opus-4': { input: 15, output: 75 },
-                  'claude-3-5-sonnet': { input: 3, output: 15 },
-                  'claude-3-5-haiku': { input: 0.8, output: 4 },
-                  'gpt-4.1': { input: 2, output: 8 },
-                  'gpt-4.1-mini': { input: 0.4, output: 1.6 },
-                  'gpt-4.1-nano': { input: 0.1, output: 0.4 },
-                  'gpt-4o': { input: 2.5, output: 10 },
-                  'gpt-4o-mini': { input: 0.15, output: 0.6 },
-                  'o3-mini': { input: 1.1, output: 4.4 },
-                  'o3': { input: 2, output: 8 },
-                  'o4-mini': { input: 1.1, output: 4.4 },
-                }
-                // Context window limits (tokens)
-                const contextLimits: Record<string, number> = {
-                  'claude-sonnet-4': 200000, 'claude-opus-4': 200000,
-                  'claude-3-5-sonnet': 200000, 'claude-3-5-haiku': 200000,
-                  'gpt-4.1': 1047576, 'gpt-4.1-mini': 1047576, 'gpt-4.1-nano': 1047576,
-                  'gpt-4o': 128000, 'gpt-4o-mini': 128000,
-                  'o3-mini': 200000, 'o3': 200000, 'o4-mini': 200000,
-                }
-                const priceKey = Object.keys(pricing).find((k) => model.includes(k))
-                const price = priceKey ? pricing[priceKey] : null
-                // Anthropic cache pricing: cache_read = 10% of input price, cache_creation = 25% extra
-                const hasCache = totals.cacheCreation > 0 || totals.cacheRead > 0
-                const cost = price
-                  ? hasCache
-                    ? ((totals.input - totals.cacheRead) * price.input + totals.cacheRead * price.input * 0.1 + totals.cacheCreation * price.input * 1.25 + totals.output * price.output) / 1_000_000
-                    : (totals.input * price.input + totals.output * price.output) / 1_000_000
-                  : null
-                const ctxKey = Object.keys(contextLimits).find((k) => model.includes(k))
-                const ctxLimit = ctxKey ? contextLimits[ctxKey] : null
+                const totalUsage = { inputTokens: totals.input, outputTokens: totals.output, cacheCreationTokens: totals.cacheCreation || undefined, cacheReadTokens: totals.cacheRead || undefined }
+                const cost = calculateCost(totalUsage, activeModelCfg)
                 const totalTokens = totals.input + totals.output
-                const pct = ctxLimit ? Math.min((totalTokens / ctxLimit) * 100, 100) : null
+                const ctxLimit = activeModelCfg?.contextLength ?? null
+                // Context window = last API call's input tokens (stored as contextTokens, not accumulated)
+                const lastUsage = [...activeSession.messages].reverse().find((m) => m.usage)?.usage
+                const ctxUsed = lastUsage?.contextTokens ?? 0
+                const pct = ctxLimit && ctxUsed > 0 ? Math.min((ctxUsed / ctxLimit) * 100, 100) : null
                 const barColor = pct === null ? '' : pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-500' : 'bg-green-500'
                 return (
                   <>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Zap className="size-3 shrink-0" />
                       <span>
-                        {totalTokens.toLocaleString()} tokens
-                        <span className="text-muted-foreground/50"> ({totals.input.toLocaleString()}↓ {totals.output.toLocaleString()}↑)</span>
-                        {cost !== null && <span className="text-muted-foreground/50"> · ~${cost < 0.01 ? '<0.01' : cost.toFixed(2)}</span>}
-                        {totals.cacheRead > 0 && <span className="text-green-500/60"> · {totals.cacheRead.toLocaleString()} cached</span>}
-                        {totals.reasoning > 0 && <span className="text-blue-500/60"> · {totals.reasoning.toLocaleString()} reasoning</span>}
+                        {formatTokens(totalTokens)} tokens
+                        <span className="text-muted-foreground/50"> ({formatTokens(totals.input)}↓ {formatTokens(totals.output)}↑)</span>
+                        {cost !== null && <span className="text-emerald-500/70"> · {formatCost(cost)}</span>}
+                        {totals.cacheRead > 0 && <span className="text-green-500/60"> · {formatTokens(totals.cacheRead)} cached</span>}
+                        {totals.reasoning > 0 && <span className="text-blue-500/60"> · {formatTokens(totals.reasoning)} reasoning</span>}
                       </span>
                     </div>
                     {pct !== null && (
                       <div className="mt-1 space-y-0.5">
                         <div className="flex items-center justify-between text-[9px] text-muted-foreground/40">
                           <span>Context window</span>
-                          <span>{pct.toFixed(0)}% of {(ctxLimit! / 1000).toFixed(0)}k</span>
+                          <span>{formatTokens(ctxUsed)} / {formatTokens(ctxLimit!)} ({pct.toFixed(0)}%)</span>
                         </div>
                         <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
                           <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />

@@ -1,6 +1,36 @@
 import { nanoid } from 'nanoid'
 import type { SSEEvent } from '../api/sse-parser'
 
+export interface RequestDebugInfo {
+  url: string
+  method: string
+  headers: Record<string, string>
+  body?: string
+  timestamp: number
+}
+
+export class ApiStreamError extends Error {
+  debugInfo: RequestDebugInfo
+  constructor(message: string, debugInfo: RequestDebugInfo) {
+    super(message)
+    this.name = 'ApiStreamError'
+    this.debugInfo = debugInfo
+  }
+}
+
+function maskHeaders(headers: Record<string, string>): Record<string, string> {
+  const masked: Record<string, string> = {}
+  const sensitiveKeys = ['authorization', 'x-api-key', 'api-key']
+  for (const [k, v] of Object.entries(headers)) {
+    if (sensitiveKeys.includes(k.toLowerCase()) && v.length > 8) {
+      masked[k] = v.slice(0, 4) + '****' + v.slice(-4)
+    } else {
+      masked[k] = v
+    }
+  }
+  return masked
+}
+
 /**
  * Streams an API request through the main process IPC proxy.
  * Returns an AsyncIterable of SSE events, matching the same interface
@@ -82,13 +112,32 @@ export async function* ipcStreamRequest(params: {
 
         if (item.type === 'end') {
           done = true
+          // Flush any remaining data in the SSE buffer that wasn't
+          // terminated with a double newline (some providers omit the trailing blank line).
+          if (buffer.trim()) {
+            const lines = buffer.split(/\r?\n/)
+            const parsed: SSEEvent = { data: '' }
+            const dataLines: string[] = []
+            for (const line of lines) {
+              if (line.startsWith('event:')) parsed.event = line.slice(line.charAt(6) === ' ' ? 7 : 6)
+              else if (line.startsWith('data:')) dataLines.push(line.slice(line.charAt(5) === ' ' ? 6 : 5))
+            }
+            parsed.data = dataLines.join('\n')
+            if (parsed.data) yield parsed
+            buffer = ''
+          }
           break
         }
 
         if (item.type === 'error') {
           done = true
-          yield { data: '', event: 'error' }
-          throw new Error(item.error)
+          throw new ApiStreamError(item.error, {
+            url,
+            method,
+            headers: maskHeaders(headers),
+            body,
+            timestamp: Date.now(),
+          })
         }
 
         // Parse SSE from chunk

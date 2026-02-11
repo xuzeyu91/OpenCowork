@@ -4,6 +4,12 @@ import type { ToolCallState } from '../types'
 import { runSubAgent } from './runner'
 import { subAgentEvents } from './events'
 import type { ProviderConfig, TokenUsage } from '../../api/types'
+import { useAgentStore } from '../../../stores/agent-store'
+import { useSettingsStore } from '../../../stores/settings-store'
+import { ConcurrencyLimiter } from '../concurrency-limiter'
+
+/** Global concurrency limiter: at most 2 SubAgents run simultaneously. */
+const subAgentLimiter = new ConcurrencyLimiter(2)
 
 /** Metadata embedded in SubAgent output for historical rendering */
 export interface SubAgentMeta {
@@ -61,6 +67,10 @@ export function createSubAgentTool(
       inputSchema: def.inputSchema,
     },
     execute: async (input, ctx) => {
+      // Acquire concurrency slot (blocks if 2 SubAgents are already running)
+      await subAgentLimiter.acquire(ctx.signal)
+
+      try {
       // Collect inner tool calls for metadata embedding
       const collectedToolCalls = new Map<string, ToolCallState>()
       let startedAt = Date.now()
@@ -82,6 +92,17 @@ export function createSubAgentTool(
         input,
         toolUseId: ctx.currentToolUseId ?? '',
         onEvent,
+        onApprovalNeeded: async (tc: ToolCallState) => {
+          const autoApprove = useSettingsStore.getState().autoApprove
+          if (autoApprove) return true
+          const approved = useAgentStore.getState().approvedToolNames
+          if (approved.includes(tc.name)) return true
+          // Show in PermissionDialog
+          useAgentStore.getState().addToolCall(tc)
+          const result = await useAgentStore.getState().requestApproval(tc.id)
+          if (result) useAgentStore.getState().addApprovedTool(tc.name)
+          return result
+        },
       })
 
       // Build metadata for historical rendering (truncate large outputs to prevent bloat)
@@ -109,7 +130,7 @@ export function createSubAgentTool(
           name: tc.name,
           input: truncInput(tc.input),
           status: tc.status,
-          output: truncStr(tc.output, MAX_OUTPUT),
+          output: truncStr(typeof tc.output === 'string' ? tc.output : tc.output ? JSON.stringify(tc.output) : undefined, MAX_OUTPUT),
           error: tc.error,
           startedAt: tc.startedAt,
           completedAt: tc.completedAt,
@@ -126,6 +147,9 @@ export function createSubAgentTool(
       }
 
       return metaStr + result.output
+      } finally {
+        subAgentLimiter.release()
+      }
     },
     requiresApproval: () => false,
   }

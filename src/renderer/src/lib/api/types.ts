@@ -11,6 +11,8 @@ export interface TokenUsage {
   cacheReadTokens?: number
   /** Reasoning model (o3/o4-mini etc.) internal thinking tokens */
   reasoningTokens?: number
+  /** Last API call's input tokens — represents current context window usage (not accumulated) */
+  contextTokens?: number
 }
 
 // --- Content Blocks ---
@@ -32,10 +34,12 @@ export interface ToolUseBlock {
   input: Record<string, unknown>
 }
 
+export type ToolResultContent = string | Array<TextBlock | ImageBlock>
+
 export interface ToolResultBlock {
   type: 'tool_result'
   toolUseId: string
-  content: string
+  content: ToolResultContent
   isError?: boolean
 }
 
@@ -50,12 +54,21 @@ export type ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlo
 
 // --- Messages ---
 
+export interface RequestDebugInfo {
+  url: string
+  method: string
+  headers: Record<string, string>
+  body?: string
+  timestamp: number
+}
+
 export interface UnifiedMessage {
   id: string
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string | ContentBlock[]
   createdAt: number
   usage?: TokenUsage
+  debugInfo?: RequestDebugInfo
 }
 
 // --- Streaming Events ---
@@ -95,9 +108,39 @@ export interface ToolDefinition {
   }
 }
 
-// --- Provider Config ---
+// --- AI Provider Management ---
 
 export type ProviderType = 'anthropic' | 'openai-chat' | 'openai-responses'
+
+export interface AIModelConfig {
+  id: string
+  name: string
+  enabled: boolean
+  contextLength?: number
+  maxOutputTokens?: number
+  /** Price per million input tokens (USD) */
+  inputPrice?: number
+  /** Price per million output tokens (USD) */
+  outputPrice?: number
+  /** Price per million tokens for cache creation/write (USD) */
+  cacheCreationPrice?: number
+  /** Price per million tokens for cache hit/read (USD) */
+  cacheHitPrice?: number
+}
+
+export interface AIProvider {
+  id: string
+  name: string
+  type: ProviderType
+  apiKey: string
+  baseUrl: string
+  enabled: boolean
+  models: AIModelConfig[]
+  builtinId?: string
+  createdAt: number
+}
+
+// --- Provider Config ---
 
 export interface ProviderConfig {
   type: ProviderType

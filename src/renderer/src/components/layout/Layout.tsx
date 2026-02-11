@@ -21,6 +21,8 @@ import { InputArea } from '@renderer/components/chat/InputArea'
 
 import { SettingsDialog } from '@renderer/components/settings/SettingsDialog'
 
+import { SettingsPage } from '@renderer/components/settings/SettingsPage'
+
 import { KeyboardShortcutsDialog } from '@renderer/components/settings/KeyboardShortcutsDialog'
 
 import { PermissionDialog } from '@renderer/components/cowork/PermissionDialog'
@@ -136,6 +138,8 @@ export function Layout(): React.JSX.Element {
 
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
 
+  const settingsPageOpen = useUIStore((s) => s.settingsPageOpen)
+
   const toggleLeftSidebar = useUIStore((s) => s.toggleLeftSidebar)
 
 
@@ -182,7 +186,7 @@ export function Layout(): React.JSX.Element {
 
         e.preventDefault()
 
-        setSettingsOpen(true)
+        useUIStore.getState().openSettingsPage()
 
       }
 
@@ -606,6 +610,9 @@ export function Layout(): React.JSX.Element {
 
         <SidebarInset>
 
+          {settingsPageOpen ? (
+            <SettingsPage />
+          ) : (
           <div className="flex h-screen min-w-0 flex-col overflow-hidden">
 
             <TopBar />
@@ -734,6 +741,7 @@ export function Layout(): React.JSX.Element {
             </ErrorBoundary>
 
           </div>
+          )}
 
         </SidebarInset>
 

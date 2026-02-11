@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../api/types'
+import type { ToolDefinition, ToolResultContent } from '../api/types'
 
 // --- Tool Context ---
 
@@ -20,6 +20,6 @@ export interface IPCClient {
 
 export interface ToolHandler {
   definition: ToolDefinition
-  execute: (input: Record<string, unknown>, ctx: ToolContext) => Promise<string>
+  execute: (input: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResultContent>
   requiresApproval?: (input: Record<string, unknown>, ctx: ToolContext) => boolean
 }

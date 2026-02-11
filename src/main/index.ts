@@ -16,6 +16,9 @@ import { registerSettingsHandlers } from './ipc/settings-handlers'
 
 import { registerSkillsHandlers } from './ipc/skills-handlers'
 import { registerProcessManagerHandlers, killAllManagedProcesses } from './ipc/process-manager'
+import { registerDbHandlers } from './ipc/db-handlers'
+import { registerConfigHandlers } from './ipc/secure-key-store'
+import { closeDb } from './db/database'
 
 
 
@@ -39,7 +42,7 @@ function createWindow(): void {
 
     autoHideMenuBar: true,
 
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon:icon,
 
     webPreferences: {
 
@@ -177,6 +180,8 @@ app.whenReady().then(() => {
 
   registerSkillsHandlers()
   registerProcessManagerHandlers()
+  registerDbHandlers()
+  registerConfigHandlers()
 
 
 
@@ -206,6 +211,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   killAllManagedProcesses()
+  closeDb()
   if (process.platform !== 'darwin') {
     app.quit()
   }

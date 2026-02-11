@@ -8,54 +8,64 @@ import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
 import { useChatStore } from '@renderer/stores/chat-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
+import { useProviderStore } from '@renderer/stores/provider-store'
 import { useTeamStore } from '@renderer/stores/team-store'
 import { cn } from '@renderer/lib/utils'
 import { useTheme } from 'next-themes'
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/components/ui/popover'
 import { WindowControls } from './WindowControls'
-import type { ProviderType } from '@renderer/lib/api/types'
+import { ProviderIcon } from '@renderer/components/settings/provider-icons'
 
-const MODEL_PRESETS: Record<ProviderType, string[]> = {
-  anthropic: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-5-haiku-20241022'],
-  'openai-chat': ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o4-mini'],
-  'openai-responses': ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini', 'o3-mini', 'o4-mini'],
-}
-
-function ModelSwitcher({ model, provider, hasCustomPrompt }: { model: string; provider: ProviderType; hasCustomPrompt: boolean }): React.JSX.Element {
+function ModelSwitcher({ hasCustomPrompt }: { hasCustomPrompt: boolean }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const presets = MODEL_PRESETS[provider] ?? []
-  const shortName = model.split('/').pop()?.replace(/-\d{8}$/, '') ?? model
+  const activeProviderId = useProviderStore((s) => s.activeProviderId)
+  const activeModelId = useProviderStore((s) => s.activeModelId)
+  const providers = useProviderStore((s) => s.providers)
+  const setActiveModel = useProviderStore((s) => s.setActiveModel)
+
+  const activeProvider = providers.find((p) => p.id === activeProviderId)
+  const enabledModels = activeProvider?.models.filter((m) => m.enabled) ?? []
+  const providerName = activeProvider?.name ?? 'No provider'
+  const shortName = (activeModelId.split('/').pop()?.replace(/-\d{8}$/, '') ?? activeModelId) || 'No model'
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className="titlebar-no-drag hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors truncate max-w-[160px] rounded px-1 py-0.5 hover:bg-muted/40"
-          title={`${model} (click to switch)`}
+          className="titlebar-no-drag hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors truncate max-w-[180px] rounded px-1 py-0.5 hover:bg-muted/40"
+          title={`${activeModelId || 'No model'} (click to switch)`}
         >
+          <ProviderIcon builtinId={activeProvider?.builtinId} size={14} />
           {shortName}
           {hasCustomPrompt && <span className="size-1.5 rounded-full bg-violet-400/60 shrink-0" title="Custom system prompt active" />}
           <ChevronDown className="size-2.5 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-1" align="end">
-        <div className="text-[10px] text-muted-foreground/50 px-2 py-1 uppercase tracking-wider">{provider}</div>
-        {presets.map((m) => (
-          <button
-            key={m}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-muted/60 transition-colors',
-              m === model && 'bg-muted/40 font-medium'
-            )}
-            onClick={() => {
-              useSettingsStore.getState().updateSettings({ model: m })
-              setOpen(false)
-            }}
-          >
-            {m === model ? <Check className="size-3 text-primary" /> : <span className="size-3" />}
-            <span className="truncate">{m.replace(/-\d{8}$/, '')}</span>
-          </button>
-        ))}
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50 px-2 py-1 uppercase tracking-wider">
+          <ProviderIcon builtinId={activeProvider?.builtinId} size={12} />
+          {providerName}
+        </div>
+        {enabledModels.length === 0 ? (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">No models available</div>
+        ) : (
+          enabledModels.map((m) => (
+            <button
+              key={m.id}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-muted/60 transition-colors',
+                m.id === activeModelId && 'bg-muted/40 font-medium'
+              )}
+              onClick={() => {
+                setActiveModel(m.id)
+                setOpen(false)
+              }}
+            >
+              {m.id === activeModelId ? <Check className="size-3 text-primary" /> : <span className="size-3" />}
+              <span className="truncate">{m.name || m.id.replace(/-\d{8}$/, '')}</span>
+            </button>
+          ))
+        )}
       </PopoverContent>
     </Popover>
   )
@@ -77,12 +87,11 @@ export function TopBar(): React.JSX.Element {
   const { theme, setTheme } = useTheme()
 
   const sessions = useChatStore((s) => s.sessions)
-  const model = useSettingsStore((s) => s.model)
   const autoApprove = useSettingsStore((s) => s.autoApprove)
   const hasCustomPrompt = useSettingsStore((s) => !!s.systemPrompt)
   const activeSessionId = useChatStore((s) => s.activeSessionId)
   const streamingMessageId = useChatStore((s) => s.streamingMessageId)
-  const isAgentRunning = useAgentStore((s) => s.isRunning)
+  const isAgentRunning = useAgentStore((s) => activeSessionId ? s.runningSessions[activeSessionId] === 'running' : false)
   const pendingApprovals = useAgentStore((s) => s.pendingToolCalls).length
   const errorCount = useAgentStore((s) => s.executedToolCalls.filter((t) => t.status === 'error').length)
   const activeSubAgents = useAgentStore((s) => s.activeSubAgents)
@@ -304,8 +313,6 @@ export function TopBar(): React.JSX.Element {
 
       {/* Model quick-switcher */}
       <ModelSwitcher
-        model={model}
-        provider={useSettingsStore.getState().provider}
         hasCustomPrompt={hasCustomPrompt}
       />
 

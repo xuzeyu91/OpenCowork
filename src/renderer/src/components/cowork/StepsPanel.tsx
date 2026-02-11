@@ -2,6 +2,7 @@ import { CheckCircle2, Circle, Loader2 } from 'lucide-react'
 import { Badge } from '@renderer/components/ui/badge'
 import { useTaskStore, type TodoItem } from '@renderer/stores/task-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
+import { useChatStore } from '@renderer/stores/chat-store'
 import { cn } from '@renderer/lib/utils'
 
 function TodoStatusIcon({ status }: { status: TodoItem['status'] }): React.JSX.Element {
@@ -28,7 +29,8 @@ function PriorityBadge({ priority }: { priority: TodoItem['priority'] }): React.
 
 export function StepsPanel(): React.JSX.Element {
   const todos = useTaskStore((s) => s.todos)
-  const isRunning = useAgentStore((s) => s.isRunning)
+  const activeSessionId = useChatStore((s) => s.activeSessionId)
+  const isRunning = useAgentStore((s) => activeSessionId ? s.runningSessions[activeSessionId] === 'running' : false)
 
   const total = todos.length
   const completed = todos.filter((t) => t.status === 'completed').length

@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../api/types'
+import type { ToolDefinition, ToolResultContent } from '../api/types'
 import type { ToolHandler, ToolContext } from '../tools/tool-types'
 
 /**
@@ -36,7 +36,7 @@ class ToolRegistry {
     name: string,
     input: Record<string, unknown>,
     ctx: ToolContext
-  ): Promise<string> {
+  ): Promise<ToolResultContent> {
     const handler = this.tools.get(name)
     if (!handler) {
       return JSON.stringify({ error: `Unknown tool: ${name}` })

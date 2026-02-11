@@ -34,8 +34,16 @@ export const TEAM_TOOL_NAMES = new Set(TEAM_TOOLS.map((t) => t.definition.name))
  * Call this once at application startup. The event subscription is
  * global and never unsubscribed — teammate agent loops outlive the
  * lead's agent loop, so scoped subscriptions would lose events.
+ *
+ * Guard: safe to call multiple times (e.g. HMR / StrictMode);
+ * tools and the event subscription are only registered once.
  */
+let _teamToolsRegistered = false
+
 export function registerTeamTools(): void {
+  if (_teamToolsRegistered) return
+  _teamToolsRegistered = true
+
   for (const tool of TEAM_TOOLS) {
     toolRegistry.register(tool)
   }

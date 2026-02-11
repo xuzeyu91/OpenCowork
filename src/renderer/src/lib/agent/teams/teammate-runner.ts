@@ -4,6 +4,8 @@ import { toolRegistry } from '../tool-registry'
 import { teamEvents } from './events'
 import { useTeamStore } from '../../../stores/team-store'
 import { useSettingsStore } from '../../../stores/settings-store'
+import { useProviderStore } from '../../../stores/provider-store'
+import { useAgentStore } from '../../../stores/agent-store'
 import { ipcClient } from '../../ipc/ipc-client'
 import { MessageQueue } from '../types'
 import type { AgentLoopConfig, ToolCallState } from '../types'
@@ -231,16 +233,24 @@ async function runSingleTaskLoop(opts: {
 }): Promise<SingleTaskResult> {
   const { memberId, memberName, prompt, taskId, model, workingFolder, abortController, toolDefs, messageQueue } = opts
 
-  // Build provider config
+  // Build provider config from provider-store with fallback to settings-store
   const settings = useSettingsStore.getState()
-  const providerConfig: ProviderConfig = {
-    type: settings.provider,
-    apiKey: settings.apiKey,
-    baseUrl: settings.baseUrl || undefined,
-    model: model && model !== 'default' ? model : settings.model,
-    maxTokens: settings.maxTokens,
-    temperature: settings.temperature,
-  }
+  const activeConfig = useProviderStore.getState().getActiveProviderConfig()
+  const providerConfig: ProviderConfig = activeConfig
+    ? {
+        ...activeConfig,
+        model: model && model !== 'default' ? model : activeConfig.model,
+        maxTokens: settings.maxTokens,
+        temperature: settings.temperature,
+      }
+    : {
+        type: settings.provider,
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl || undefined,
+        model: model && model !== 'default' ? model : settings.model,
+        maxTokens: settings.maxTokens,
+        temperature: settings.temperature,
+      }
 
   const team = useTeamStore.getState().activeTeam
   const taskInfo = taskId && team ? team.tasks.find((t) => t.id === taskId) : null
@@ -284,6 +294,23 @@ async function runSingleTaskLoop(opts: {
   let reason: SingleTaskResult['reason'] = 'completed'
   let taskCompleted = false
 
+  // Throttle streamingText updates to reduce store churn / re-renders.
+  // Accumulate deltas and flush at most every 200 ms.
+  const STREAM_THROTTLE_MS = 200
+  let streamDirty = false
+  let streamTimer: ReturnType<typeof setTimeout> | null = null
+
+  const flushStreamingText = (): void => {
+    if (streamTimer) { clearTimeout(streamTimer); streamTimer = null }
+    if (!streamDirty) return
+    streamDirty = false
+    teamEvents.emit({
+      type: 'team_member_update',
+      memberId,
+      patch: { streamingText },
+    })
+  }
+
   try {
     const loop = runAgentLoop(
       [userMsg],
@@ -293,7 +320,13 @@ async function runSingleTaskLoop(opts: {
         if (READ_ONLY_TOOLS.has(tc.name)) return true
         const autoApprove = useSettingsStore.getState().autoApprove
         if (autoApprove) return true
-        return false
+        // Per-session tool approval memory
+        const approved = useAgentStore.getState().approvedToolNames
+        if (approved.includes(tc.name)) return true
+        // Bubble up to UI PermissionDialog
+        const result = await useAgentStore.getState().requestApproval(tc.id)
+        if (result) useAgentStore.getState().addApprovedTool(tc.name)
+        return result
       }
     )
 
@@ -312,6 +345,7 @@ async function runSingleTaskLoop(opts: {
           }
           iteration = event.iteration
           streamingText = ''
+          flushStreamingText()
           teamEvents.emit({
             type: 'team_member_update',
             memberId,
@@ -321,16 +355,27 @@ async function runSingleTaskLoop(opts: {
 
         case 'text_delta':
           streamingText += event.text
-          teamEvents.emit({
-            type: 'team_member_update',
-            memberId,
-            patch: { streamingText },
-          })
+          streamDirty = true
+          if (!streamTimer) {
+            streamTimer = setTimeout(flushStreamingText, STREAM_THROTTLE_MS)
+          }
           break
+
+        case 'tool_call_approval_needed': {
+          // Add to agent store's pending list so PermissionDialog renders
+          const willAutoApprove = useSettingsStore.getState().autoApprove ||
+            useAgentStore.getState().approvedToolNames.includes(event.toolCall.name)
+          if (!willAutoApprove) {
+            useAgentStore.getState().addToolCall(event.toolCall)
+          }
+          break
+        }
 
         case 'tool_call_start':
         case 'tool_call_result':
           {
+            // Flush any buffered streaming text before reporting tool activity
+            flushStreamingText()
             const idx = collectedToolCalls.findIndex((t) => t.id === event.toolCall.id)
             if (idx >= 0) {
               collectedToolCalls[idx] = event.toolCall
@@ -346,6 +391,7 @@ async function runSingleTaskLoop(opts: {
           break
 
         case 'loop_end':
+          flushStreamingText()
           reason = event.reason as SingleTaskResult['reason']
           if ((event.reason === 'completed' || event.reason === 'max_iterations') && taskId) {
             teamEvents.emit({
@@ -363,6 +409,10 @@ async function runSingleTaskLoop(opts: {
     }
   } catch {
     reason = 'error'
+  } finally {
+    // Clean up streaming throttle timer
+    if (streamTimer) { clearTimeout(streamTimer); streamTimer = null }
+    flushStreamingText()
   }
 
   return {

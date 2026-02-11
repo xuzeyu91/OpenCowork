@@ -26,13 +26,8 @@ Extract tables, form fields, and structured data from PDF files.
 
 2. Run the table extraction script.
 
-   **On Linux/macOS (bash):**
    ```bash
    python ~/.open-cowork/skills/pdf-data-extract/scripts/extract_tables.py "INPUT_FILE_PATH"
-   ```
-   **On Windows (PowerShell) — use the expanded absolute path:**
-   ```powershell
-   python "$HOME\.open-cowork\skills\pdf-data-extract\scripts\extract_tables.py" "INPUT_FILE_PATH"
    ```
 
    For CSV output instead of Markdown, add `--csv`:
@@ -44,13 +39,8 @@ Extract tables, form fields, and structured data from PDF files.
 
 For fillable PDF forms:
 
-**On Linux/macOS (bash):**
 ```bash
 python ~/.open-cowork/skills/pdf-data-extract/scripts/extract_form_fields.py "INPUT_FILE_PATH"
-```
-**On Windows (PowerShell):**
-```powershell
-python "$HOME\.open-cowork\skills\pdf-data-extract\scripts\extract_form_fields.py" "INPUT_FILE_PATH"
 ```
 For JSON output, add `--json`:
 ```bash
@@ -61,13 +51,8 @@ python ~/.open-cowork/skills/pdf-data-extract/scripts/extract_form_fields.py "IN
 
 If tabula is unavailable or the data is not in table format:
 
-**On Linux/macOS:**
 ```bash
 python ~/.open-cowork/skills/pdf-data-extract/scripts/extract_text.py "INPUT_FILE_PATH"
-```
-**On Windows (PowerShell):**
-```powershell
-python "$HOME\.open-cowork\skills\pdf-data-extract\scripts\extract_text.py" "INPUT_FILE_PATH"
 ```
 Then parse the text output to identify patterns (key-value pairs, repeated structures) and convert to the requested format.
 

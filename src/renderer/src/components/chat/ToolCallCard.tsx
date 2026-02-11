@@ -2,6 +2,7 @@ import * as React from 'react'
 import { ChevronDown, CheckCircle2, XCircle, Copy, Check, ArrowRight, Terminal, FileCode, Search, FolderTree, Folder, File, ListChecks, Circle, CircleDot } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import type { ToolCallStatus } from '@renderer/lib/agent/types'
+import type { ToolResultContent } from '@renderer/lib/api/types'
 import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { MONO_FONT } from '@renderer/lib/constants'
@@ -9,15 +10,28 @@ import { MONO_FONT } from '@renderer/lib/constants'
 interface ToolCallCardProps {
   name: string
   input: Record<string, unknown>
-  output?: string
+  output?: ToolResultContent
   status: ToolCallStatus | 'completed'
   error?: string
   startedAt?: number
   completedAt?: number
 }
 
+/** Extract string representation from ToolResultContent for backward-compat rendering */
+function outputAsString(output: ToolResultContent | undefined): string | undefined {
+  if (output === undefined) return undefined
+  if (typeof output === 'string') return output
+  const texts = output.filter((b) => b.type === 'text').map((b) => b.type === 'text' ? b.text : '')
+  return texts.join('\n') || undefined
+}
 
-function inputSummary(name: string, input: Record<string, unknown>): string {
+/** Check if output contains image blocks */
+function hasImageBlocks(output: ToolResultContent | undefined): boolean {
+  return Array.isArray(output) && output.some((b) => b.type === 'image')
+}
+
+
+export function inputSummary(name: string, input: Record<string, unknown>): string {
   // Tool-specific smart summaries
   if (name === 'Bash' && input.command) return String(input.command).slice(0, 80)
   if (['Read', 'Write', 'LS'].includes(name)) {
@@ -63,6 +77,33 @@ function CopyBtn({ text }: { text: string }): React.JSX.Element {
     >
       {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
     </button>
+  )
+}
+
+function ImageOutputBlock({ output }: { output: ToolResultContent }): React.JSX.Element | null {
+  if (!Array.isArray(output)) return null
+  const images = output.filter((b) => b.type === 'image')
+  if (images.length === 0) return null
+  return (
+    <div className="space-y-2">
+      {images.map((img, i) => {
+        if (img.type !== 'image') return null
+        const src = img.source.url || `data:${img.source.mediaType || 'image/png'};base64,${img.source.data}`
+        return (
+          <div key={i}>
+            <div className="mb-1 flex items-center gap-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Image</p>
+              <span className="text-[9px] text-muted-foreground/40">{img.source.mediaType}</span>
+            </div>
+            <img
+              src={src}
+              alt="Tool output"
+              className="max-w-full max-h-72 rounded-md border object-contain bg-zinc-950"
+            />
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -766,7 +807,7 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
 // Tools that auto-expand when they have output (mutation/action tools)
 const EXPAND_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'Delete', 'Bash', 'TodoWrite'])
 
-function ToolStatusDot({ status }: { status: ToolCallCardProps['status'] }): React.JSX.Element {
+export function ToolStatusDot({ status }: { status: ToolCallCardProps['status'] }): React.JSX.Element {
   switch (status) {
     case 'completed':
       return (
@@ -923,41 +964,49 @@ export function ToolCallCard({
             <StructuredInput name={name} input={input} />
           )}
           {/* Output — tool-specific rendering */}
-          {output && name === 'Read' && (
-            <ReadOutputBlock output={output} filePath={String(input.file_path ?? input.path ?? '')} />
+          {output && name === 'Read' && hasImageBlocks(output) && (
+            <ImageOutputBlock output={output} />
           )}
-          {output && name === 'Bash' && (
-            <BashOutputBlock command={String(input.command ?? '')} output={output} />
+          {output && name === 'Read' && !hasImageBlocks(output) && outputAsString(output) && (
+            <ReadOutputBlock output={outputAsString(output)!} filePath={String(input.file_path ?? input.path ?? '')} />
           )}
-          {output && name === 'Grep' && (
-            <GrepOutputBlock output={output} pattern={String(input.pattern ?? '')} />
+          {output && name === 'Bash' && outputAsString(output) && (
+            <BashOutputBlock command={String(input.command ?? '')} output={outputAsString(output)!} />
           )}
-          {output && name === 'Glob' && (
-            <GlobOutputBlock output={output} />
+          {output && name === 'Grep' && outputAsString(output) && (
+            <GrepOutputBlock output={outputAsString(output)!} pattern={String(input.pattern ?? '')} />
           )}
-          {output && name === 'LS' && (
-            <LSOutputBlock output={output} />
+          {output && name === 'Glob' && outputAsString(output) && (
+            <GlobOutputBlock output={outputAsString(output)!} />
           )}
-          {output && (name === 'TodoRead' || name === 'TodoWrite') && (
-            <TodoOutputBlock output={output} />
+          {output && name === 'LS' && outputAsString(output) && (
+            <LSOutputBlock output={outputAsString(output)!} />
           )}
-          {output && ['Edit', 'MultiEdit', 'Write', 'Delete'].includes(name) && (
-            <div className="flex items-center gap-1.5 text-xs">
-              {output.includes('"success"') || output.includes('success') ? (
-                <>
-                  <CheckCircle2 className="size-3 text-green-500" />
-                  <span className="text-green-500/70">Applied successfully</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="size-3 text-destructive" />
-                  <span className="text-destructive/70 font-mono truncate">{output.slice(0, 100)}</span>
-                </>
-              )}
-            </div>
+          {output && (name === 'TodoRead' || name === 'TodoWrite') && outputAsString(output) && (
+            <TodoOutputBlock output={outputAsString(output)!} />
           )}
+          {output && ['Edit', 'MultiEdit', 'Write', 'Delete'].includes(name) && (() => {
+            const s = outputAsString(output) ?? ''
+            return (
+              <div className="flex items-center gap-1.5 text-xs">
+                {s.includes('"success"') || s.includes('success') ? (
+                  <>
+                    <CheckCircle2 className="size-3 text-green-500" />
+                    <span className="text-green-500/70">Applied successfully</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="size-3 text-destructive" />
+                    <span className="text-destructive/70 font-mono truncate">{s.slice(0, 100)}</span>
+                  </>
+                )}
+              </div>
+            )
+          })()}
           {output && !['Read', 'Bash', 'Grep', 'Glob', 'LS', 'TodoWrite', 'TodoRead', 'Edit', 'MultiEdit', 'Write', 'Delete'].includes(name) && (
-            <OutputBlock output={output} />
+            hasImageBlocks(output)
+              ? <ImageOutputBlock output={output} />
+              : outputAsString(output) ? <OutputBlock output={outputAsString(output)!} /> : null
           )}
           {/* Error */}
           {error && (

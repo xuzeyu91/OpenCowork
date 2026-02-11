@@ -26,13 +26,8 @@ Extract and analyze legal documents, contracts, and agreements.
 
 2. Extract text from the legal document.
 
-   **On Linux/macOS (bash):**
    ```bash
    python ~/.open-cowork/skills/pdf-legal/scripts/extract_text.py "INPUT_FILE_PATH"
-   ```
-   **On Windows (PowerShell) — use the expanded absolute path:**
-   ```powershell
-   python "$HOME\.open-cowork\skills\pdf-legal\scripts\extract_text.py" "INPUT_FILE_PATH"
    ```
 
    The script prints extracted text directly to stdout.
@@ -78,13 +73,8 @@ Extract and analyze legal documents, contracts, and agreements.
 
 5. (Optional) Search for specific clauses by keyword:
 
-   **On Linux/macOS:**
    ```bash
    python ~/.open-cowork/skills/pdf-legal/scripts/search_clauses.py "INPUT_FILE_PATH" termination confidential indemnif
-   ```
-   **On Windows (PowerShell):**
-   ```powershell
-   python "$HOME\.open-cowork\skills\pdf-legal\scripts\search_clauses.py" "INPUT_FILE_PATH" termination confidential indemnif
    ```
    Multiple keywords can be passed as separate arguments.
 

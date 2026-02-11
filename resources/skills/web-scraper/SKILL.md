@@ -48,15 +48,9 @@ crawl4ai-setup
 
 Use this for most websites. It's fast, lightweight, and works for articles, docs, blogs, etc.
 
-**On Linux/macOS (bash):**
 ```bash
 python ~/.open-cowork/skills/web-scraper/scripts/fetch_page.py "URL"
 ```
-**On Windows (PowerShell) — you MUST use the expanded absolute path, NOT `$HOME` or `$Env:USERPROFILE` inside quotes:**
-```powershell
-python "C:\Users\USERNAME\.open-cowork\skills\web-scraper\scripts\fetch_page.py" "URL"
-```
-**IMPORTANT:** Replace `USERNAME` with the actual Windows username. You can discover it via `$Env:USERPROFILE` or `whoami` first, then construct the full path as a plain string.
 
 Options:
 - `--raw` — Output full page Markdown instead of extracted article content
@@ -80,15 +74,9 @@ python fetch_page.py "https://example.com" --raw --max-length 5000
 
 Search using DuckDuckGo (no API key required).
 
-**On Linux/macOS:**
 ```bash
 python ~/.open-cowork/skills/web-scraper/scripts/search_web.py "search query"
 ```
-**On Windows (PowerShell) — use the expanded absolute path:**
-```powershell
-python "C:\Users\USERNAME\.open-cowork\skills\web-scraper\scripts\search_web.py" "search query"
-```
-**IMPORTANT:** Replace `USERNAME` with the actual Windows username. Discover it via `$Env:USERPROFILE` or `whoami` first.
 
 Options:
 - `--max-results N` — Number of results to return (default: 10)
@@ -108,15 +96,9 @@ python search_web.py "AI 最新进展" --news --region cn-zh --max-results 5
 
 Use this only when `fetch_page.py` returns empty or incomplete content (SPA, React/Vue apps, pages that load content via JS).
 
-**On Linux/macOS:**
 ```bash
 python ~/.open-cowork/skills/web-scraper/scripts/crawl_dynamic.py "URL"
 ```
-**On Windows (PowerShell) — use the expanded absolute path:**
-```powershell
-python "C:\Users\USERNAME\.open-cowork\skills\web-scraper\scripts\crawl_dynamic.py" "URL"
-```
-**IMPORTANT:** Replace `USERNAME` with the actual Windows username.
 
 Options:
 - `--wait N` — Wait N seconds after page load for JS to finish (default: 3)
@@ -129,15 +111,9 @@ Options:
 
 Extract all links with their text labels, categorized by type (internal, external, resource).
 
-**On Linux/macOS:**
 ```bash
 python ~/.open-cowork/skills/web-scraper/scripts/extract_links.py "URL"
 ```
-**On Windows (PowerShell) — use the expanded absolute path:**
-```powershell
-python "C:\Users\USERNAME\.open-cowork\skills\web-scraper\scripts\extract_links.py" "URL"
-```
-**IMPORTANT:** Replace `USERNAME` with the actual Windows username.
 
 Options:
 - `--filter PATTERN` — Only show links matching a regex pattern (applied to URL)

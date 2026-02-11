@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { FileText, FilePen, CheckCircle2, XCircle, Copy, Check, Eye, Trash2, Table2 } from 'lucide-react'
+import { FileText, FilePen, CheckCircle2, XCircle, Copy, Check, Eye, Trash2 } from 'lucide-react'
 import { Badge } from '@renderer/components/ui/badge'
 import { Separator } from '@renderer/components/ui/separator'
 import { useAgentStore } from '@renderer/stores/agent-store'
@@ -91,14 +91,9 @@ export function ArtifactsPanel(): React.JSX.Element {
             <button
               key={tc.id}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors group"
-              onClick={() => {
-                if (isPreviewable) {
-                  useUIStore.getState().openFilePreview(filePath)
-                } else {
-                  handleCopyPath(tc.id, filePath)
-                }
-              }}
-              title={isPreviewable ? `${filePath}\nClick to preview` : `${filePath}\nClick to copy path`}
+              onClick={() => handleCopyPath(tc.id, filePath)}
+              onDoubleClick={() => useUIStore.getState().openFilePreview(filePath)}
+              title={`${filePath}\nClick to copy path · Double-click to preview`}
             >
               {ops.has('Write') ? (
                 <FileText className="size-3.5 shrink-0 text-blue-500" />
@@ -113,36 +108,17 @@ export function ArtifactsPanel(): React.JSX.Element {
                 </div>
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
-                {PREVIEWABLE_EXTENSIONS.has(ext) && (
-                  <Eye className="size-3.5 shrink-0 text-blue-500" />
-                )}
-                {SPREADSHEET_EXTENSIONS.has(ext) && (
-                  <Table2 className="size-3.5 shrink-0 text-green-500" />
-                )}
                 {isPreviewable && (
-                  <button
-                    className="size-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleCopyPath(tc.id, filePath)
-                    }}
-                    title="Copy path"
-                  >
-                    {isCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                  </button>
+                  <Eye className="size-3.5 shrink-0 text-blue-500/60" />
                 )}
-                {!isPreviewable && (
+                {isCopied ? (
+                  <Check className="size-3 shrink-0 text-green-500" />
+                ) : isError ? (
+                  <XCircle className="size-3.5 shrink-0 text-destructive" />
+                ) : (
                   <>
-                    {isCopied ? (
-                      <Check className="size-3 shrink-0 text-green-500" />
-                    ) : isError ? (
-                      <XCircle className="size-3.5 shrink-0 text-destructive" />
-                    ) : (
-                      <>
-                        <CheckCircle2 className="size-3.5 shrink-0 text-green-500 group-hover:hidden" />
-                        <Copy className="size-3.5 shrink-0 text-muted-foreground hidden group-hover:block" />
-                      </>
-                    )}
+                    <CheckCircle2 className="size-3.5 shrink-0 text-green-500 group-hover:hidden" />
+                    <Copy className="size-3.5 shrink-0 text-muted-foreground hidden group-hover:block" />
                   </>
                 )}
               </div>

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { TeamMember, TeamTask, TeamMessage, TeamEvent } from '../lib/agent/teams/types'
+import { ipcStorage } from '../lib/ipc/ipc-storage'
 
 export interface ActiveTeam {
   name: string
@@ -110,7 +111,13 @@ export const useTeamStore = create<TeamStore>()(
             }
             break
           case 'team_member_add':
-            if (state.activeTeam) state.activeTeam.members.push(event.member)
+            if (state.activeTeam) {
+              // Guard: skip if a member with the same id or name already exists
+              const dup = state.activeTeam.members.some(
+                (m) => m.id === event.member.id || m.name === event.member.name
+              )
+              if (!dup) state.activeTeam.members.push(event.member)
+            }
             break
           case 'team_member_update': {
             if (!state.activeTeam) break
@@ -148,7 +155,7 @@ export const useTeamStore = create<TeamStore>()(
   })),
   {
     name: 'opencowork-team',
-    storage: createJSONStorage(() => localStorage),
+    storage: createJSONStorage(() => ipcStorage),
     partialize: (state) => ({
       activeTeam: state.activeTeam,
       teamHistory: state.teamHistory,

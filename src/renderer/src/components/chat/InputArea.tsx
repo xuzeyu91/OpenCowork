@@ -4,7 +4,7 @@ import { Send, Square, FolderOpen, AlertTriangle, FileUp, Sparkles, X, Trash2 } 
 import { Button } from '@renderer/components/ui/button'
 import { Textarea } from '@renderer/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
-import { useSettingsStore } from '@renderer/stores/settings-store'
+import { useProviderStore } from '@renderer/stores/provider-store'
 import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
 import { useChatStore } from '@renderer/stores/chat-store'
 import { SkillsMenu } from './SkillsMenu'
@@ -46,7 +46,11 @@ export function InputArea({
   const [text, setText] = React.useState('')
   const [selectedSkill, setSelectedSkill] = React.useState<string | null>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
-  const apiKey = useSettingsStore((s) => s.apiKey)
+  const activeProvider = useProviderStore((s) => {
+    const { providers, activeProviderId } = s
+    if (!activeProviderId) return null
+    return providers.find((p) => p.id === activeProviderId) ?? null
+  })
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
   const mode = useUIStore((s) => s.mode)
   const activeSessionId = useChatStore((s) => s.activeSessionId)
@@ -55,7 +59,7 @@ export function InputArea({
     return (session?.messages.length ?? 0) > 0
   })
   const clearSessionMessages = useChatStore((s) => s.clearSessionMessages)
-  const hasApiKey = !!apiKey
+  const hasApiKey = !!(activeProvider?.apiKey)
 
   // Auto-focus textarea when not streaming or when switching sessions
   React.useEffect(() => {

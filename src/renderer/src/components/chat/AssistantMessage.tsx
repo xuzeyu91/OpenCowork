@@ -17,9 +17,11 @@ import rust from 'react-syntax-highlighter/dist/esm/languages/prism/rust'
 import go from 'react-syntax-highlighter/dist/esm/languages/prism/go'
 import { Avatar, AvatarFallback } from '@renderer/components/ui/avatar'
 import { useTypewriter } from '@renderer/hooks/use-typewriter'
-import { Bot, Copy, Check, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
-import type { ContentBlock, TokenUsage } from '@renderer/lib/api/types'
+import { Bot, Copy, Check, ChevronsDownUp, ChevronsUpDown, Bug } from 'lucide-react'
+import type { ContentBlock, TokenUsage, ToolResultContent, RequestDebugInfo } from '@renderer/lib/api/types'
+import { useSettingsStore } from '@renderer/stores/settings-store'
 import { ToolCallCard } from './ToolCallCard'
+import { ToolCallGroup } from './ToolCallGroup'
 import { FileChangeCard } from './FileChangeCard'
 import { SubAgentCard } from './SubAgentCard'
 import { TodoCard } from './TodoCard'
@@ -29,6 +31,8 @@ import { InlineTeammateCard } from './InlineTeammateCard'
 import { subAgentRegistry } from '@renderer/lib/agent/sub-agents/registry'
 import { TEAM_TOOL_NAMES } from '@renderer/lib/agent/teams/register'
 import { useAgentStore } from '@renderer/stores/agent-store'
+import { useProviderStore } from '@renderer/stores/provider-store'
+import { formatTokens, calculateCost, formatCost } from '@renderer/lib/format-tokens'
 import { MONO_FONT } from '@renderer/lib/constants'
 
 SyntaxHighlighter.registerLanguage('typescript', typescript)
@@ -55,7 +59,49 @@ interface AssistantMessageProps {
   isStreaming?: boolean
   usage?: TokenUsage
   /** Map of toolUseId → output for completed tool results (from next user message) */
-  toolResults?: Map<string, { content: string; isError?: boolean }>
+  toolResults?: Map<string, { content: ToolResultContent; isError?: boolean }>
+  debugInfo?: RequestDebugInfo
+}
+
+function DebugInfoPanel({ debugInfo }: { debugInfo: RequestDebugInfo }): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const formatted = JSON.stringify(
+    { url: debugInfo.url, method: debugInfo.method, headers: debugInfo.headers, body: debugInfo.body ? '(see below)' : undefined, timestamp: new Date(debugInfo.timestamp).toISOString() },
+    null,
+    2
+  )
+  const bodyFormatted = (() => {
+    if (!debugInfo.body) return null
+    try { return JSON.stringify(JSON.parse(debugInfo.body), null, 2) } catch { return debugInfo.body }
+  })()
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-orange-500 hover:bg-orange-500/10 transition-colors border border-orange-500/30"
+      >
+        <Bug className="size-3" />
+        {expanded ? '收起调试信息' : '查看请求调试信息'}
+      </button>
+      {expanded && (
+        <div className="mt-2 rounded-lg border border-orange-500/20 bg-muted/50 overflow-hidden">
+          <div className="px-3 py-1.5 border-b border-orange-500/20 bg-orange-500/5">
+            <span className="text-[10px] font-mono text-orange-500/70 uppercase tracking-wider">Request Debug Info</span>
+          </div>
+          <pre className="p-3 text-[11px] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all" style={{ fontFamily: MONO_FONT }}>{formatted}</pre>
+          {bodyFormatted && (
+            <>
+              <div className="px-3 py-1.5 border-t border-orange-500/20 bg-orange-500/5">
+                <span className="text-[10px] font-mono text-orange-500/70 uppercase tracking-wider">Request Body</span>
+              </div>
+              <pre className="p-3 text-[11px] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto" style={{ fontFamily: MONO_FONT }}>{bodyFormatted}</pre>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function CopyButton({ text }: { text: string }): React.JSX.Element {
@@ -154,7 +200,43 @@ function StreamingMarkdownContent({ text, isStreaming }: { text: string; isStrea
   return <MarkdownContent text={displayed} />
 }
 
-export function AssistantMessage({ content, isStreaming, usage, toolResults }: AssistantMessageProps): React.JSX.Element {
+interface ThinkSegment {
+  type: 'text' | 'think'
+  content: string
+  closed?: boolean
+}
+
+function parseThinkTags(text: string): ThinkSegment[] {
+  if (!/<think>/.test(text)) return [{ type: 'text', content: text }]
+
+  const segments: ThinkSegment[] = []
+  const regex = /<think>([\s\S]*?)(<\/think>|$)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const before = text.slice(lastIndex, match.index)
+      if (before.trim()) segments.push({ type: 'text', content: before })
+    }
+    segments.push({ type: 'think', content: match[1], closed: match[2] === '</think>' })
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex)
+    if (remaining.trim()) segments.push({ type: 'text', content: remaining })
+  }
+
+  return segments.length > 0 ? segments : [{ type: 'text', content: text }]
+}
+
+function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim()
+}
+
+export function AssistantMessage({ content, isStreaming, usage, toolResults, debugInfo }: AssistantMessageProps): React.JSX.Element {
+  const devMode = useSettingsStore((s) => s.devMode)
   const [toolsCollapsed, setToolsCollapsed] = useState(false)
 
   // Subscribe to live tool call state for real-time status during streaming
@@ -184,9 +266,31 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults }: A
     }
 
     if (typeof content === 'string') {
+      const segments = parseThinkTags(content)
+      const hasThink = segments.some((s) => s.type === 'think')
+
+      if (!hasThink) {
+        return (
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <StreamingMarkdownContent text={content} isStreaming={!!isStreaming} />
+            {isStreaming && <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />}
+          </div>
+        )
+      }
+
+      const lastTextSegIdx = segments.reduce((acc: number, s, idx) => (s.type === 'text' ? idx : acc), -1)
       return (
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <StreamingMarkdownContent text={content} isStreaming={!!isStreaming} />
+        <div className="space-y-2">
+          {segments.map((seg, idx) => {
+            if (seg.type === 'think') {
+              return <ThinkingBlock key={idx} thinking={seg.content} isStreaming={!!isStreaming && !seg.closed} />
+            }
+            return (
+              <div key={idx} className="prose prose-sm dark:prose-invert max-w-none">
+                <StreamingMarkdownContent text={seg.content} isStreaming={!!isStreaming && idx === lastTextSegIdx} />
+              </div>
+            )
+          })}
           {isStreaming && <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />}
         </div>
       )
@@ -196,6 +300,85 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults }: A
     const lastTextIdx = isStreaming
       ? content.reduce((acc: number, b, idx) => (b.type === 'text' ? idx : acc), -1)
       : -1
+
+    // Tools that have special renderers and should NOT be grouped
+    const SPECIAL_TOOLS = new Set(['TodoWrite', 'SpawnTeammate', 'Write', 'Edit', 'MultiEdit', 'Delete'])
+
+    /** Check if a tool_use block should use the generic ToolCallCard (groupable) */
+    const isGroupableTool = (name: string): boolean =>
+      !SPECIAL_TOOLS.has(name) && !TEAM_TOOL_NAMES.has(name) && !subAgentRegistry.has(name)
+
+    // Pre-process: group consecutive same-name groupable tool_use blocks
+    type RenderItem =
+      | { kind: 'block'; index: number }
+      | { kind: 'group'; toolName: string; indices: number[] }
+
+    const renderItems: RenderItem[] = []
+    for (let i = 0; i < content.length; i++) {
+      const block = content[i]
+      if (block.type === 'tool_use' && isGroupableTool(block.name)) {
+        // Check if last item is a group of the same tool name
+        const last = renderItems[renderItems.length - 1]
+        if (last && last.kind === 'group' && last.toolName === block.name) {
+          last.indices.push(i)
+        } else {
+          renderItems.push({ kind: 'group', toolName: block.name, indices: [i] })
+        }
+      } else {
+        renderItems.push({ kind: 'block', index: i })
+      }
+    }
+
+    /** Render a single tool_use block (special or generic) */
+    const renderToolBlock = (block: Extract<ContentBlock, { type: 'tool_use' }>, key: string): React.JSX.Element | null => {
+      if (toolsCollapsed) return null
+      if (block.name === 'TodoWrite') {
+        return <TodoCard key={key} input={block.input} isLive={!!isStreaming} />
+      }
+      if (block.name === 'SpawnTeammate') {
+        const result = toolResults?.get(block.id)
+        return <InlineTeammateCard key={key} input={block.input} output={result?.content} />
+      }
+      if (TEAM_TOOL_NAMES.has(block.name)) {
+        const result = toolResults?.get(block.id)
+        return <TeamEventCard key={key} name={block.name} input={block.input} output={result?.content} />
+      }
+      if (subAgentRegistry.has(block.name)) {
+        const result = toolResults?.get(block.id)
+        return <SubAgentCard key={key} name={block.name} toolUseId={block.id} input={block.input} output={result?.content} isLive={!!isStreaming} />
+      }
+      if (['Write', 'Edit', 'MultiEdit', 'Delete'].includes(block.name)) {
+        const result = toolResults?.get(block.id)
+        const liveTc = liveToolCallMap?.get(block.id)
+        return (
+          <FileChangeCard
+            key={key}
+            name={block.name}
+            input={block.input}
+            output={liveTc?.output ?? result?.content}
+            status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
+            error={liveTc?.error}
+            startedAt={liveTc?.startedAt}
+            completedAt={liveTc?.completedAt}
+          />
+        )
+      }
+      // Generic ToolCallCard
+      const result = toolResults?.get(block.id)
+      const liveTc = liveToolCallMap?.get(block.id)
+      return (
+        <ToolCallCard
+          key={key}
+          name={block.name}
+          input={block.input}
+          output={liveTc?.output ?? result?.content}
+          status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
+          error={liveTc?.error}
+          startedAt={liveTc?.startedAt}
+          completedAt={liveTc?.completedAt}
+        />
+      )
+    }
 
     return (
       <div className="space-y-2">
@@ -208,93 +391,97 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults }: A
             {toolsCollapsed ? `Show ${toolCount} tool calls` : `Collapse ${toolCount} tool calls`}
           </button>
         )}
-        {content.map((block, i) => {
-          switch (block.type) {
-            case 'thinking':
-              return (
-                <ThinkingBlock
-                  key={i}
-                  thinking={block.thinking}
-                  isStreaming={isStreaming}
-                  startedAt={block.startedAt}
-                  completedAt={block.completedAt}
-                />
-              )
-            case 'text':
-              return (
-                <div key={i} className="prose prose-sm dark:prose-invert max-w-none">
-                  <StreamingMarkdownContent text={block.text} isStreaming={i === lastTextIdx} />
-                </div>
-              )
-            case 'tool_use':
-              if (toolsCollapsed) return null
-              // Render TodoWrite as inline task card
-              if (block.name === 'TodoWrite') {
+        {renderItems.map((item) => {
+          if (item.kind === 'block') {
+            const block = content[item.index]
+            switch (block.type) {
+              case 'thinking':
                 return (
-                  <TodoCard
-                    key={block.id}
-                    input={block.input}
-                    isLive={!!isStreaming}
+                  <ThinkingBlock
+                    key={item.index}
+                    thinking={block.thinking}
+                    isStreaming={isStreaming}
+                    startedAt={block.startedAt}
+                    completedAt={block.completedAt}
                   />
                 )
-              }
-              // Render SpawnTeammate as a full inline card with live state
-              if (block.name === 'SpawnTeammate') {
-                const result = toolResults?.get(block.id)
+              case 'text': {
+                const textSegments = parseThinkTags(block.text)
+                const hasThinkInBlock = textSegments.some((s) => s.type === 'think')
+                if (!hasThinkInBlock) {
+                  return (
+                    <div key={item.index} className="prose prose-sm dark:prose-invert max-w-none">
+                      <StreamingMarkdownContent text={block.text} isStreaming={item.index === lastTextIdx} />
+                    </div>
+                  )
+                }
+                const isBlockStreaming = !!(isStreaming && item.index === lastTextIdx)
+                const lastTxtSeg = textSegments.reduce((acc: number, s, j) => (s.type === 'text' ? j : acc), -1)
                 return (
-                  <InlineTeammateCard
-                    key={block.id}
-                    input={block.input}
-                    output={result?.content}
-                  />
+                  <div key={item.index}>
+                    {textSegments.map((seg, j) => {
+                      if (seg.type === 'think') {
+                        return <ThinkingBlock key={j} thinking={seg.content} isStreaming={isBlockStreaming && !seg.closed} />
+                      }
+                      return (
+                        <div key={j} className="prose prose-sm dark:prose-invert max-w-none">
+                          <StreamingMarkdownContent text={seg.content} isStreaming={isBlockStreaming && j === lastTxtSeg} />
+                        </div>
+                      )
+                    })}
+                  </div>
                 )
               }
-              // Render other Team tools as compact event cards
-              if (TEAM_TOOL_NAMES.has(block.name)) {
-                const result = toolResults?.get(block.id)
-                return (
-                  <TeamEventCard
-                    key={block.id}
-                    name={block.name}
-                    input={block.input}
-                    output={result?.content}
-                  />
-                )
-              }
-              // Render SubAgent tools as workspace cards
-              if (subAgentRegistry.has(block.name)) {
-                const result = toolResults?.get(block.id)
-                return (
-                  <SubAgentCard
-                    key={block.id}
-                    name={block.name}
-                    toolUseId={block.id}
-                    input={block.input}
-                    output={result?.content}
-                    isLive={!!isStreaming}
-                  />
-                )
-              }
-              // Render file mutation tools (Write/Edit/MultiEdit/Delete) as file change cards
-              if (['Write', 'Edit', 'MultiEdit', 'Delete'].includes(block.name)) {
-                const result = toolResults?.get(block.id)
-                const liveTc = liveToolCallMap?.get(block.id)
-                return (
-                  <FileChangeCard
-                    key={block.id}
-                    name={block.name}
-                    input={block.input}
-                    output={liveTc?.output ?? result?.content}
-                    status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
-                    error={liveTc?.error}
-                    startedAt={liveTc?.startedAt}
-                    completedAt={liveTc?.completedAt}
-                  />
-                )
-              }
-              {
-                // During streaming: use live state from agent-store for real-time status
-                // Historical: use toolResults from next user message
+              case 'tool_use':
+                return renderToolBlock(block, block.id)
+              default:
+                return null
+            }
+          }
+
+          // kind === 'group': render grouped tool calls
+          if (toolsCollapsed) return null
+          const groupBlocks = item.indices.map((idx) => content[idx] as Extract<ContentBlock, { type: 'tool_use' }>)
+          const groupKey = `group-${item.indices[0]}`
+
+          // Single item in group — render directly without wrapper
+          if (groupBlocks.length === 1) {
+            const block = groupBlocks[0]
+            const result = toolResults?.get(block.id)
+            const liveTc = liveToolCallMap?.get(block.id)
+            return (
+              <ToolCallCard
+                key={block.id}
+                name={block.name}
+                input={block.input}
+                output={liveTc?.output ?? result?.content}
+                status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
+                error={liveTc?.error}
+                startedAt={liveTc?.startedAt}
+                completedAt={liveTc?.completedAt}
+              />
+            )
+          }
+
+          // Multiple items — wrap in ToolCallGroup
+          const groupItems = groupBlocks.map((block) => {
+            const result = toolResults?.get(block.id)
+            const liveTc = liveToolCallMap?.get(block.id)
+            return {
+              id: block.id,
+              name: block.name,
+              input: block.input,
+              output: liveTc?.output ?? result?.content,
+              status: (liveTc?.status ?? (result?.isError ? 'error' : 'completed')) as import('@renderer/lib/agent/types').ToolCallStatus | 'completed',
+              error: liveTc?.error,
+              startedAt: liveTc?.startedAt,
+              completedAt: liveTc?.completedAt,
+            }
+          })
+
+          return (
+            <ToolCallGroup key={groupKey} toolName={item.toolName} items={groupItems}>
+              {groupBlocks.map((block) => {
                 const result = toolResults?.get(block.id)
                 const liveTc = liveToolCallMap?.get(block.id)
                 return (
@@ -309,10 +496,9 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults }: A
                     completedAt={liveTc?.completedAt}
                   />
                 )
-              }
-            default:
-              return null
-          }
+              })}
+            </ToolCallGroup>
+          )
         })}
         {isStreaming && <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse" />}
       </div>
@@ -320,8 +506,8 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults }: A
   }
 
   const plainText = typeof content === 'string'
-    ? content
-    : content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
+    ? stripThinkTags(content)
+    : content.filter((b) => b.type === 'text').map((b) => stripThinkTags(b.text)).join('\n')
 
   return (
     <div className="group/msg flex gap-3">
@@ -340,10 +526,24 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults }: A
           )}
         </div>
         {renderContent()}
+        {devMode && debugInfo && <DebugInfoPanel debugInfo={debugInfo} />}
         {!isStreaming && plainText && (
           <p className="mt-1 text-[10px] text-muted-foreground/40">
             {plainText.split(/\s+/).filter(Boolean).length} words
-            {usage && ` · ${usage.inputTokens + usage.outputTokens} tokens (${usage.inputTokens} in / ${usage.outputTokens} out${usage.cacheReadTokens ? ` / ${usage.cacheReadTokens} cached` : ''}${usage.reasoningTokens ? ` / ${usage.reasoningTokens} reasoning` : ''})`}
+            {usage && (() => {
+              const total = usage.inputTokens + usage.outputTokens
+              const modelCfg = useProviderStore.getState().getActiveModelConfig()
+              const cost = calculateCost(usage, modelCfg)
+              return (
+                <>
+                  {` · ${formatTokens(total)} tokens (${formatTokens(usage.inputTokens)}↓ ${formatTokens(usage.outputTokens)}↑`}
+                  {usage.cacheReadTokens ? ` · ${formatTokens(usage.cacheReadTokens)} cached` : ''}
+                  {usage.reasoningTokens ? ` · ${formatTokens(usage.reasoningTokens)} reasoning` : ''}
+                  {')' }
+                  {cost !== null && <span className="text-emerald-500/70"> · {formatCost(cost)}</span>}
+                </>
+              )
+            })()}
           </p>
         )}
       </div>

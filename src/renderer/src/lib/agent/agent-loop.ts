@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 import { parse as parsePartialJSON } from 'partial-json'
-import type { UnifiedMessage, ContentBlock, ToolUseBlock } from '../api/types'
+import type { UnifiedMessage, ContentBlock, ToolUseBlock, ToolResultContent } from '../api/types'
 import { createProvider } from '../api/provider'
 import { toolRegistry } from './tool-registry'
 import type { AgentEvent, AgentLoopConfig, ToolCallState } from './types'
@@ -96,31 +96,33 @@ export async function* runAgentLoop(
             break
 
           case 'tool_call_end': {
+            const endToolId = event.toolCallId || currentToolId || nanoid()
+            const endToolName = event.toolName || currentToolName
             const toolInput = event.toolCallInput ?? safeParseJSON(currentToolArgs)
             const toolUseBlock: ToolUseBlock = {
               type: 'tool_use',
-              id: currentToolId || nanoid(),
-              name: currentToolName,
+              id: endToolId,
+              name: endToolName,
               input: toolInput,
             }
             assistantContentBlocks.push(toolUseBlock)
 
             const requiresApproval = toolRegistry.checkRequiresApproval(
-              currentToolName,
+              endToolName,
               toolInput,
               toolCtx
             )
 
             const tc: ToolCallState = {
               id: toolUseBlock.id,
-              name: currentToolName,
+              name: endToolName,
               input: toolInput,
               status: requiresApproval ? 'pending_approval' : 'running',
               requiresApproval,
             }
             toolCalls.push(tc)
-            yield { type: 'tool_use_generated', toolUseBlock: { id: toolUseBlock.id, name: currentToolName, input: toolInput } }
-            break
+            yield { type: 'tool_use_generated', toolUseBlock: { id: toolUseBlock.id, name: endToolName, input: toolInput } }
+            break;
           }
 
           case 'message_end':
@@ -186,7 +188,13 @@ export async function* runAgentLoop(
       const startedAt = Date.now()
       yield { type: 'tool_call_start', toolCall: { ...tc, status: 'running', startedAt } }
 
-      const output = await toolRegistry.execute(tc.name, tc.input, { ...toolCtx, currentToolUseId: tc.id })
+      let output: ToolResultContent
+      try {
+        output = await toolRegistry.execute(tc.name, tc.input, { ...toolCtx, currentToolUseId: tc.id })
+      } catch (toolErr) {
+        const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr)
+        output = JSON.stringify({ error: errMsg })
+      }
 
       yield { type: 'tool_call_result', toolCall: { ...tc, status: 'completed', output, startedAt, completedAt: Date.now() } }
 
@@ -212,7 +220,7 @@ export async function* runAgentLoop(
       stopReason: 'tool_use',
       toolResults: toolResults
         .filter((b) => b.type === 'tool_result')
-        .map((b) => ({ toolUseId: (b as { toolUseId: string }).toolUseId, content: (b as { content: string }).content, isError: (b as { isError?: boolean }).isError })),
+        .map((b) => ({ toolUseId: (b as { toolUseId: string }).toolUseId, content: (b as { content: ToolResultContent }).content, isError: (b as { isError?: boolean }).isError })),
     }
   }
 

@@ -1,4 +1,4 @@
-import type { UnifiedMessage } from '@renderer/lib/api/types'
+import type { UnifiedMessage, ToolResultContent } from '@renderer/lib/api/types'
 import { UserMessage } from './UserMessage'
 import { AssistantMessage } from './AssistantMessage'
 
@@ -7,7 +7,7 @@ interface MessageItemProps {
   isStreaming?: boolean
   isLastUserMessage?: boolean
   onEditUserMessage?: (newContent: string) => void
-  toolResults?: Map<string, { content: string; isError?: boolean }>
+  toolResults?: Map<string, { content: ToolResultContent; isError?: boolean }>
 }
 
 function formatTime(ts: number): string {
@@ -36,7 +36,7 @@ export function MessageItem({ message, isStreaming, isLastUserMessage, onEditUse
         )
       }
       case 'assistant':
-        return <AssistantMessage content={message.content} isStreaming={isStreaming} usage={message.usage} toolResults={toolResults} />
+        return <AssistantMessage content={message.content} isStreaming={isStreaming} usage={message.usage} toolResults={toolResults} debugInfo={message.debugInfo} />
       default:
         return null
     }

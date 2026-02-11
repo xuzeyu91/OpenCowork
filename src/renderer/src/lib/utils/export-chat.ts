@@ -17,8 +17,18 @@ function contentToMarkdown(content: string | ContentBlock[]): string {
           }
           return `**Tool Call: \`${block.name}\`**\n\`\`\`json\n${JSON.stringify(block.input, null, 2)}\n\`\`\``
         }
-        case 'tool_result':
-          return `**Tool Result** (${block.isError ? 'error' : 'success'}):\n\`\`\`\n${block.content}\n\`\`\``
+        case 'tool_result': {
+          let contentStr: string
+          if (Array.isArray(block.content)) {
+            const parts = block.content.map((cb) =>
+              cb.type === 'text' ? cb.text : cb.type === 'image' ? `[Image: ${cb.source.mediaType}]` : ''
+            )
+            contentStr = parts.join('\n') || '[Image]'
+          } else {
+            contentStr = block.content
+          }
+          return `**Tool Result** (${block.isError ? 'error' : 'success'}):\n\`\`\`\n${contentStr}\n\`\`\``
+        }
         default:
           return ''
       }

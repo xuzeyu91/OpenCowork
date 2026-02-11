@@ -1,4 +1,5 @@
 import { useSettingsStore } from '@renderer/stores/settings-store'
+import { useProviderStore } from '@renderer/stores/provider-store'
 import { createProvider } from './provider'
 import type { ProviderConfig, UnifiedMessage } from './types'
 
@@ -9,18 +10,31 @@ import type { ProviderConfig, UnifiedMessage } from './types'
  */
 export async function generateSessionTitle(userMessage: string): Promise<string | null> {
   const settings = useSettingsStore.getState()
-  if (!settings.apiKey || !settings.fastModel) return null
 
-  const config: ProviderConfig = {
-    type: settings.provider,
-    apiKey: settings.apiKey,
-    baseUrl: settings.baseUrl || undefined,
-    model: settings.fastModel,
-    maxTokens: 60,
-    temperature: 0.3,
-    systemPrompt:
-      'You are a title generator. Given a user message, produce a concise title (max 30 characters) that summarizes the intent. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation.',
-  }
+  // Try provider-store fast model config first, then fall back to settings-store
+  const fastConfig = useProviderStore.getState().getFastProviderConfig()
+  const config: ProviderConfig | null = fastConfig
+    ? {
+        ...fastConfig,
+        maxTokens: 60,
+        temperature: 0.3,
+        systemPrompt:
+          'You are a title generator. Given a user message, produce a concise title (max 30 characters) that summarizes the intent. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation.',
+      }
+    : settings.apiKey && settings.fastModel
+      ? {
+          type: settings.provider,
+          apiKey: settings.apiKey,
+          baseUrl: settings.baseUrl || undefined,
+          model: settings.fastModel,
+          maxTokens: 60,
+          temperature: 0.3,
+          systemPrompt:
+            'You are a title generator. Given a user message, produce a concise title (max 30 characters) that summarizes the intent. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation.',
+        }
+      : null
+
+  if (!config || !config.apiKey) return null
 
   const messages: UnifiedMessage[] = [
     {

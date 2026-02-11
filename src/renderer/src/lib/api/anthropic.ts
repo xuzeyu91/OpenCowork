@@ -144,8 +144,18 @@ class AnthropicProvider implements APIProvider {
                 return { type: 'text', text: b.text }
               case 'tool_use':
                 return { type: 'tool_use', id: b.id, name: b.name, input: b.input }
-              case 'tool_result':
-                return { type: 'tool_result', tool_use_id: b.toolUseId, content: b.content }
+              case 'tool_result': {
+                let formattedContent: unknown = b.content
+                if (Array.isArray(b.content)) {
+                  formattedContent = b.content.map((cb) => {
+                    if (cb.type === 'image') {
+                      return { type: 'image', source: { type: cb.source.type, media_type: cb.source.mediaType, data: cb.source.data } }
+                    }
+                    return cb
+                  })
+                }
+                return { type: 'tool_result', tool_use_id: b.toolUseId, content: formattedContent }
+              }
               case 'image':
                 return { type: 'image', source: b.source }
               default:

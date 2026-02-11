@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react'
+import appIconUrl from '../../../../../resources/icon.png'
 import { nanoid } from 'nanoid'
-import { Plus, MessageSquare, Trash2, Eraser, Search, Briefcase, Code2, Download, Copy, X, Pin, PinOff, Pencil, Upload } from 'lucide-react'
+import { formatTokens } from '@renderer/lib/format-tokens'
+import { Plus, MessageSquare, Trash2, Eraser, Search, Briefcase, Code2, Download, Copy, X, Pin, PinOff, Pencil, Upload, Settings, Loader2, CheckCircle2 } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -40,6 +42,7 @@ import {
 import { toast } from 'sonner'
 import { useChatStore, type SessionMode } from '@renderer/stores/chat-store'
 import { useUIStore } from '@renderer/stores/ui-store'
+import { useAgentStore } from '@renderer/stores/agent-store'
 import { sessionToMarkdown } from '@renderer/lib/utils/export-chat'
 
 const modeIcons: Record<SessionMode, React.ReactNode> = {
@@ -59,6 +62,7 @@ export function AppSidebar(): React.JSX.Element {
   const updateSessionMode = useChatStore((s) => s.updateSessionMode)
   const togglePinSession = useChatStore((s) => s.togglePinSession)
   const mode = useUIStore((s) => s.mode)
+  const runningSessions = useAgentStore((s) => s.runningSessions)
   const [search, setSearch] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -104,7 +108,7 @@ export function AppSidebar(): React.JSX.Element {
       // Pinned sessions first
       if (a.pinned && !b.pinned) return -1
       if (!a.pinned && b.pinned) return 1
-      return b.updatedAt - a.updatedAt
+      return b.createdAt - a.createdAt
     })
 
   const filtered = search.trim()
@@ -127,11 +131,11 @@ export function AppSidebar(): React.JSX.Element {
   const monthStart = todayStart - 30 * 86400000
 
   const groups: { label: string; items: typeof filtered }[] = []
-  const today = filtered.filter((s) => s.updatedAt >= todayStart)
-  const yesterday = filtered.filter((s) => s.updatedAt >= yesterdayStart && s.updatedAt < todayStart)
-  const thisWeek = filtered.filter((s) => s.updatedAt >= weekStart && s.updatedAt < yesterdayStart)
-  const thisMonth = filtered.filter((s) => s.updatedAt >= monthStart && s.updatedAt < weekStart)
-  const older = filtered.filter((s) => s.updatedAt < monthStart)
+  const today = filtered.filter((s) => s.createdAt >= todayStart)
+  const yesterday = filtered.filter((s) => s.createdAt >= yesterdayStart && s.createdAt < todayStart)
+  const thisWeek = filtered.filter((s) => s.createdAt >= weekStart && s.createdAt < yesterdayStart)
+  const thisMonth = filtered.filter((s) => s.createdAt >= monthStart && s.createdAt < weekStart)
+  const older = filtered.filter((s) => s.createdAt < monthStart)
   if (today.length) groups.push({ label: 'Today', items: today })
   if (yesterday.length) groups.push({ label: 'Yesterday', items: yesterday })
   if (thisWeek.length) groups.push({ label: 'This Week', items: thisWeek })
@@ -144,9 +148,9 @@ export function AppSidebar(): React.JSX.Element {
       <SidebarHeader>
         <div className="flex items-center gap-2.5 px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
           <img
-            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230ea5e9'/%3E%3Ccircle cx='35' cy='40' r='14' fill='%23fff'/%3E%3Ccircle cx='65' cy='40' r='14' fill='%23fff' opacity='.85'/%3E%3Cpath d='M25 68 Q50 85 75 68' stroke='%23fff' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"
+            src={appIconUrl}
             alt="OpenCowork"
-            className="size-7 rounded-lg shadow-sm"
+            className="size-8 rounded-xl object-cover shadow-sm"
           />
           <span className="text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
             OpenCowork
@@ -230,8 +234,11 @@ export function AppSidebar(): React.JSX.Element {
                         <ContextMenuTrigger asChild>
                           <SidebarMenuItem>
                             <SidebarMenuButton
-                              isActive={session.id === activeSessionId}
-                              onClick={() => setActiveSession(session.id)}
+                              isActive={session.id === activeSessionId && !useUIStore.getState().settingsPageOpen}
+                              onClick={() => {
+                                setActiveSession(session.id)
+                                useUIStore.getState().closeSettingsPage()
+                              }}
                               onDoubleClick={(e) => {
                                 e.preventDefault()
                                 setEditingId(session.id)
@@ -277,6 +284,12 @@ export function AppSidebar(): React.JSX.Element {
                               )}
                               {editingId !== session.id && (
                                 <span className="ml-auto shrink-0 flex items-center gap-1">
+                                  {runningSessions[session.id] === 'running' && (
+                                    <Loader2 className="size-3 animate-spin text-blue-500" />
+                                  )}
+                                  {runningSessions[session.id] === 'completed' && (
+                                    <CheckCircle2 className="size-3 text-emerald-500" />
+                                  )}
                                   {session.pinned && (
                                     <Pin className="size-2.5 text-muted-foreground/30 -rotate-45" />
                                   )}
@@ -402,57 +415,68 @@ export function AppSidebar(): React.JSX.Element {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="flex gap-1.5 group-data-[collapsible=icon]:justify-center">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 gap-2 rounded-lg group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:shadow-none transition-all duration-200 hover:shadow-sm"
-            onClick={handleNewSession}
-            title="New Chat"
-          >
-            <Plus className="size-4" />
-            <span className="group-data-[collapsible=icon]:hidden">New Chat</span>
-          </Button>
+        <div className="flex flex-col gap-1.5 group-data-[collapsible=icon]:items-center">
+          <div className="flex gap-1.5 group-data-[collapsible=icon]:justify-center">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2 rounded-lg group-data-[collapsible=icon]:size-10 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:shadow-none transition-all duration-200 hover:shadow-sm"
+              onClick={handleNewSession}
+              title="New Chat"
+            >
+              <Plus className="size-4" />
+              <span className="group-data-[collapsible=icon]:hidden">New Chat</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-8 shrink-0 p-0 group-data-[collapsible=icon]:hidden"
+              title="Import session (JSON)"
+              onClick={() => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = '.json'
+                input.onchange = () => {
+                  const file = input.files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    try {
+                      const data = JSON.parse(reader.result as string)
+                      if (data.id && data.messages && data.title) {
+                        data.id = nanoid()
+                        useChatStore.getState().restoreSession(data)
+                        toast.success(`Imported "${data.title}"`)
+                      } else {
+                        toast.error('Invalid session file')
+                      }
+                    } catch {
+                      toast.error('Failed to parse JSON')
+                    }
+                  }
+                  reader.readAsText(file)
+                }
+                input.click()
+              }}
+            >
+              <Upload className="size-3.5" />
+            </Button>
+          </div>
           <Button
             variant="ghost"
             size="sm"
-            className="size-8 shrink-0 p-0 group-data-[collapsible=icon]:hidden"
-            title="Import session (JSON)"
-            onClick={() => {
-              const input = document.createElement('input')
-              input.type = 'file'
-              input.accept = '.json'
-              input.onchange = () => {
-                const file = input.files?.[0]
-                if (!file) return
-                const reader = new FileReader()
-                reader.onload = () => {
-                  try {
-                    const data = JSON.parse(reader.result as string)
-                    if (data.id && data.messages && data.title) {
-                      data.id = nanoid()
-                      useChatStore.getState().restoreSession(data)
-                      toast.success(`Imported "${data.title}"`)
-                    } else {
-                      toast.error('Invalid session file')
-                    }
-                  } catch {
-                    toast.error('Failed to parse JSON')
-                  }
-                }
-                reader.readAsText(file)
-              }
-              input.click()
-            }}
+            className="size-8 shrink-0 p-0 group-data-[collapsible=icon]:size-10"
+            title="系统设置"
+            onClick={() => useUIStore.getState().openSettingsPage()}
           >
-            <Upload className="size-3.5" />
+            <Settings className="size-3.5" />
           </Button>
         </div>
         <p className="text-center text-[10px] text-muted-foreground/25 group-data-[collapsible=icon]:hidden">
           {sessions.length} sessions · {sessions.reduce((a, s) => a + s.messages.length, 0)} msgs
           {(() => {
             const total = sessions.reduce((a, s) => a + s.messages.reduce((b, m) => b + (m.usage ? m.usage.inputTokens + m.usage.outputTokens : 0), 0), 0)
-            return total > 0 ? ` · ${total >= 1000 ? `${(total / 1000).toFixed(1)}K` : total} tokens` : ''
+            return total > 0 ? ` · ${formatTokens(total)} tokens` : ''
           })()}
         </p>
       </SidebarFooter>

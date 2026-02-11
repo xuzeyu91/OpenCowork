@@ -4,6 +4,7 @@ import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@renderer/lib/utils'
 import type { ToolCallStatus } from '@renderer/lib/agent/types'
+import type { ToolResultContent } from '@renderer/lib/api/types'
 import { MONO_FONT } from '@renderer/lib/constants'
 
 // ── Types ────────────────────────────────────────────────────────
@@ -12,7 +13,7 @@ interface FileChangeCardProps {
   /** Tool name: Write, Edit, MultiEdit, Delete */
   name: string
   input: Record<string, unknown>
-  output?: string
+  output?: ToolResultContent
   status: ToolCallStatus | 'completed'
   error?: string
   startedAt?: number
@@ -328,8 +329,9 @@ export function FileChangeCard({
 
   const filePath = String(input.file_path ?? input.path ?? '')
   const elapsed = startedAt && completedAt ? ((completedAt - startedAt) / 1000).toFixed(1) + 's' : null
-  const isSuccess = output ? (output.includes('"success"') || output.includes('success')) : false
-  const isOutputError = output ? (!isSuccess && output.length > 0) : false
+  const outputStr = typeof output === 'string' ? output : undefined
+  const isSuccess = outputStr ? (outputStr.includes('"success"') || outputStr.includes('success')) : false
+  const isOutputError = outputStr ? (!isSuccess && outputStr.length > 0) : false
 
   // Determine border color based on status
   const borderColor =
@@ -410,9 +412,9 @@ export function FileChangeCard({
           <p className="text-[11px] text-destructive truncate">{error}</p>
         </div>
       )}
-      {output && !error && isOutputError && !isSuccess && (
+      {outputStr && !error && isOutputError && !isSuccess && (
         <div className="border-t border-destructive/20 px-3 py-1.5 bg-destructive/5">
-          <p className="text-[11px] text-destructive/80 font-mono truncate">{output.slice(0, 120)}</p>
+          <p className="text-[11px] text-destructive/80 font-mono truncate">{outputStr.slice(0, 120)}</p>
         </div>
       )}
     </div>
