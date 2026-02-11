@@ -10,6 +10,7 @@ export type SessionMode = 'chat' | 'cowork' | 'code'
 export interface Session {
   id: string
   title: string
+  icon?: string
   mode: SessionMode
   messages: UnifiedMessage[]
   createdAt: number
@@ -24,6 +25,7 @@ function dbCreateSession(s: Session): void {
   ipcClient.invoke('db:sessions:create', {
     id: s.id,
     title: s.title,
+    icon: s.icon,
     mode: s.mode,
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
@@ -111,6 +113,7 @@ interface ChatStore {
   deleteSession: (id: string) => void
   setActiveSession: (id: string | null) => void
   updateSessionTitle: (id: string, title: string) => void
+  updateSessionIcon: (id: string, icon: string) => void
   updateSessionMode: (id: string, mode: SessionMode) => void
   setWorkingFolder: (sessionId: string, folder: string) => void
   clearSessionMessages: (sessionId: string) => void
@@ -145,6 +148,7 @@ interface ChatStore {
 interface SessionRow {
   id: string
   title: string
+  icon: string | null
   mode: string
   created_at: number
   updated_at: number
@@ -166,6 +170,7 @@ function rowToSession(row: SessionRow, messages: UnifiedMessage[] = []): Session
   return {
     id: row.id,
     title: row.title,
+    icon: row.icon ?? undefined,
     mode: row.mode as SessionMode,
     messages,
     createdAt: row.created_at,
@@ -272,6 +277,18 @@ export const useChatStore = create<ChatStore>()(
       dbUpdateSession(id, { title, updatedAt: now })
     },
 
+    updateSessionIcon: (id, icon) => {
+      const now = Date.now()
+      set((state) => {
+        const session = state.sessions.find((s) => s.id === id)
+        if (session) {
+          session.icon = icon
+          session.updatedAt = now
+        }
+      })
+      dbUpdateSession(id, { icon, updatedAt: now })
+    },
+
     updateSessionMode: (id, mode) => {
       const now = Date.now()
       set((state) => {
@@ -344,6 +361,7 @@ export const useChatStore = create<ChatStore>()(
       const newSession: Session = {
         id: newId,
         title: `${source.title} (copy)`,
+        icon: source.icon,
         mode: source.mode,
         messages: clonedMessages,
         createdAt: now,

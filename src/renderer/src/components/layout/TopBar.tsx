@@ -3,7 +3,6 @@ import { MessageSquare, Briefcase, Code2, Settings, PanelRightOpen, PanelRightCl
 import { Button } from '@renderer/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { SidebarTrigger } from '@renderer/components/ui/sidebar'
-import { Separator } from '@renderer/components/ui/separator'
 import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
 import { useChatStore } from '@renderer/stores/chat-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
@@ -145,7 +144,7 @@ export function TopBar(): React.JSX.Element {
   return (
     <header className="titlebar-drag relative flex h-10 w-full shrink-0 items-center gap-2 overflow-hidden border-b bg-background/80 backdrop-blur-md pl-4 pr-[132px]">
       <SidebarTrigger className="titlebar-no-drag shrink-0 -ml-1" />
-      <Separator orientation="vertical" className="shrink-0 mr-2 h-4" />
+      <div className="shrink-0 mr-2" />
 
       {/* Mode Selector */}
       <div className="titlebar-no-drag flex shrink-0 items-center gap-0.5 rounded-lg bg-muted/60 p-0.5">

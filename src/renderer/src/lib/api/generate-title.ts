@@ -2,13 +2,27 @@ import { useSettingsStore } from '@renderer/stores/settings-store'
 import { useProviderStore } from '@renderer/stores/provider-store'
 import { createProvider } from './provider'
 import type { ProviderConfig, UnifiedMessage } from './types'
+import { SESSION_ICONS_PROMPT_LIST } from '@renderer/lib/constants/session-icons'
+
+export interface SessionTitleResult {
+  title: string
+  icon: string
+}
+
+const TITLE_SYSTEM_PROMPT = `You are a title generator. Given a user message, produce:
+1. A concise title (max 30 characters) that summarizes the intent.
+2. Pick ONE icon name from the following Lucide icon list that best represents the topic:
+${SESSION_ICONS_PROMPT_LIST}
+
+Reply with ONLY a JSON object in this exact format (no markdown, no explanation):
+{"title":"your title here","icon":"icon-name"}`
 
 /**
  * Use the fast model to generate a short session title from the user's first message.
  * Runs in the background — does not block the main chat flow.
- * Returns a short title string (≤30 chars) or null on failure.
+ * Returns { title, icon } or null on failure.
  */
-export async function generateSessionTitle(userMessage: string): Promise<string | null> {
+export async function generateSessionTitle(userMessage: string): Promise<SessionTitleResult | null> {
   const settings = useSettingsStore.getState()
 
   // Try provider-store fast model config first, then fall back to settings-store
@@ -16,10 +30,9 @@ export async function generateSessionTitle(userMessage: string): Promise<string 
   const config: ProviderConfig | null = fastConfig
     ? {
         ...fastConfig,
-        maxTokens: 60,
+        maxTokens: 100,
         temperature: 0.3,
-        systemPrompt:
-          'You are a title generator. Given a user message, produce a concise title (max 30 characters) that summarizes the intent. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation.',
+        systemPrompt: TITLE_SYSTEM_PROMPT,
       }
     : settings.apiKey && settings.fastModel
       ? {
@@ -27,10 +40,9 @@ export async function generateSessionTitle(userMessage: string): Promise<string 
           apiKey: settings.apiKey,
           baseUrl: settings.baseUrl || undefined,
           model: settings.fastModel,
-          maxTokens: 60,
+          maxTokens: 100,
           temperature: 0.3,
-          systemPrompt:
-            'You are a title generator. Given a user message, produce a concise title (max 30 characters) that summarizes the intent. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation.',
+          systemPrompt: TITLE_SYSTEM_PROMPT,
         }
       : null
 
@@ -58,10 +70,26 @@ export async function generateSessionTitle(userMessage: string): Promise<string 
     }
     clearTimeout(timeout)
 
-    title = title.trim().replace(/^["']|["']$/g, '').trim()
-    if (!title) return null
-    if (title.length > 40) title = title.slice(0, 40) + '...'
-    return title
+    const raw = title.trim()
+    if (!raw) return null
+
+    // Try to parse JSON response
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        if (parsed.title && parsed.icon) {
+          let t = String(parsed.title).trim().replace(/^["']|["']$/g, '').trim()
+          if (t.length > 40) t = t.slice(0, 40) + '...'
+          return { title: t, icon: String(parsed.icon).trim() }
+        }
+      }
+    } catch { /* fall through to plain-text fallback */ }
+
+    // Fallback: treat entire response as title, use default icon
+    let plainTitle = raw.replace(/^["']|["']$/g, '').trim()
+    if (plainTitle.length > 40) plainTitle = plainTitle.slice(0, 40) + '...'
+    return { title: plainTitle, icon: 'message-square' }
   } catch {
     return null
   }

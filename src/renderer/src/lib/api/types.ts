@@ -126,6 +126,10 @@ export interface AIModelConfig {
   cacheCreationPrice?: number
   /** Price per million tokens for cache hit/read (USD) */
   cacheHitPrice?: number
+  /** Whether the model supports image/vision input */
+  supportsVision?: boolean
+  /** Whether the model supports function/tool calling */
+  supportsFunctionCall?: boolean
 }
 
 export interface AIProvider {

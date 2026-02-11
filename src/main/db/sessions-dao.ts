@@ -3,6 +3,7 @@ import { getDb } from './database'
 export interface SessionRow {
   id: string
   title: string
+  icon: string | null
   mode: string
   created_at: number
   updated_at: number
@@ -23,6 +24,7 @@ export function getSession(id: string): SessionRow | undefined {
 export function createSession(session: {
   id: string
   title: string
+  icon?: string
   mode: string
   createdAt: number
   updatedAt: number
@@ -31,11 +33,12 @@ export function createSession(session: {
 }): void {
   const db = getDb()
   db.prepare(
-    `INSERT INTO sessions (id, title, mode, created_at, updated_at, working_folder, pinned)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO sessions (id, title, icon, mode, created_at, updated_at, working_folder, pinned)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     session.id,
     session.title,
+    session.icon ?? null,
     session.mode,
     session.createdAt,
     session.updatedAt,
@@ -48,6 +51,7 @@ export function updateSession(
   id: string,
   patch: Partial<{
     title: string
+    icon: string | null
     mode: string
     updatedAt: number
     workingFolder: string | null
@@ -61,6 +65,10 @@ export function updateSession(
   if (patch.title !== undefined) {
     sets.push('title = ?')
     values.push(patch.title)
+  }
+  if (patch.icon !== undefined) {
+    sets.push('icon = ?')
+    values.push(patch.icon)
   }
   if (patch.mode !== undefined) {
     sets.push('mode = ?')

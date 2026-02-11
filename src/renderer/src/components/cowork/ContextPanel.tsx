@@ -187,8 +187,9 @@ export function ContextPanel(): React.JSX.Element {
                 const totalTokens = totals.input + totals.output
                 const ctxLimit = activeModelCfg?.contextLength ?? null
                 // Context window = last API call's input tokens (stored as contextTokens, not accumulated)
+                // Fallback to inputTokens for older messages that don't have contextTokens
                 const lastUsage = [...activeSession.messages].reverse().find((m) => m.usage)?.usage
-                const ctxUsed = lastUsage?.contextTokens ?? 0
+                const ctxUsed = lastUsage?.contextTokens ?? lastUsage?.inputTokens ?? 0
                 const pct = ctxLimit && ctxUsed > 0 ? Math.min((ctxUsed / ctxLimit) * 100, 100) : null
                 const barColor = pct === null ? '' : pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-500' : 'bg-green-500'
                 return (

@@ -18,20 +18,22 @@ const builtinAgents = [codeSearchAgent, codeReviewAgent, plannerAgent]
 export function registerBuiltinSubAgents(): void {
   const providerGetter = (): ProviderConfig => {
     const s = useSettingsStore.getState()
-    const fastConfig = useProviderStore.getState().getFastProviderConfig()
+    const store = useProviderStore.getState()
+    const fastConfig = store.getFastProviderConfig()
     if (fastConfig && fastConfig.apiKey) {
       return {
         ...fastConfig,
-        maxTokens: s.maxTokens,
+        maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fastConfig.model),
         temperature: s.temperature,
       }
     }
+    const fallbackModel = s.fastModel || s.model
     return {
       type: s.provider,
       apiKey: s.apiKey,
       baseUrl: s.baseUrl || undefined,
-      model: s.fastModel || s.model,
-      maxTokens: s.maxTokens,
+      model: fallbackModel,
+      maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fallbackModel),
       temperature: s.temperature,
     }
   }

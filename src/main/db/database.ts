@@ -49,6 +49,13 @@ export function getDb(): Database.Database {
       ON messages(session_id, sort_order);
   `)
 
+  // Migration: add icon column if missing
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN icon TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
   return db
 }
 

@@ -12,6 +12,7 @@ import { moonshotPreset } from './moonshot'
 import { qwenPreset } from './qwen'
 import { siliconflowPreset } from './siliconflow'
 import { giteeAiPreset } from './gitee-ai'
+import { xiaomiPreset } from './xiaomi'
 import type { BuiltinProviderPreset } from './types'
 
 export const builtinProviderPresets: BuiltinProviderPreset[] = [
@@ -27,4 +28,5 @@ export const builtinProviderPresets: BuiltinProviderPreset[] = [
   qwenPreset,
   siliconflowPreset,
   giteeAiPreset,
+  xiaomiPreset,
 ]

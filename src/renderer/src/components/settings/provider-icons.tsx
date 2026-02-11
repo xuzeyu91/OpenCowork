@@ -9,6 +9,7 @@ import Moonshot from '@lobehub/icons/es/Moonshot'
 import Qwen from '@lobehub/icons/es/Qwen'
 import SiliconCloud from '@lobehub/icons/es/SiliconCloud'
 import GiteeAI from '@lobehub/icons/es/GiteeAI'
+import XiaomiMiMo from '@lobehub/icons/es/XiaomiMiMo'
 import { Bot } from 'lucide-react'
 
 const iconUrlMap: Record<string, string> = {
@@ -27,6 +28,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
   qwen: Qwen,
   siliconflow: SiliconCloud,
   'gitee-ai': GiteeAI,
+  xiaomi: XiaomiMiMo,
 }
 
 export function ProviderIcon({

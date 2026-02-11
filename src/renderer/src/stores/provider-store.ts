@@ -57,6 +57,8 @@ interface ProviderStore {
   getActiveModelConfig: () => AIModelConfig | null
   getActiveProviderConfig: () => ProviderConfig | null
   getFastProviderConfig: () => ProviderConfig | null
+  /** Clamp user maxTokens to model's maxOutputTokens if exceeded */
+  getEffectiveMaxTokens: (userMaxTokens: number, modelId?: string) => number
 
   // Migration
   _migrated: boolean
@@ -204,6 +206,17 @@ export const useProviderStore = create<ProviderStore>()(
         }
       },
 
+      getEffectiveMaxTokens: (userMaxTokens: number, modelId?: string) => {
+        const { providers, activeProviderId, activeModelId } = get()
+        const targetModelId = modelId ?? activeModelId
+        if (!activeProviderId || !targetModelId) return userMaxTokens
+        const provider = providers.find((p) => p.id === activeProviderId)
+        if (!provider) return userMaxTokens
+        const model = provider.models.find((m) => m.id === targetModelId)
+        if (!model?.maxOutputTokens) return userMaxTokens
+        return Math.min(userMaxTokens, model.maxOutputTokens)
+      },
+
       _markMigrated: () => set({ _migrated: true }),
     }),
     {
@@ -244,6 +257,9 @@ function ensureBuiltinPresets(): void {
         if (m.cacheCreationPrice == null && presetModel.cacheCreationPrice != null) patch.cacheCreationPrice = presetModel.cacheCreationPrice
         if (m.cacheHitPrice == null && presetModel.cacheHitPrice != null) patch.cacheHitPrice = presetModel.cacheHitPrice
         if (m.contextLength == null && presetModel.contextLength != null) patch.contextLength = presetModel.contextLength
+        if (m.maxOutputTokens == null && presetModel.maxOutputTokens != null) patch.maxOutputTokens = presetModel.maxOutputTokens
+        if (m.supportsVision == null && presetModel.supportsVision != null) patch.supportsVision = presetModel.supportsVision
+        if (m.supportsFunctionCall == null && presetModel.supportsFunctionCall != null) patch.supportsFunctionCall = presetModel.supportsFunctionCall
         if (Object.keys(patch).length > 0) { dirty = true; return { ...m, ...patch } }
         return m
       })

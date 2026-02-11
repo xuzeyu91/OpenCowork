@@ -148,7 +148,7 @@ export function InputArea({
   }
 
   return (
-    <div className="border-t bg-background/80 backdrop-blur-sm px-4 py-3">
+    <div className="px-4 py-3 pb-4">
       {/* API key warning */}
       {!hasApiKey && (
         <button

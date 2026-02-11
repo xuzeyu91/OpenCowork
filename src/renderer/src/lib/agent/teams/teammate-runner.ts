@@ -236,19 +236,23 @@ async function runSingleTaskLoop(opts: {
   // Build provider config from provider-store with fallback to settings-store
   const settings = useSettingsStore.getState()
   const activeConfig = useProviderStore.getState().getActiveProviderConfig()
+  const effectiveModel = model && model !== 'default'
+    ? model
+    : (activeConfig?.model ?? settings.model)
+  const effectiveMaxTokens = useProviderStore.getState().getEffectiveMaxTokens(settings.maxTokens, effectiveModel)
   const providerConfig: ProviderConfig = activeConfig
     ? {
         ...activeConfig,
-        model: model && model !== 'default' ? model : activeConfig.model,
-        maxTokens: settings.maxTokens,
+        model: effectiveModel,
+        maxTokens: effectiveMaxTokens,
         temperature: settings.temperature,
       }
     : {
         type: settings.provider,
         apiKey: settings.apiKey,
         baseUrl: settings.baseUrl || undefined,
-        model: model && model !== 'default' ? model : settings.model,
-        maxTokens: settings.maxTokens,
+        model: effectiveModel,
+        maxTokens: effectiveMaxTokens,
         temperature: settings.temperature,
       }
 

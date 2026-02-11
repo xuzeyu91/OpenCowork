@@ -30,10 +30,11 @@ export function useChatActions() {
 
     // Build provider config from provider-store (new system) with fallback to settings-store
     const providerConfig = useProviderStore.getState().getActiveProviderConfig()
+    const effectiveMaxTokens = useProviderStore.getState().getEffectiveMaxTokens(settings.maxTokens)
     const baseProviderConfig: ProviderConfig | null = providerConfig
       ? {
           ...providerConfig,
-          maxTokens: settings.maxTokens,
+          maxTokens: effectiveMaxTokens,
           temperature: settings.temperature,
           systemPrompt: settings.systemPrompt || undefined,
         }
@@ -43,7 +44,7 @@ export function useChatActions() {
             apiKey: settings.apiKey,
             baseUrl: settings.baseUrl || undefined,
             model: settings.model,
-            maxTokens: settings.maxTokens,
+            maxTokens: effectiveMaxTokens,
             temperature: settings.temperature,
             systemPrompt: settings.systemPrompt || undefined,
           }
@@ -72,13 +73,15 @@ export function useChatActions() {
     }
     chatStore.addMessage(sessionId, userMsg)
 
-    // Auto-title: fire-and-forget AI title generation for the first message
+    // Auto-title: fire-and-forget AI title + icon generation for the first message
     const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)
     if (session && session.title === 'New Conversation') {
       const capturedSessionId = sessionId
-      generateSessionTitle(text).then((aiTitle) => {
-        if (aiTitle) {
-          useChatStore.getState().updateSessionTitle(capturedSessionId, aiTitle)
+      generateSessionTitle(text).then((result) => {
+        if (result) {
+          const store = useChatStore.getState()
+          store.updateSessionTitle(capturedSessionId, result.title)
+          store.updateSessionIcon(capturedSessionId, result.icon)
         }
       }).catch(() => { /* keep default title on failure */ })
     }

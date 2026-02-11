@@ -3,6 +3,7 @@ import appIconUrl from '../../../../../resources/icon.png'
 import { nanoid } from 'nanoid'
 import { formatTokens } from '@renderer/lib/format-tokens'
 import { Plus, MessageSquare, Trash2, Eraser, Search, Briefcase, Code2, Download, Copy, X, Pin, PinOff, Pencil, Upload, Settings, Loader2, CheckCircle2 } from 'lucide-react'
+import { DynamicIcon } from 'lucide-react/dynamic'
 import {
   Sidebar,
   SidebarContent,
@@ -247,7 +248,7 @@ export function AppSidebar(): React.JSX.Element {
                               }}
                               tooltip={`${session.title}\n${session.mode} · ${(() => { const m = Math.floor((Date.now() - session.updatedAt) / 60000); if (m < 1) return 'just now'; if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; return `${Math.floor(h / 24)}d ago`; })()} · ${session.messages.length} msgs${session.pinned ? ' · pinned' : ''}`}
                             >
-                              {session.pinned ? <Pin className="size-3 shrink-0 text-muted-foreground/50" /> : modeIcons[session.mode]}
+                              {session.pinned ? <Pin className="size-3 shrink-0 text-muted-foreground/50" /> : session.icon ? <DynamicIcon name={session.icon as never} className="size-4 shrink-0" /> : modeIcons[session.mode]}
                               {editingId === session.id ? (
                                 <input
                                   ref={editRef}
