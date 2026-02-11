@@ -10,10 +10,11 @@ function contentToMarkdown(content: string | ContentBlock[]): string {
         case 'text':
           return block.text
         case 'tool_use': {
-          const isSubAgent = ['CodeSearch', 'CodeReview', 'Planner'].includes(block.name)
-          if (isSubAgent) {
-            const query = String((block.input as Record<string, unknown>).query ?? (block.input as Record<string, unknown>).task ?? (block.input as Record<string, unknown>).target ?? '')
-            return `**🧠 SubAgent: \`${block.name}\`** — ${query}`
+          if (block.name === 'Task') {
+            const inp = block.input as Record<string, unknown>
+            const subType = String(inp.subType ?? '?')
+            const desc = String(inp.description ?? inp.prompt ?? '')
+            return `**🧠 Task: \`${subType}\`** — ${desc}`
           }
           return `**Tool Call: \`${block.name}\`**\n\`\`\`json\n${JSON.stringify(block.input, null, 2)}\n\`\`\``
         }

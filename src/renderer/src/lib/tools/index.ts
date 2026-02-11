@@ -14,10 +14,13 @@ import { registerPreviewTools } from './preview-tool'
  * SubAgents are registered AFTER regular tools because they
  * reference tool definitions from the registry.
  * Team tools are registered last.
+ *
+ * This is async because SubAgent definitions are loaded from
+ * .md files via IPC from the main process.
  */
 let _allToolsRegistered = false
 
-export function registerAllTools(): void {
+export async function registerAllTools(): Promise<void> {
   if (_allToolsRegistered) return
   _allToolsRegistered = true
 
@@ -28,8 +31,8 @@ export function registerAllTools(): void {
   registerSkillTools()
   registerPreviewTools()
 
-  // SubAgents (registered as tools so the main agent can invoke them)
-  registerBuiltinSubAgents()
+  // SubAgents (loaded from ~/.open-cowork/agents/*.md via IPC, then registered as unified Task tool)
+  await registerBuiltinSubAgents()
 
   // Agent Team tools
   registerTeamTools()

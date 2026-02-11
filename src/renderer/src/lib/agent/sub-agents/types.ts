@@ -73,7 +73,3 @@ export type SubAgentEvent =
   | { type: 'sub_agent_text_delta'; subAgentName: string; toolUseId: string; text: string }
   | { type: 'sub_agent_iteration'; subAgentName: string; toolUseId: string; iteration: number }
   | { type: 'sub_agent_end'; subAgentName: string; toolUseId: string; result: SubAgentResult }
-
-// --- Read-only tools that SubAgents can auto-approve ---
-
-export const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep', 'TodoRead'])

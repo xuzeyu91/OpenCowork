@@ -11,11 +11,13 @@ import { registerAllProviders } from './lib/api'
 import { registerAllViewers } from './lib/preview/register-viewers'
 import { toast } from 'sonner'
 
-// Register all built-in tools, API providers, and viewers at startup
-registerAllTools()
+// Register synchronous providers and viewers immediately at startup
 registerAllProviders()
 registerAllViewers()
 initProviderStore()
+
+// Register tools (async because SubAgents are loaded from .md files via IPC)
+registerAllTools().catch((err) => console.error('[App] Failed to register tools:', err))
 
 function App(): React.JSX.Element {
   const theme = useSettingsStore((s) => s.theme)

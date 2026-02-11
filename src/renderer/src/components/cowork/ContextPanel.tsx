@@ -124,7 +124,6 @@ export function ContextPanel(): React.JSX.Element {
                 </span>
               </div>
               {(() => {
-                const subAgentNames = new Set(['CodeSearch', 'CodeReview', 'Planner'])
                 let toolUseCount = 0
                 let subAgentCount = 0
                 for (const m of activeSession.messages) {
@@ -132,7 +131,7 @@ export function ContextPanel(): React.JSX.Element {
                     for (const b of m.content) {
                       if (b.type === 'tool_use') {
                         toolUseCount++
-                        if (subAgentNames.has(b.name)) subAgentCount++
+                        if (b.name === 'Task') subAgentCount++
                       }
                     }
                   }

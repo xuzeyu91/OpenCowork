@@ -4,46 +4,87 @@ import { toolRegistry } from '../../tool-registry'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { useProviderStore } from '@renderer/stores/provider-store'
 import type { ProviderConfig } from '../../../api/types'
+import type { SubAgentDefinition } from '../types'
+import { ipcClient } from '../../../ipc/ipc-client'
 
-import { codeSearchAgent } from './code-search'
-import { codeReviewAgent } from './code-review'
-import { plannerAgent } from './planner'
+/** Shape returned by the agents:list IPC handler */
+interface AgentInfo {
+  name: string
+  description: string
+  icon?: string
+  allowedTools: string[]
+  maxIterations: number
+  model?: string
+  temperature?: number
+  systemPrompt: string
+}
 
-const builtinAgents = [codeSearchAgent, codeReviewAgent, plannerAgent]
+/** Convert an IPC AgentInfo into a SubAgentDefinition */
+function toDefinition(info: AgentInfo): SubAgentDefinition {
+  return {
+    name: info.name,
+    description: info.description,
+    icon: info.icon,
+    allowedTools: info.allowedTools,
+    maxIterations: info.maxIterations,
+    model: info.model,
+    temperature: info.temperature,
+    systemPrompt: info.systemPrompt,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: 'The detailed task for the sub-agent to perform',
+        },
+      },
+      required: ['prompt'],
+    },
+  }
+}
 
-/**
- * Register all built-in SubAgents in the SubAgent registry,
- * then register one unified "Task" tool in the tool registry
- * that dispatches to the appropriate SubAgent via the "subType" parameter.
- */
-export function registerBuiltinSubAgents(): void {
-  const providerGetter = (): ProviderConfig => {
-    const s = useSettingsStore.getState()
-    const store = useProviderStore.getState()
-    const fastConfig = store.getFastProviderConfig()
-    if (fastConfig && fastConfig.apiKey) {
-      return {
-        ...fastConfig,
-        maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fastConfig.model),
-        temperature: s.temperature,
-      }
-    }
-    const fallbackModel = s.fastModel || s.model
+function getProviderConfig(): ProviderConfig {
+  const s = useSettingsStore.getState()
+  const store = useProviderStore.getState()
+  const fastConfig = store.getFastProviderConfig()
+  if (fastConfig && fastConfig.apiKey) {
     return {
-      type: s.provider,
-      apiKey: s.apiKey,
-      baseUrl: s.baseUrl || undefined,
-      model: fallbackModel,
-      maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fallbackModel),
+      ...fastConfig,
+      maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fastConfig.model),
       temperature: s.temperature,
     }
   }
+  const fallbackModel = s.fastModel || s.model
+  return {
+    type: s.provider,
+    apiKey: s.apiKey,
+    baseUrl: s.baseUrl || undefined,
+    model: fallbackModel,
+    maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fallbackModel),
+    temperature: s.temperature,
+  }
+}
 
-  // Register each SubAgent definition in the registry
-  for (const def of builtinAgents) {
-    subAgentRegistry.register(def)
+/**
+ * Load all agent .md files from ~/.open-cowork/agents/ via IPC,
+ * register them in the SubAgent registry, then register one unified
+ * "Task" tool in the tool registry.
+ *
+ * This is async because it reads files via IPC from the main process.
+ */
+export async function registerBuiltinSubAgents(): Promise<void> {
+  try {
+    const agents = (await ipcClient.invoke('agents:list')) as AgentInfo[]
+    if (Array.isArray(agents)) {
+      for (const info of agents) {
+        subAgentRegistry.register(toDefinition(info))
+      }
+    }
+  } catch (err) {
+    console.error('[SubAgents] Failed to load agents from IPC:', err)
   }
 
   // Register one unified Task tool that dispatches by subType
-  toolRegistry.register(createTaskTool(providerGetter))
+  // (works even if no agents were loaded — will produce an empty enum)
+  toolRegistry.register(createTaskTool(getProviderConfig))
 }
