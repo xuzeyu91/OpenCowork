@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import type { ToolHandler } from '../../../tools/tool-types'
 import { teamEvents } from '../events'
+import { useTeamStore } from '../../../../stores/team-store'
 import type { TeamTask } from '../types'
 
 export const taskCreateTool: ToolHandler = {
@@ -13,29 +14,45 @@ export const taskCreateTool: ToolHandler = {
       properties: {
         subject: {
           type: 'string',
-          description: 'Short title for the task',
+          description: 'Short title for the task'
         },
         description: {
           type: 'string',
-          description: 'Detailed description of what needs to be done',
+          description: 'Detailed description of what needs to be done'
         },
         depends_on: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional list of task IDs this task depends on',
-        },
+          description: 'Optional list of task IDs this task depends on'
+        }
       },
-      required: ['subject', 'description'],
-    },
+      required: ['subject', 'description']
+    }
   },
   execute: async (input) => {
+    const team = useTeamStore.getState().activeTeam
+    const subject = String(input.subject)
+
+    // Guard: skip if a task with the same subject already exists
+    if (team) {
+      const existing = team.tasks.find((t) => t.subject === subject)
+      if (existing) {
+        return JSON.stringify({
+          success: true,
+          task_id: existing.id,
+          subject: existing.subject,
+          note: 'Task with this subject already exists, returning existing task.'
+        })
+      }
+    }
+
     const task: TeamTask = {
       id: nanoid(8),
-      subject: String(input.subject),
+      subject,
       description: String(input.description),
       status: 'pending',
       owner: null,
-      dependsOn: Array.isArray(input.depends_on) ? input.depends_on.map(String) : [],
+      dependsOn: Array.isArray(input.depends_on) ? input.depends_on.map(String) : []
     }
 
     teamEvents.emit({ type: 'team_task_add', task })
@@ -43,8 +60,8 @@ export const taskCreateTool: ToolHandler = {
     return JSON.stringify({
       success: true,
       task_id: task.id,
-      subject: task.subject,
+      subject: task.subject
     })
   },
-  requiresApproval: () => false,
+  requiresApproval: () => false
 }

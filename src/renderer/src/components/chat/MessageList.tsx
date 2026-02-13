@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useChatStore } from '@renderer/stores/chat-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
@@ -14,18 +15,18 @@ import appIconUrl from '../../../../../resources/icon.png'
 const modeHints = {
   chat: {
     icon: <MessageSquare className="size-12 text-muted-foreground/20" />,
-    title: 'Start a conversation',
-    description: 'Ask anything — no tools, just chat.',
+    titleKey: 'messageList.startConversation',
+    descKey: 'messageList.startConversationDesc',
   },
   cowork: {
     icon: <Briefcase className="size-12 text-muted-foreground/20" />,
-    title: 'Start a Cowork session',
-    description: 'Select a working folder, then ask the assistant to help with your project.',
+    titleKey: 'messageList.startCowork',
+    descKey: 'messageList.startCoworkDesc',
   },
   code: {
     icon: <Code2 className="size-12 text-muted-foreground/20" />,
-    title: 'Start coding',
-    description: 'Describe what you want to build and the assistant will write the code.',
+    titleKey: 'messageList.startCoding',
+    descKey: 'messageList.startCodingDesc',
   },
 }
 
@@ -35,6 +36,7 @@ interface MessageListProps {
 }
 
 export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const sessions = useChatStore((s) => s.sessions)
   const activeSessionId = useChatStore((s) => s.activeSessionId)
   const streamingMessageId = useChatStore((s) => s.streamingMessageId)
@@ -139,36 +141,36 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
             {hint.icon}
           </div>
           <div>
-            <p className="text-base font-semibold text-foreground/80">{hint.title}</p>
-            <p className="mt-1.5 text-sm text-muted-foreground/60 max-w-[320px]">{hint.description}</p>
+            <p className="text-base font-semibold text-foreground/80">{t(hint.titleKey)}</p>
+            <p className="mt-1.5 text-sm text-muted-foreground/60 max-w-[320px]">{t(hint.descKey)}</p>
           </div>
         </div>
         {mode !== 'chat' && (
           <p className="text-[11px] text-muted-foreground/40">
-            Tip: Drop files into the input to reference their paths
+            {t('messageList.tipDropFiles')}
           </p>
         )}
         <div className="flex flex-wrap justify-center gap-2 max-w-[400px]">
           {(mode === 'chat' ? [
-            'Explain how async/await works',
-            'Compare REST vs GraphQL',
-            'Write a regex for email validation',
+            t('messageList.explainAsync'),
+            t('messageList.compareRest'),
+            t('messageList.writeRegex'),
           ] : mode === 'cowork' ? (activeSession?.workingFolder ? [
-            'Summarize this project structure',
-            'Find and fix potential bugs',
-            'Add error handling to the main module',
+            t('messageList.summarizeProject'),
+            t('messageList.findBugs'),
+            t('messageList.addErrorHandling'),
           ] : [
-            'Review this codebase and suggest improvements',
-            'Add tests for the main module',
-            'Refactor for better error handling',
+            t('messageList.reviewCodebase'),
+            t('messageList.addTests'),
+            t('messageList.refactorError'),
           ]) : (activeSession?.workingFolder ? [
-            'Add a new feature that...',
-            'Write tests for the existing code',
-            'Optimize the performance of...',
+            t('messageList.addFeature'),
+            t('messageList.writeTestsExisting'),
+            t('messageList.optimizePerformance'),
           ] : [
-            'Build a CLI tool that...',
-            'Create a REST API with...',
-            'Write a script that...',
+            t('messageList.buildCli'),
+            t('messageList.createRestApi'),
+            t('messageList.writeScript'),
           ])).map((prompt) => (
             <button
               key={prompt}
@@ -189,12 +191,12 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
         </div>
         <div className="mt-1 rounded-xl border bg-muted/30 px-5 py-3">
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
-            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+N</kbd><span className="text-muted-foreground/60">New chat</span></div>
-            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+K</kbd><span className="text-muted-foreground/60">Commands</span></div>
-            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+B</kbd><span className="text-muted-foreground/60">Sidebar</span></div>
-            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+/</kbd><span className="text-muted-foreground/60">Shortcuts</span></div>
-            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+,</kbd><span className="text-muted-foreground/60">Settings</span></div>
-            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+D</kbd><span className="text-muted-foreground/60">Duplicate</span></div>
+            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+N</kbd><span className="text-muted-foreground/60">{t('messageList.newChat')}</span></div>
+            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+K</kbd><span className="text-muted-foreground/60">{t('messageList.commands')}</span></div>
+            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+B</kbd><span className="text-muted-foreground/60">{t('messageList.sidebarShortcut')}</span></div>
+            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+/</kbd><span className="text-muted-foreground/60">{t('messageList.shortcutsShortcut')}</span></div>
+            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+,</kbd><span className="text-muted-foreground/60">{t('messageList.settingsShortcut')}</span></div>
+            <div className="flex items-center gap-2"><kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+D</kbd><span className="text-muted-foreground/60">{t('messageList.duplicateShortcut')}</span></div>
           </div>
         </div>
       </div>
@@ -259,10 +261,10 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
       const blob = new Blob([bytes], { type: 'image/png' })
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-      toast.success('图片已复制到剪贴板', { description: '可直接粘贴到聊天或文档中' })
+      toast.success(t('messageList.imageCopied'), { description: t('messageList.imageCopiedDesc') })
     } catch (err) {
       console.error('Export image failed:', err)
-      toast.error('导出图片失败', { description: String(err) })
+      toast.error(t('messageList.exportImageFailed'), { description: String(err) })
     } finally {
       if (node.contains(footer)) node.removeChild(footer)
       setExporting(false)
@@ -281,7 +283,7 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
           >
             {exporting ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <ImageDown className="size-3.5 shrink-0" />}
             <span className="overflow-hidden max-w-0 group-hover/btn:max-w-[80px] transition-all duration-200 text-[10px] whitespace-nowrap">
-              {exporting ? 'Exporting...' : 'Export Image'}
+              {exporting ? t('messageList.exporting') : t('messageList.exportImage')}
             </span>
           </button>
           <button
@@ -290,7 +292,7 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
           >
             {copiedAll ? <Check className="size-3.5 shrink-0" /> : <ClipboardCopy className="size-3.5 shrink-0" />}
             <span className="overflow-hidden max-w-0 group-hover/btn:max-w-[60px] transition-all duration-200 text-[10px] whitespace-nowrap">
-              {copiedAll ? 'Copied!' : 'Copy All'}
+              {copiedAll ? t('messageList.copied') : t('messageList.copyAll')}
             </span>
           </button>
         </div>
@@ -304,9 +306,9 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
               const hasOnlyToolResults = msg.content.every((b) => b.type === 'tool_result')
               if (hasOnlyToolResults) return null
             }
-            // Check if this is the last *real* user message (exclude tool_result-only messages)
+            // Check if this is the last *real* user message (exclude tool_result-only and team notification messages)
             const isRealUserMsg = (m: typeof msg): boolean =>
-              m.role === 'user' && (typeof m.content === 'string' || m.content.some((b) => b.type === 'text'))
+              m.role === 'user' && !m.source && (typeof m.content === 'string' || m.content.some((b) => b.type === 'text'))
             const isLastUser = !streamingMessageId && isRealUserMsg(msg) &&
               !messages.slice(idx + 1).some((m) => isRealUserMsg(m))
             // Build tool results map for assistant messages.
@@ -343,7 +345,7 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
             <div className="flex justify-center">
               <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground" onClick={onRetry}>
                 <RefreshCw className="size-3" />
-                Retry
+                {t('action.retry', { ns: 'common' })}
               </Button>
             </div>
           )}
@@ -358,7 +360,7 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
           className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full border bg-background/90 backdrop-blur-sm px-3 py-1.5 text-xs text-muted-foreground shadow-lg hover:text-foreground hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5"
         >
           <ArrowDown className="size-3" />
-          Scroll to bottom
+          {t('messageList.scrollToBottom')}
         </button>
       )}
     </div>

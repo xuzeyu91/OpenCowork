@@ -12,7 +12,7 @@ function contentToMarkdown(content: string | ContentBlock[]): string {
         case 'tool_use': {
           if (block.name === 'Task') {
             const inp = block.input as Record<string, unknown>
-            const subType = String(inp.subType ?? '?')
+            const subType = String(inp.subagent_type ?? '?')
             const desc = String(inp.description ?? inp.prompt ?? '')
             return `**🧠 Task: \`${subType}\`** — ${desc}`
           }
@@ -22,7 +22,11 @@ function contentToMarkdown(content: string | ContentBlock[]): string {
           let contentStr: string
           if (Array.isArray(block.content)) {
             const parts = block.content.map((cb) =>
-              cb.type === 'text' ? cb.text : cb.type === 'image' ? `[Image: ${cb.source.mediaType}]` : ''
+              cb.type === 'text'
+                ? cb.text
+                : cb.type === 'image'
+                  ? `[Image: ${cb.source.mediaType}]`
+                  : ''
             )
             contentStr = parts.join('\n') || '[Image]'
           } else {
@@ -59,7 +63,10 @@ export function sessionToMarkdown(session: Session): string {
   for (const msg of session.messages) {
     if (msg.role === 'system') continue
     const label = msg.role === 'user' ? '## User' : '## Assistant'
-    const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const time = new Date(msg.createdAt).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
     lines.push(`${label} <sub>${time}</sub>`)
     lines.push('')
     lines.push(contentToMarkdown(msg.content))
@@ -68,7 +75,9 @@ export function sessionToMarkdown(session: Session): string {
       const extras: string[] = []
       if (msg.usage.cacheReadTokens) extras.push(`${msg.usage.cacheReadTokens} cached`)
       if (msg.usage.reasoningTokens) extras.push(`${msg.usage.reasoningTokens} reasoning`)
-      lines.push(`<sub>Tokens: ${msg.usage.inputTokens} in / ${msg.usage.outputTokens} out${extras.length > 0 ? ` / ${extras.join(' / ')}` : ''}</sub>`)
+      lines.push(
+        `<sub>Tokens: ${msg.usage.inputTokens} in / ${msg.usage.outputTokens} out${extras.length > 0 ? ` / ${extras.join(' / ')}` : ''}</sub>`
+      )
     }
     lines.push('')
   }
@@ -77,7 +86,8 @@ export function sessionToMarkdown(session: Session): string {
   const totals = session.messages.reduce(
     (acc, m) => {
       if (m.usage) {
-        acc.input += m.usage.inputTokens; acc.output += m.usage.outputTokens
+        acc.input += m.usage.inputTokens
+        acc.output += m.usage.outputTokens
         if (m.usage.cacheReadTokens) acc.cacheRead += m.usage.cacheReadTokens
         if (m.usage.cacheCreationTokens) acc.cacheCreation += m.usage.cacheCreationTokens
         if (m.usage.reasoningTokens) acc.reasoning += m.usage.reasoningTokens
@@ -93,7 +103,9 @@ export function sessionToMarkdown(session: Session): string {
     if (totals.cacheRead > 0) totalExtras.push(`${totals.cacheRead} cache read`)
     if (totals.cacheCreation > 0) totalExtras.push(`${totals.cacheCreation} cache write`)
     if (totals.reasoning > 0) totalExtras.push(`${totals.reasoning} reasoning`)
-    lines.push(`**Total tokens**: ${totals.input + totals.output} (${totals.input} input + ${totals.output} output${totalExtras.length > 0 ? ` | ${totalExtras.join(', ')}` : ''})`)
+    lines.push(
+      `**Total tokens**: ${totals.input + totals.output} (${totals.input} input + ${totals.output} output${totalExtras.length > 0 ? ` | ${totalExtras.join(', ')}` : ''})`
+    )
     lines.push('')
   }
 

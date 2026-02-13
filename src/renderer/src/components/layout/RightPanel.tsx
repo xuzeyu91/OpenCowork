@@ -26,6 +26,7 @@ import { useTeamStore } from '@renderer/stores/team-store'
 
 import { useSettingsStore } from '@renderer/stores/settings-store'
 
+import { useTranslation } from 'react-i18next'
 import { cn } from '@renderer/lib/utils'
 
 
@@ -34,19 +35,19 @@ const ALL_FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'Delete'])
 
 
 
-const tabDefs: { value: RightPanelTab; label: string; icon: React.ReactNode }[] = [
+const tabDefs: { value: RightPanelTab; labelKey: string; icon: React.ReactNode }[] = [
 
-  { value: 'steps', label: 'Steps', icon: <ListChecks className="size-4" /> },
+  { value: 'steps', labelKey: 'steps', icon: <ListChecks className="size-4" /> },
 
-  { value: 'team', label: 'Team', icon: <Users className="size-4" /> },
+  { value: 'team', labelKey: 'team', icon: <Users className="size-4" /> },
 
-  { value: 'files', label: 'Files', icon: <FolderTree className="size-4" /> },
+  { value: 'files', labelKey: 'files', icon: <FolderTree className="size-4" /> },
 
-  { value: 'artifacts', label: 'Artifacts', icon: <FileOutput className="size-4" /> },
+  { value: 'artifacts', labelKey: 'artifacts', icon: <FileOutput className="size-4" /> },
 
-  { value: 'context', label: 'Context', icon: <Database className="size-4" /> },
+  { value: 'context', labelKey: 'context', icon: <Database className="size-4" /> },
 
-  { value: 'skills', label: 'Skills', icon: <Sparkles className="size-4" /> },
+  { value: 'skills', labelKey: 'skills', icon: <Sparkles className="size-4" /> },
 
 ]
 
@@ -54,6 +55,7 @@ const tabDefs: { value: RightPanelTab; label: string; icon: React.ReactNode }[] 
 
 export function RightPanel({ compact = false }: { compact?: boolean }): React.JSX.Element {
 
+  const { t } = useTranslation('layout')
   const tab = useUIStore((s) => s.rightPanelTab)
 
   const setTab = useUIStore((s) => s.setRightPanelTab)
@@ -90,17 +92,17 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
 
       <div className="flex h-10 min-w-0 items-center gap-0.5 overflow-x-auto px-2">
 
-        {visibleTabs.map((t) => {
+        {visibleTabs.map((tDef) => {
 
-          const count = badgeCounts[t.value] ?? 0
+          const count = badgeCounts[tDef.value] ?? 0
 
           return (
 
             <Button
 
-              key={t.value}
+              key={tDef.value}
 
-              variant={tab === t.value ? 'secondary' : 'ghost'}
+              variant={tab === tDef.value ? 'secondary' : 'ghost'}
 
               size="sm"
 
@@ -108,7 +110,7 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
 
                 'h-6 shrink-0 gap-1.5 rounded-md px-2 text-xs transition-all duration-200',
 
-                tab === t.value
+                tab === tDef.value
 
                   ? 'bg-muted shadow-sm ring-1 ring-border/50'
 
@@ -116,15 +118,15 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
 
               )}
 
-              onClick={() => setTab(t.value)}
+              onClick={() => setTab(tDef.value)}
 
             >
 
-              {t.icon}
+              {tDef.icon}
 
-              <span className="hidden lg:inline">{t.label}</span>
+              <span className="hidden lg:inline">{t(`rightPanel.${tDef.labelKey}`)}</span>
 
-              {count > 0 && tab !== t.value && (
+              {count > 0 && tab !== tDef.value && (
 
                 <span className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/10 text-[9px] font-medium text-muted-foreground">
 

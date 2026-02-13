@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { ProviderType } from '../lib/api/types'
+import type { ProviderType, ReasoningEffortLevel } from '../lib/api/types'
 import { ipcStorage } from '../lib/ipc/ipc-storage'
 
 interface SettingsStore {
@@ -17,7 +17,9 @@ interface SettingsStore {
   autoApprove: boolean
   devMode: boolean
   thinkingEnabled: boolean
+  reasoningEffort: ReasoningEffortLevel
   teamToolsEnabled: boolean
+  contextCompressionEnabled: boolean
 
   updateSettings: (patch: Partial<Omit<SettingsStore, 'updateSettings'>>) => void
 }
@@ -38,7 +40,9 @@ export const useSettingsStore = create<SettingsStore>()(
       autoApprove: false,
       devMode: false,
       thinkingEnabled: false,
+      reasoningEffort: 'medium',
       teamToolsEnabled: false,
+      contextCompressionEnabled: true,
 
       updateSettings: (patch) => set(patch),
     }),
@@ -58,7 +62,9 @@ export const useSettingsStore = create<SettingsStore>()(
         autoApprove: state.autoApprove,
         devMode: state.devMode,
         thinkingEnabled: state.thinkingEnabled,
+        reasoningEffort: state.reasoningEffort,
         teamToolsEnabled: state.teamToolsEnabled,
+        contextCompressionEnabled: state.contextCompressionEnabled,
         // NOTE: apiKey is intentionally excluded from localStorage persistence.
         // In production, it should be stored securely in the main process.
       }),

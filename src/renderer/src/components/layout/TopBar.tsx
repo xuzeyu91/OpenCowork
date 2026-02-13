@@ -1,99 +1,25 @@
-import { useState, useRef, useEffect } from 'react'
-import { MessageSquare, Briefcase, Code2, Settings, PanelRightOpen, PanelRightClose, Sun, Moon, Keyboard, Loader2, Brain, ChevronDown, Check, Users } from 'lucide-react'
+import { MessageSquare, Briefcase, Code2, Settings, PanelRightOpen, PanelRightClose, Sun, Moon, Keyboard, Brain, Users } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { SidebarTrigger } from '@renderer/components/ui/sidebar'
 import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
-import { useChatStore } from '@renderer/stores/chat-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
-import { useProviderStore } from '@renderer/stores/provider-store'
 import { useTeamStore } from '@renderer/stores/team-store'
 import { cn } from '@renderer/lib/utils'
 import { useTheme } from 'next-themes'
-import { Popover, PopoverContent, PopoverTrigger } from '@renderer/components/ui/popover'
+import { useTranslation } from 'react-i18next'
 import { WindowControls } from './WindowControls'
-import { ProviderIcon, ModelIcon } from '@renderer/components/settings/provider-icons'
 
-function ModelSwitcher({ hasCustomPrompt }: { hasCustomPrompt: boolean }): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const activeProviderId = useProviderStore((s) => s.activeProviderId)
-  const activeModelId = useProviderStore((s) => s.activeModelId)
-  const providers = useProviderStore((s) => s.providers)
-  const setActiveProvider = useProviderStore((s) => s.setActiveProvider)
-  const setActiveModel = useProviderStore((s) => s.setActiveModel)
-
-  const enabledProviders = providers.filter((p) => p.enabled)
-  const activeProvider = providers.find((p) => p.id === activeProviderId)
-  const shortName = (activeModelId.split('/').pop()?.replace(/-\d{8}$/, '') ?? activeModelId) || 'No model'
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          className="titlebar-no-drag hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors truncate max-w-[180px] rounded px-1 py-0.5 hover:bg-muted/40"
-          title={`${activeModelId || 'No model'} (click to switch)`}
-        >
-          <ModelIcon icon={activeProvider?.models.find((m) => m.id === activeModelId)?.icon} modelId={activeModelId} providerBuiltinId={activeProvider?.builtinId} size={14} />
-          {shortName}
-          {hasCustomPrompt && <span className="size-1.5 rounded-full bg-violet-400/60 shrink-0" title="Custom system prompt active" />}
-          <ChevronDown className="size-2.5 shrink-0 opacity-50" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56 p-1 max-h-80 overflow-y-auto" align="end">
-        {enabledProviders.length === 0 ? (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">No providers available</div>
-        ) : (
-          enabledProviders.map((provider) => {
-            const models = provider.models.filter((m) => m.enabled)
-            return (
-              <div key={provider.id}>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/50 px-2 py-1 uppercase tracking-wider">
-                  <ProviderIcon builtinId={provider.builtinId} size={12} />
-                  {provider.name}
-                </div>
-                {models.length === 0 ? (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground/40">No models</div>
-                ) : (
-                  models.map((m) => {
-                    const isActive = provider.id === activeProviderId && m.id === activeModelId
-                    return (
-                      <button
-                        key={`${provider.id}-${m.id}`}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs hover:bg-muted/60 transition-colors',
-                          isActive && 'bg-muted/40 font-medium'
-                        )}
-                        onClick={() => {
-                          if (provider.id !== activeProviderId) {
-                            setActiveProvider(provider.id)
-                          }
-                          setActiveModel(m.id)
-                          setOpen(false)
-                        }}
-                      >
-                        {isActive ? <Check className="size-3 text-primary" /> : <ModelIcon icon={m.icon} modelId={m.id} providerBuiltinId={provider.builtinId} size={12} className="opacity-60" />}
-                        <span className="truncate">{m.name || m.id.replace(/-\d{8}$/, '')}</span>
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            )
-          })
-        )}
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-const modes: { value: AppMode; label: string; icon: React.ReactNode }[] = [
-  { value: 'chat', label: 'Chat', icon: <MessageSquare className="size-4" /> },
-  { value: 'cowork', label: 'Cowork', icon: <Briefcase className="size-4" /> },
-  { value: 'code', label: 'Code', icon: <Code2 className="size-4" /> },
+const modes: { value: AppMode; labelKey: string; icon: React.ReactNode }[] = [
+  { value: 'chat', labelKey: 'mode.chat', icon: <MessageSquare className="size-4" /> },
+  { value: 'cowork', labelKey: 'mode.cowork', icon: <Briefcase className="size-4" /> },
+  { value: 'code', labelKey: 'mode.code', icon: <Code2 className="size-4" /> },
 ]
 
 export function TopBar(): React.JSX.Element {
+  const { t: tCommon } = useTranslation('common')
+  const { t } = useTranslation('layout')
   const mode = useUIStore((s) => s.mode)
   const setMode = useUIStore((s) => s.setMode)
   const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
@@ -102,57 +28,12 @@ export function TopBar(): React.JSX.Element {
   const setShortcutsOpen = useUIStore((s) => s.setShortcutsOpen)
   const { theme, setTheme } = useTheme()
 
-  const sessions = useChatStore((s) => s.sessions)
   const autoApprove = useSettingsStore((s) => s.autoApprove)
-  const hasCustomPrompt = useSettingsStore((s) => !!s.systemPrompt)
-  const activeSessionId = useChatStore((s) => s.activeSessionId)
-  const streamingMessageId = useChatStore((s) => s.streamingMessageId)
-  const isAgentRunning = useAgentStore((s) => activeSessionId ? s.runningSessions[activeSessionId] === 'running' : false)
   const pendingApprovals = useAgentStore((s) => s.pendingToolCalls).length
   const errorCount = useAgentStore((s) => s.executedToolCalls.filter((t) => t.status === 'error').length)
   const activeSubAgents = useAgentStore((s) => s.activeSubAgents)
   const runningSubAgents = Object.values(activeSubAgents).filter((sa) => sa.isRunning)
   const activeTeam = useTeamStore((s) => s.activeTeam)
-  const activeSession = sessions.find((s) => s.id === activeSessionId)
-  const isWorking = !!streamingMessageId || isAgentRunning
-
-  const [editing, setEditing] = useState(false)
-  const [editTitle, setEditTitle] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [elapsed, setElapsed] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    if (isWorking) {
-      setElapsed(0)
-      timerRef.current = setInterval(() => setElapsed((v) => v + 1), 1000)
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [isWorking])
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [editing])
-
-  const handleStartRename = (): void => {
-    if (!activeSession) return
-    setEditTitle(activeSession.title)
-    setEditing(true)
-  }
-
-  const handleSaveTitle = (): void => {
-    const trimmed = editTitle.trim()
-    if (trimmed && activeSessionId && trimmed !== activeSession?.title) {
-      useChatStore.getState().updateSessionTitle(activeSessionId, trimmed)
-    }
-    setEditing(false)
-  }
 
   const toggleTheme = (): void => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -180,63 +61,15 @@ export function TopBar(): React.JSX.Element {
                 onClick={() => setMode(m.value)}
               >
                 {m.icon}
-                {m.label}
+                {tCommon(m.labelKey)}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{m.label} (Ctrl+{i + 1})</TooltipContent>
+            <TooltipContent>{tCommon(m.labelKey)} (Ctrl+{i + 1})</TooltipContent>
           </Tooltip>
         ))}
       </div>
 
-      {/* Session Title */}
-      <div className="flex-1 flex items-center justify-center min-w-0 overflow-hidden">
-        {activeSession && (
-          editing ? (
-            <input
-              ref={inputRef}
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onBlur={handleSaveTitle}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveTitle()
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="titlebar-no-drag h-6 w-full max-w-full rounded-md border bg-background px-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          ) : (
-            <button
-              onClick={handleStartRename}
-              className="titlebar-no-drag flex items-center gap-2 truncate rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 max-w-full"
-              title="Click to rename"
-            >
-              {isWorking && (
-                <>
-                  <Loader2 className="size-3 shrink-0 animate-spin text-blue-500" />
-                  <span className="shrink-0 text-[9px] tabular-nums text-blue-500/70">
-                    {elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m${String(elapsed % 60).padStart(2, '0')}s`}
-                  </span>
-                </>
-              )}
-              <span className="truncate font-medium">{activeSession.title}</span>
-              {activeSession.mode !== mode && (
-                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground/60 capitalize">
-                  {activeSession.mode}
-                </span>
-              )}
-              {activeSession.messages.length > 0 && !isWorking && (
-                <span className="shrink-0 text-[10px] text-muted-foreground/40">
-                  {activeSession.messages.length}
-                </span>
-              )}
-              {activeSession.workingFolder && (
-                <span className="shrink-0 truncate max-w-[100px] text-[9px] text-muted-foreground/30" title={activeSession.workingFolder}>
-                  {activeSession.workingFolder.split(/[\\/]/).pop()}
-                </span>
-              )}
-            </button>
-          )
-        )}
-      </div>
+      <div className="flex-1" />
 
       {/* Right-side controls — must not shrink */}
       <div className="flex shrink-0 items-center gap-1">
@@ -252,7 +85,7 @@ export function TopBar(): React.JSX.Element {
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Toggle Panel</TooltipContent>
+          <TooltipContent>{t('topbar.togglePanel')}</TooltipContent>
         </Tooltip>
       )}
 
@@ -264,7 +97,7 @@ export function TopBar(): React.JSX.Element {
               AUTO
             </span>
           </TooltipTrigger>
-          <TooltipContent>Auto-approve is ON — all tools run without confirmation</TooltipContent>
+          <TooltipContent>{t('topbar.autoApproveOn')}</TooltipContent>
         </Tooltip>
       )}
 
@@ -273,10 +106,10 @@ export function TopBar(): React.JSX.Element {
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="titlebar-no-drag animate-pulse rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-medium text-amber-600 dark:text-amber-400 cursor-default">
-              {pendingApprovals} pending
+              {t('topbar.pendingCount', { count: pendingApprovals })}
             </span>
           </TooltipTrigger>
-          <TooltipContent>Tool call awaiting approval — press Y to allow, N to deny</TooltipContent>
+          <TooltipContent>{t('topbar.toolCallAwaiting')}</TooltipContent>
         </Tooltip>
       )}
 
@@ -320,17 +153,12 @@ export function TopBar(): React.JSX.Element {
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="titlebar-no-drag rounded bg-destructive/10 px-1.5 py-0.5 text-[9px] font-medium text-destructive cursor-default">
-              {errorCount} error{errorCount > 1 ? 's' : ''}
+              {t('topbar.errorsCount', { count: errorCount })}
             </span>
           </TooltipTrigger>
-          <TooltipContent>{errorCount} tool call{errorCount > 1 ? 's' : ''} failed</TooltipContent>
+          <TooltipContent>{t('topbar.toolCallsFailed', { count: errorCount })}</TooltipContent>
         </Tooltip>
       )}
-
-      {/* Model quick-switcher */}
-      <ModelSwitcher
-        hasCustomPrompt={hasCustomPrompt}
-      />
 
       {/* Theme Toggle */}
       <Tooltip>
@@ -339,7 +167,7 @@ export function TopBar(): React.JSX.Element {
             {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Toggle Theme</TooltipContent>
+        <TooltipContent>{t('topbar.toggleTheme')}</TooltipContent>
       </Tooltip>
 
       {/* Keyboard Shortcuts */}
@@ -349,7 +177,7 @@ export function TopBar(): React.JSX.Element {
             <Keyboard className="size-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Shortcuts (Ctrl+/)</TooltipContent>
+        <TooltipContent>{t('topbar.shortcuts')}</TooltipContent>
       </Tooltip>
 
       {/* Settings */}
@@ -364,7 +192,7 @@ export function TopBar(): React.JSX.Element {
             <Settings className="size-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Settings (Ctrl+,)</TooltipContent>
+        <TooltipContent>{t('topbar.settings')}</TooltipContent>
       </Tooltip>
 
       </div>

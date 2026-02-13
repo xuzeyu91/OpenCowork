@@ -1,0 +1,109 @@
+{
+  "context": {
+    "workingFolder": "工作目录",
+    "clickToCopy": "点击复制路径",
+    "changeFolder": "更改目录",
+    "open": "打开",
+    "selectFolder": "选择工作目录",
+    "sessionInfo": "会话信息",
+    "created": "创建于 {{time}}",
+    "toolCalls": "{{count}} 次工具调用",
+    "subAgentRuns": "{{count}} 次子代理运行",
+    "autoApproved": "自动批准：{{count}}",
+    "noContext": "未加载上下文",
+    "noContextDesc": "选择工作目录以允许助手访问你的项目"
+  },
+  "steps": {
+    "noTasks": "暂无任务",
+    "noTasksDesc": "当助手创建计划时，任务将显示在这里",
+    "progress": "进度",
+    "teamProgress": "团队进度",
+    "agentWorking": "代理工作中...",
+    "teamWorking": "团队工作中..."
+  },
+  "team": {
+    "noActiveTeam": "暂无活动团队",
+    "noActiveTeamDesc": "让助手创建一个团队来进行并行协作",
+    "membersTab": "成员",
+    "messagesTab": "消息",
+    "broadcastPlaceholder": "向所有队友广播...",
+    "messagePlaceholder": "给 {{name}} 发消息...",
+    "iter": "迭代 {{count}}",
+    "toolCalls": "{{count}} 次工具调用",
+    "thinking": "思考中",
+    "workingStatus": "工作中...",
+    "toolCallsLabel": "工具调用",
+    "stopMember": "停止 {{name}}",
+    "lastOutput": "最近输出",
+    "workingCount": "{{count}} 个工作中",
+    "stopAllTeam": "停止所有队友并清除团队",
+    "noTeam": "暂无活动团队",
+    "noTeamDesc": "让助手创建一个团队来进行并行协作",
+    "working": "工作中...",
+    "members": "成员",
+    "messages": "消息",
+    "stopAll": "停止所有队友并清除团队",
+    "showLess": "收起",
+    "showMore": "展开"
+  },
+  "skills": {
+    "noSkills": "未加载技能",
+    "noSkillsDesc": "已安装的插件技能将显示在这里",
+    "builtInTools": "内置工具",
+    "fileSystem": "文件系统",
+    "search": "搜索",
+    "shell": "Shell",
+    "taskManagement": "任务管理",
+    "other": "其他",
+    "approval": "需审批",
+    "agent": "代理",
+    "teamLabel": "团队",
+    "taskSubAgents": "Task（子代理）",
+    "teamTools": "团队工具",
+    "maxIter": "最多 {{count}} 次迭代"
+  },
+  "artifacts": {
+    "noArtifacts": "暂无产物",
+    "noArtifactsDesc": "助手创建或编辑的文件将显示在这里",
+    "modifiedFiles": "已修改文件",
+    "deletedFiles": "已删除文件",
+    "new": "{{count}} 个新建",
+    "edited": "{{count}} 个编辑",
+    "clickCopyDoublePreview": "{{path}}\n点击复制路径 · 双击预览"
+  },
+  "fileTree": {
+    "selectFolder": "选择工作目录以查看文件",
+    "newFile": "新建文件",
+    "newFolder": "新建文件夹",
+    "deleteConfirm": "删除{{type}}「{{name}}」？",
+    "folder": "文件夹",
+    "file": "文件",
+    "copyPath": "\u590d\u5236\u8def\u5f84",
+    "insertPath": "\u63d2\u5165\u8def\u5f84\u5230\u5bf9\u8bdd",
+    "closePreview": "\u5173\u95ed\u9884\u89c8",
+    "unableToRead": "（无法读取文件）",
+    "stats": "{{folders}} 个文件夹 · {{files}} 个文件"
+  },
+  "teammateCard": {
+    "status": {
+      "working": "工作中",
+      "idle": "空闲",
+      "waiting": "等待中",
+      "stopped": "已停止"
+    },
+    "iter": "迭代 {{count}}",
+    "calls": "{{count}} 次调用",
+    "tools": "工具",
+    "working": "工作中...",
+    "message": "消息",
+    "stop": "停止"
+  },
+  "errorBoundary": {
+    "title": "出了点问题",
+    "defaultMessage": "应用中发生了意外错误。",
+    "tryAgain": "重试",
+    "reloadApp": "重新加载",
+    "copyError": "复制错误",
+    "errorDetails": "错误详情"
+  }
+}

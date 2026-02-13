@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Wrench,
   ChevronDown,
@@ -41,6 +42,7 @@ interface TeammateCardProps {
 }
 
 export function TeammateCard({ member, task, onSendMessage, onStop }: TeammateCardProps): React.JSX.Element {
+  const { t } = useTranslation('cowork')
   const [toolsExpanded, setToolsExpanded] = React.useState(false)
   const isWorking = member.status === 'working'
 
@@ -81,7 +83,7 @@ export function TeammateCard({ member, task, onSendMessage, onStop }: TeammateCa
               variant={isWorking ? 'default' : 'secondary'}
               className={cn('text-[8px] px-1 h-3.5', isWorking && statusColors[member.status])}
             >
-              {member.status}
+              {t(`teammateCard.status.${member.status}`, { defaultValue: member.status })}
             </Badge>
             {member.model !== 'default' && (
               <span className="text-[8px] text-muted-foreground/40 truncate">{member.model}</span>
@@ -96,13 +98,13 @@ export function TeammateCard({ member, task, onSendMessage, onStop }: TeammateCa
         <div className="flex items-center gap-1.5 shrink-0 text-[9px] text-muted-foreground/50">
           {member.iteration > 0 && (
             <>
-              <span className="tabular-nums">iter {member.iteration}</span>
+              <span className="tabular-nums">{t('teammateCard.iter', { count: member.iteration })}</span>
               <span>·</span>
             </>
           )}
           {member.toolCalls.length > 0 && (
             <>
-              <span className="tabular-nums">{member.toolCalls.length} calls</span>
+              <span className="tabular-nums">{t('teammateCard.calls', { count: member.toolCalls.length })}</span>
               <span>·</span>
             </>
           )}
@@ -120,7 +122,7 @@ export function TeammateCard({ member, task, onSendMessage, onStop }: TeammateCa
             <CollapsibleTrigger asChild>
               <button className="flex w-full items-center gap-1.5 text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors">
                 <Wrench className="size-2.5" />
-                <span className="font-medium uppercase tracking-wider">Tools</span>
+                <span className="font-medium uppercase tracking-wider">{t('teammateCard.tools')}</span>
                 <Badge variant="secondary" className="text-[8px] h-3 px-1">{member.toolCalls.length}</Badge>
                 <span className="flex-1" />
                 {toolsExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
@@ -164,7 +166,7 @@ export function TeammateCard({ member, task, onSendMessage, onStop }: TeammateCa
             <span className="size-1 rounded-full bg-cyan-400/50 animate-bounce" style={{ animationDelay: '150ms' }} />
             <span className="size-1 rounded-full bg-cyan-400/50 animate-bounce" style={{ animationDelay: '300ms' }} />
           </span>
-          <span className="text-[9px] text-cyan-400/60">Working...</span>
+          <span className="text-[9px] text-cyan-400/60">{t('teammateCard.working')}</span>
         </div>
       )}
 
@@ -176,7 +178,7 @@ export function TeammateCard({ member, task, onSendMessage, onStop }: TeammateCa
             className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-muted-foreground/50 hover:text-cyan-500 hover:bg-cyan-500/5 transition-colors"
           >
             <MessageSquare className="size-2.5" />
-            Message
+            {t('teammateCard.message')}
           </button>
         )}
         {onStop && isWorking && (
@@ -185,7 +187,7 @@ export function TeammateCard({ member, task, onSendMessage, onStop }: TeammateCa
             className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-muted-foreground/50 hover:text-destructive hover:bg-destructive/5 transition-colors ml-auto"
           >
             <Square className="size-2.5" />
-            Stop
+            {t('teammateCard.stop')}
           </button>
         )}
       </div>

@@ -37,6 +37,21 @@ export const IPC = {
   // Settings
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
+
+  // Plugins
+  PLUGIN_LIST_PROVIDERS: 'plugin:list-providers',
+  PLUGIN_LIST: 'plugin:list',
+  PLUGIN_ADD: 'plugin:add',
+  PLUGIN_UPDATE: 'plugin:update',
+  PLUGIN_REMOVE: 'plugin:remove',
+  PLUGIN_START: 'plugin:start',
+  PLUGIN_STOP: 'plugin:stop',
+  PLUGIN_STATUS: 'plugin:status',
+  PLUGIN_EXEC: 'plugin:exec',
+  PLUGIN_SESSIONS_LIST: 'plugin:sessions:list',
+  PLUGIN_SESSIONS_MESSAGES: 'plugin:sessions:messages',
+  PLUGIN_SESSIONS_CREATE: 'plugin:sessions:create',
+  PLUGIN_INCOMING_MESSAGE: 'plugin:incoming-message',
 } as const
 
 export type IPCChannel = (typeof IPC)[keyof typeof IPC]

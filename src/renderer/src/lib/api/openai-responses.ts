@@ -19,11 +19,20 @@ class OpenAIResponsesProvider implements APIProvider {
     config: ProviderConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamEvent> {
+    const requestStartedAt = Date.now()
+    let firstTokenAt: number | null = null
+    let outputTokens = 0
+    const baseUrl = (config.baseUrl || 'https://api.openai.com/v1').trim().replace(/\/+$/, '')
+    const isOpenAI = /^https?:\/\/api\.openai\.com/i.test(baseUrl)
+
     const body: Record<string, unknown> = {
       model: config.model,
       input: this.formatMessages(messages, config.systemPrompt),
       stream: true,
     }
+
+    // Enable prompt caching for OpenAI endpoints to reduce costs
+    if (isOpenAI && config.sessionId) body.prompt_cache_key = `opencowork-${config.sessionId}`
 
     if (tools.length > 0) {
       body.tools = this.formatTools(tools)
@@ -34,6 +43,12 @@ class OpenAIResponsesProvider implements APIProvider {
     // Merge thinking/reasoning params when enabled; explicit disable params when off
     if (config.thinkingEnabled && config.thinkingConfig) {
       Object.assign(body, config.thinkingConfig.bodyParams)
+      // Override reasoning_effort with user-selected level when model supports multiple levels
+      if (config.thinkingConfig.reasoningEffortLevels && config.reasoningEffort) {
+        // Responses API uses nested reasoning.effort format; also set top-level for compat
+        body.reasoning = { ...(typeof body.reasoning === 'object' && body.reasoning !== null ? body.reasoning : {}), effort: config.reasoningEffort }
+        body.reasoning_effort = config.reasoningEffort
+      }
       if (config.thinkingConfig.forceTemperature !== undefined) {
         body.temperature = config.thinkingConfig.forceTemperature
       }
@@ -41,7 +56,6 @@ class OpenAIResponsesProvider implements APIProvider {
       Object.assign(body, config.thinkingConfig.disabledBodyParams)
     }
 
-    const baseUrl = (config.baseUrl || 'https://api.openai.com/v1').trim().replace(/\/+$/, '')
     const url = `${baseUrl}/responses`
 
     const headers = {
@@ -73,6 +87,7 @@ class OpenAIResponsesProvider implements APIProvider {
 
       switch (sse.event) {
         case 'response.output_text.delta':
+          if (firstTokenAt === null) firstTokenAt = Date.now()
           yield { type: 'text_delta', text: data.delta }
           break
 
@@ -102,7 +117,11 @@ class OpenAIResponsesProvider implements APIProvider {
           }
           break
 
-        case 'response.completed':
+        case 'response.completed': {
+          const requestCompletedAt = Date.now()
+          if (data.response?.usage?.output_tokens !== undefined) {
+            outputTokens = data.response.usage.output_tokens ?? outputTokens
+          }
           yield {
             type: 'message_end',
             stopReason: data.response.status,
@@ -115,8 +134,14 @@ class OpenAIResponsesProvider implements APIProvider {
                     : {}),
                 }
               : undefined,
+            timing: {
+              totalMs: requestCompletedAt - requestStartedAt,
+              ttftMs: firstTokenAt ? firstTokenAt - requestStartedAt : undefined,
+              tps: computeTps(outputTokens, firstTokenAt, requestCompletedAt),
+            },
           }
           break
+        }
 
         case 'response.failed':
         case 'error':
@@ -207,12 +232,20 @@ class OpenAIResponsesProvider implements APIProvider {
   formatTools(tools: ToolDefinition[]): unknown[] {
     return tools.map((t) => ({
       type: 'function',
-      name: t.name,
-      description: t.description,
-      parameters: t.inputSchema,
-      strict: false,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.inputSchema,
+      },
     }))
   }
+}
+
+function computeTps(outputTokens: number, firstTokenAt: number | null, completedAt: number): number | undefined {
+  if (!firstTokenAt || outputTokens <= 0) return undefined
+  const durationMs = completedAt - firstTokenAt
+  if (durationMs <= 0) return undefined
+  return outputTokens / (durationMs / 1000)
 }
 
 export function registerOpenAIResponsesProvider(): void {

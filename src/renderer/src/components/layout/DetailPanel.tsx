@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   X,
   FileText,
@@ -41,7 +42,8 @@ function TeamHistoryItem({ team, isExpanded, onToggle }: {
   isExpanded: boolean
   onToggle: () => void
 }): React.JSX.Element {
-  const completedTasks = team.tasks.filter((t) => t.status === 'completed').length
+  const { t } = useTranslation('layout')
+  const completedTasks = team.tasks.filter((task) => task.status === 'completed').length
   return (
     <div className="rounded-lg border border-muted overflow-hidden">
       <button
@@ -52,8 +54,8 @@ function TeamHistoryItem({ team, isExpanded, onToggle }: {
         <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 truncate flex-1">
           {team.name}
         </span>
-        <span className="text-[9px] text-muted-foreground/50">{team.members.length} members</span>
-        <span className="text-[9px] text-muted-foreground/50">{completedTasks}/{team.tasks.length} tasks</span>
+        <span className="text-[9px] text-muted-foreground/50">{t('detailPanel.membersCount', { count: team.members.length })}</span>
+        <span className="text-[9px] text-muted-foreground/50">{t('detailPanel.tasksCount', { completed: completedTasks, total: team.tasks.length })}</span>
         <span className="text-[9px] text-muted-foreground/40">{formatDate(team.createdAt)}</span>
         {isExpanded ? <ChevronDown className="size-3 text-muted-foreground/40" /> : <ChevronRight className="size-3 text-muted-foreground/40" />}
       </button>
@@ -64,7 +66,7 @@ function TeamHistoryItem({ team, isExpanded, onToggle }: {
           {/* Members summary */}
           {team.members.length > 0 && (
             <div>
-              <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">Members</span>
+              <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.membersLabel')}</span>
               <div className="mt-1 space-y-1">
                 {team.members.map((m) => (
                   <div key={m.id} className="flex items-center gap-2 text-[10px]">
@@ -87,20 +89,20 @@ function TeamHistoryItem({ team, isExpanded, onToggle }: {
           {/* Tasks summary */}
           {team.tasks.length > 0 && (
             <div>
-              <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">Tasks</span>
+              <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.tasksLabel')}</span>
               <div className="mt-1 space-y-0.5">
-                {team.tasks.map((t) => (
-                  <div key={t.id} className="flex items-center gap-1.5 text-[10px]">
+                {team.tasks.map((task) => (
+                  <div key={task.id} className="flex items-center gap-1.5 text-[10px]">
                     <Badge variant="secondary" className={cn(
                       'text-[7px] h-3 px-1',
-                      t.status === 'completed' ? 'bg-green-500/15 text-green-500' :
-                      t.status === 'in_progress' ? 'bg-blue-500/15 text-blue-500' :
+                      task.status === 'completed' ? 'bg-green-500/15 text-green-500' :
+                      task.status === 'in_progress' ? 'bg-blue-500/15 text-blue-500' :
                       'bg-muted text-muted-foreground/60',
                     )}>
-                      {t.status === 'completed' ? 'done' : t.status === 'in_progress' ? 'active' : 'pending'}
+                      {task.status === 'completed' ? t('status.done', { ns: 'common' }) : task.status === 'in_progress' ? t('status.active', { ns: 'common' }) : t('status.pending', { ns: 'common' })}
                     </Badge>
-                    <span className="truncate text-muted-foreground/70">{t.subject}</span>
-                    {t.owner && <span className="text-cyan-500/50 shrink-0">{t.owner}</span>}
+                    <span className="truncate text-muted-foreground/70">{task.subject}</span>
+                    {task.owner && <span className="text-cyan-500/50 shrink-0">{task.owner}</span>}
                   </div>
                 ))}
               </div>
@@ -109,7 +111,7 @@ function TeamHistoryItem({ team, isExpanded, onToggle }: {
 
           {/* Messages count */}
           {team.messages.length > 0 && (
-            <span className="text-[9px] text-muted-foreground/40">{team.messages.length} messages exchanged</span>
+            <span className="text-[9px] text-muted-foreground/40">{t('detailPanel.messagesExchanged', { count: team.messages.length })}</span>
           )}
         </div>
       )}
@@ -118,6 +120,7 @@ function TeamHistoryItem({ team, isExpanded, onToggle }: {
 }
 
 function TeamDetailView(): React.JSX.Element {
+  const { t } = useTranslation('layout')
   const teamHistory = useTeamStore((s) => s.teamHistory)
   const [expandedIdx, setExpandedIdx] = React.useState<number | null>(null)
 
@@ -133,7 +136,7 @@ function TeamDetailView(): React.JSX.Element {
           <div>
             <div className="flex items-center gap-1.5 mb-2">
               <History className="size-3 text-muted-foreground/50" />
-              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">History</span>
+              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">{t('detailPanel.history')}</span>
               <Badge variant="secondary" className="text-[8px] h-3.5 px-1">{teamHistory.length}</Badge>
             </div>
             <div className="space-y-1.5">
@@ -156,6 +159,7 @@ function TeamDetailView(): React.JSX.Element {
 // ── SubAgent Detail View ─────────────────────────────────────────
 
 function SubAgentDetailItem({ sa, defaultOpen }: { sa: SubAgentState; defaultOpen?: boolean }): React.JSX.Element {
+  const { t } = useTranslation('layout')
   const [open, setOpen] = React.useState(defaultOpen ?? false)
   const elapsed = sa.completedAt && sa.startedAt ? sa.completedAt - sa.startedAt : null
 
@@ -184,9 +188,9 @@ function SubAgentDetailItem({ sa, defaultOpen }: { sa: SubAgentState; defaultOpe
       {open && (
         <div className="border-t border-muted px-3 py-2 space-y-2">
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
-            <span>Iterations: {sa.iteration}</span>
+            <span>{t('detailPanel.iterations', { count: sa.iteration })}</span>
             <span>·</span>
-            <span>Tool calls: {sa.toolCalls.length}</span>
+            <span>{t('detailPanel.toolCalls', { count: sa.toolCalls.length })}</span>
             {elapsed != null && <><span>·</span><span>{formatElapsed(elapsed)}</span></>}
           </div>
 
@@ -206,7 +210,7 @@ function SubAgentDetailItem({ sa, defaultOpen }: { sa: SubAgentState; defaultOpe
             <div>
               <div className="flex items-center gap-1.5 mb-1">
                 <Wrench className="size-2.5 text-muted-foreground/50" />
-                <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">Tool Calls</span>
+                <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.toolCallsLabel')}</span>
               </div>
               <div className="space-y-1 max-h-[400px] overflow-y-auto">
                 {sa.toolCalls.map((tc) => (
@@ -231,6 +235,7 @@ function SubAgentDetailItem({ sa, defaultOpen }: { sa: SubAgentState; defaultOpe
 }
 
 function SubAgentDetailView({ toolUseId }: { toolUseId?: string }): React.JSX.Element {
+  const { t } = useTranslation('layout')
   const activeSubAgents = useAgentStore((s) => s.activeSubAgents)
   const completedSubAgents = useAgentStore((s) => s.completedSubAgents)
   const subAgentHistory = useAgentStore((s) => s.subAgentHistory)
@@ -258,7 +263,7 @@ function SubAgentDetailView({ toolUseId }: { toolUseId?: string }): React.JSX.El
         <div>
           <div className="flex items-center gap-1.5 mb-2">
             <Bot className="size-3 text-muted-foreground/50" />
-            <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">Current</span>
+            <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">{t('detailPanel.current')}</span>
             <Badge variant="secondary" className="text-[8px] h-3.5 px-1">{currentAgents.length}</Badge>
           </div>
           <div className="space-y-1.5">
@@ -276,7 +281,7 @@ function SubAgentDetailView({ toolUseId }: { toolUseId?: string }): React.JSX.El
           <div>
             <div className="flex items-center gap-1.5 mb-2">
               <History className="size-3 text-muted-foreground/50" />
-              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">History</span>
+              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">{t('detailPanel.history')}</span>
               <Badge variant="secondary" className="text-[8px] h-3.5 px-1">{subAgentHistory.length}</Badge>
             </div>
             <div className="space-y-1.5">
@@ -292,9 +297,9 @@ function SubAgentDetailView({ toolUseId }: { toolUseId?: string }): React.JSX.El
       {currentAgents.length === 0 && subAgentHistory.length === 0 && !targeted && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Bot className="mb-3 size-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">No SubAgent records</p>
+          <p className="text-sm text-muted-foreground">{t('detailPanel.noSubAgentRecords')}</p>
           <p className="mt-1 text-xs text-muted-foreground/60">
-            SubAgent activity will appear here
+            {t('detailPanel.subAgentActivity')}
           </p>
         </div>
       )}
@@ -305,18 +310,19 @@ function SubAgentDetailView({ toolUseId }: { toolUseId?: string }): React.JSX.El
 // ── Main DetailPanel ─────────────────────────────────────────────
 
 export function DetailPanel(): React.JSX.Element {
+  const { t } = useTranslation('layout')
   const content = useUIStore((s) => s.detailPanelContent)
   const closeDetailPanel = useUIStore((s) => s.closeDetailPanel)
 
   const title = content?.type === 'team'
-    ? 'Team'
+    ? t('detailPanel.team')
     : content?.type === 'subagent'
-      ? 'SubAgent'
+      ? t('detailPanel.subAgent')
       : content?.type === 'document'
         ? content.title
         : content?.type === 'report'
           ? content.title
-          : 'Details'
+          : t('detailPanel.details')
 
   const icon = content?.type === 'team'
     ? <Users className="size-4 text-cyan-500" />
@@ -333,7 +339,7 @@ export function DetailPanel(): React.JSX.Element {
         <button
           onClick={closeDetailPanel}
           className="rounded-md p-1 text-muted-foreground/50 hover:text-foreground hover:bg-muted/50 transition-colors"
-          title="Close panel"
+          title={t('detailPanel.closePanel')}
         >
           <X className="size-4" />
         </button>
@@ -365,7 +371,7 @@ export function DetailPanel(): React.JSX.Element {
         {!content && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <FileText className="mb-3 size-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No content selected</p>
+            <p className="text-sm text-muted-foreground">{t('detailPanel.noContent')}</p>
           </div>
         )}
       </div>

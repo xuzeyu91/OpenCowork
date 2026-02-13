@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -18,16 +19,20 @@ import go from 'react-syntax-highlighter/dist/esm/languages/prism/go'
 import { Avatar, AvatarFallback } from '@renderer/components/ui/avatar'
 import { useTypewriter } from '@renderer/hooks/use-typewriter'
 import { Copy, Check, ChevronsDownUp, ChevronsUpDown, Bug } from 'lucide-react'
-import type { ContentBlock, TokenUsage, ToolResultContent, RequestDebugInfo } from '@renderer/lib/api/types'
+import type {
+  ContentBlock,
+  TokenUsage,
+  ToolResultContent,
+  RequestDebugInfo
+} from '@renderer/lib/api/types'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { ToolCallCard } from './ToolCallCard'
 import { ToolCallGroup } from './ToolCallGroup'
 import { FileChangeCard } from './FileChangeCard'
 import { SubAgentCard } from './SubAgentCard'
-import { TodoCard } from './TodoCard'
+import { TaskCard } from './TodoCard'
 import { ThinkingBlock } from './ThinkingBlock'
 import { TeamEventCard } from './TeamEventCard'
-import { InlineTeammateCard } from './InlineTeammateCard'
 import { TASK_TOOL_NAME } from '@renderer/lib/agent/sub-agents/create-tool'
 import { TEAM_TOOL_NAMES } from '@renderer/lib/agent/teams/register'
 import { useAgentStore } from '@renderer/stores/agent-store'
@@ -66,11 +71,24 @@ interface AssistantMessageProps {
   msgId?: string
 }
 
+function formatMs(ms: number): string {
+  if (ms >= 1000) {
+    const seconds = ms / 1000
+    const digits = seconds >= 10 ? 0 : 1
+    return `${seconds.toFixed(digits)}s`
+  }
+  return `${Math.round(ms)}ms`
+}
+
 function DebugToggleButton({ debugInfo }: { debugInfo: RequestDebugInfo }): React.JSX.Element {
   const [show, setShow] = useState(false)
   const bodyFormatted = (() => {
     if (!debugInfo.body) return null
-    try { return JSON.stringify(JSON.parse(debugInfo.body), null, 2) } catch { return debugInfo.body }
+    try {
+      return JSON.stringify(JSON.parse(debugInfo.body), null, 2)
+    } catch {
+      return debugInfo.body
+    }
   })()
 
   return (
@@ -82,31 +100,66 @@ function DebugToggleButton({ debugInfo }: { debugInfo: RequestDebugInfo }): Reac
         <Bug className="size-3.5" />
       </button>
       {show && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShow(false)}>
-          <div className="w-[640px] max-w-[90vw] max-h-[80vh] rounded-lg border bg-background shadow-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setShow(false)}
+        >
+          <div
+            className="w-[640px] max-w-[90vw] max-h-[80vh] rounded-lg border bg-background shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-4 py-2.5 border-b bg-muted/30 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <Bug className="size-3.5 text-orange-500" />
                 <span className="text-xs font-medium">Request Debug</span>
               </div>
-              <button onClick={() => setShow(false)} className="text-muted-foreground hover:text-foreground text-sm px-1">✕</button>
+              <button
+                onClick={() => setShow(false)}
+                className="text-muted-foreground hover:text-foreground text-sm px-1"
+              >
+                ✕
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <div className="px-4 py-2 space-y-1.5 border-b text-[11px]" style={{ fontFamily: MONO_FONT }}>
-                <div className="flex gap-2"><span className="text-muted-foreground/60 shrink-0">URL</span><span className="text-foreground break-all">{debugInfo.url}</span></div>
-                <div className="flex gap-2"><span className="text-muted-foreground/60 shrink-0">Method</span><span className="text-foreground">{debugInfo.method}</span></div>
-                <div className="flex gap-2"><span className="text-muted-foreground/60 shrink-0">Time</span><span className="text-foreground">{new Date(debugInfo.timestamp).toLocaleTimeString()}</span></div>
+              <div
+                className="px-4 py-2 space-y-1.5 border-b text-[11px]"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground/60 shrink-0">URL</span>
+                  <span className="text-foreground break-all">{debugInfo.url}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground/60 shrink-0">Method</span>
+                  <span className="text-foreground">{debugInfo.method}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground/60 shrink-0">Time</span>
+                  <span className="text-foreground">
+                    {new Date(debugInfo.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
               </div>
               {bodyFormatted && (
                 <div>
                   <div className="px-4 py-1.5 bg-muted/20 border-b flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Request Body</span>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                      Request Body
+                    </span>
                     <CopyButton text={bodyFormatted} />
                   </div>
                   <SyntaxHighlighter
                     language="json"
                     style={oneDark}
-                    customStyle={{ margin: 0, padding: '12px 16px', fontSize: '11px', fontFamily: MONO_FONT, background: 'transparent', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}
+                    customStyle={{
+                      margin: 0,
+                      padding: '12px 16px',
+                      fontSize: '11px',
+                      fontFamily: MONO_FONT,
+                      background: 'transparent',
+                      wordBreak: 'break-all',
+                      whiteSpace: 'pre-wrap'
+                    }}
                     codeTagProps={{ style: { fontFamily: MONO_FONT } }}
                   >
                     {bodyFormatted}
@@ -122,6 +175,7 @@ function DebugToggleButton({ debugInfo }: { debugInfo: RequestDebugInfo }): Reac
 }
 
 function CopyButton({ text }: { text: string }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [copied, setCopied] = useState(false)
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(text)
@@ -135,17 +189,25 @@ function CopyButton({ text }: { text: string }): React.JSX.Element {
       className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted-foreground/10 transition-colors"
     >
       {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? t('userMessage.copied') : t('action.copy', { ns: 'common' })}
     </button>
   )
 }
 
-function CodeBlock({ language, children }: { language?: string; children: string }): React.JSX.Element {
+function CodeBlock({
+  language,
+  children
+}: {
+  language?: string
+  children: string
+}): React.JSX.Element {
   const code = String(children).replace(/\n$/, '')
   return (
     <div className="group relative rounded-lg border border-border/60 overflow-hidden my-3 shadow-sm">
       <div className="flex items-center justify-between bg-muted/40 px-3 py-1.5 border-b border-border/60">
-        <span className="text-[10px] font-mono text-muted-foreground/70 uppercase tracking-wider">{language || 'text'}</span>
+        <span className="text-[10px] font-mono text-muted-foreground/70 uppercase tracking-wider">
+          {language || 'text'}
+        </span>
         <CopyButton text={code} />
       </div>
       <SyntaxHighlighter
@@ -181,7 +243,10 @@ function MarkdownContent({ text }: { text: string }): React.JSX.Element {
         a: ({ href, children }) => (
           <a
             href={href}
-            onClick={(e) => { e.preventDefault(); if (href) window.electron.ipcRenderer.invoke('shell:openExternal', href) }}
+            onClick={(e) => {
+              e.preventDefault()
+              if (href) window.electron.ipcRenderer.invoke('shell:openExternal', href)
+            }}
             className="text-primary underline underline-offset-2 hover:text-primary/80 cursor-pointer"
             title={href}
           >
@@ -204,7 +269,7 @@ function MarkdownContent({ text }: { text: string }): React.JSX.Element {
             )
           }
           return <CodeBlock language={match?.[1]}>{String(children)}</CodeBlock>
-        },
+        }
       }}
     >
       {text}
@@ -212,7 +277,13 @@ function MarkdownContent({ text }: { text: string }): React.JSX.Element {
   )
 }
 
-function StreamingMarkdownContent({ text, isStreaming }: { text: string; isStreaming: boolean }): React.JSX.Element {
+function StreamingMarkdownContent({
+  text,
+  isStreaming
+}: {
+  text: string
+  isStreaming: boolean
+}): React.JSX.Element {
   const displayed = useTypewriter(text, isStreaming)
   return <MarkdownContent text={displayed} />
 }
@@ -252,7 +323,14 @@ function stripThinkTags(text: string): string {
   return text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim()
 }
 
-export function AssistantMessage({ content, isStreaming, usage, toolResults, msgId }: AssistantMessageProps): React.JSX.Element {
+export function AssistantMessage({
+  content,
+  isStreaming,
+  usage,
+  toolResults,
+  msgId
+}: AssistantMessageProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const devMode = useSettingsStore((s) => s.devMode)
   const debugInfo = devMode && msgId ? getLastDebugInfo(msgId) : undefined
   const [toolsCollapsed, setToolsCollapsed] = useState(false)
@@ -262,7 +340,10 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
     if (usage || isStreaming) return '' // skip expensive computation when API provides usage
     return typeof content === 'string'
       ? stripThinkTags(content)
-      : content.filter((b) => b.type === 'text').map((b) => stripThinkTags(b.text)).join('\n')
+      : content
+          .filter((b) => b.type === 'text')
+          .map((b) => stripThinkTags(b.text))
+          .join('\n')
   }, [content, usage, isStreaming])
   const fallbackTokens = useMemoizedTokens(plainTextForTokens)
 
@@ -283,11 +364,20 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
       return (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="flex gap-1">
-            <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="size-1.5 rounded-full bg-foreground/30 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span
+              className="size-1.5 rounded-full bg-foreground/30 animate-bounce"
+              style={{ animationDelay: '0ms' }}
+            />
+            <span
+              className="size-1.5 rounded-full bg-foreground/30 animate-bounce"
+              style={{ animationDelay: '150ms' }}
+            />
+            <span
+              className="size-1.5 rounded-full bg-foreground/30 animate-bounce"
+              style={{ animationDelay: '300ms' }}
+            />
           </span>
-          <span className="text-xs text-muted-foreground/60">Thinking...</span>
+          <span className="text-xs text-muted-foreground/60">{t('thinking.thinkingEllipsis')}</span>
         </div>
       )
     }
@@ -300,25 +390,41 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
         return (
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <StreamingMarkdownContent text={content} isStreaming={!!isStreaming} />
-            {isStreaming && <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />}
+            {isStreaming && (
+              <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />
+            )}
           </div>
         )
       }
 
-      const lastTextSegIdx = segments.reduce((acc: number, s, idx) => (s.type === 'text' ? idx : acc), -1)
+      const lastTextSegIdx = segments.reduce(
+        (acc: number, s, idx) => (s.type === 'text' ? idx : acc),
+        -1
+      )
       return (
         <div className="space-y-2">
           {segments.map((seg, idx) => {
             if (seg.type === 'think') {
-              return <ThinkingBlock key={idx} thinking={seg.content} isStreaming={!!isStreaming && !seg.closed} />
+              return (
+                <ThinkingBlock
+                  key={idx}
+                  thinking={seg.content}
+                  isStreaming={!!isStreaming && !seg.closed}
+                />
+              )
             }
             return (
               <div key={idx} className="prose prose-sm dark:prose-invert max-w-none">
-                <StreamingMarkdownContent text={seg.content} isStreaming={!!isStreaming && idx === lastTextSegIdx} />
+                <StreamingMarkdownContent
+                  text={seg.content}
+                  isStreaming={!!isStreaming && idx === lastTextSegIdx}
+                />
               </div>
             )
           })}
-          {isStreaming && <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />}
+          {isStreaming && (
+            <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />
+          )}
         </div>
       )
     }
@@ -329,7 +435,7 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
       : -1
 
     // Tools that have special renderers and should NOT be grouped
-    const SPECIAL_TOOLS = new Set(['TodoWrite', 'SpawnTeammate', 'Write', 'Edit', 'MultiEdit', 'Delete'])
+    const SPECIAL_TOOLS = new Set(['TaskCreate', 'TaskUpdate', 'Write', 'Edit', 'MultiEdit', 'Delete'])
 
     /** Check if a tool_use block should use the generic ToolCallCard (groupable) */
     const isGroupableTool = (name: string): boolean =>
@@ -357,22 +463,46 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
     }
 
     /** Render a single tool_use block (special or generic) */
-    const renderToolBlock = (block: Extract<ContentBlock, { type: 'tool_use' }>, key: string): React.JSX.Element | null => {
+    const renderToolBlock = (
+      block: Extract<ContentBlock, { type: 'tool_use' }>,
+      key: string
+    ): React.JSX.Element | null => {
       if (toolsCollapsed) return null
-      if (block.name === 'TodoWrite') {
-        return <TodoCard key={key} input={block.input} isLive={!!isStreaming} />
+      if (block.name === 'TaskCreate') {
+        return <TaskCard key={key} name={block.name} input={block.input} isLive={!!isStreaming} />
       }
-      if (block.name === 'SpawnTeammate') {
-        const result = toolResults?.get(block.id)
-        return <InlineTeammateCard key={key} input={block.input} output={result?.content} />
+      if (block.name === 'TaskUpdate') {
+        return <TaskCard key={key} name={block.name} input={block.input} isLive={!!isStreaming} />
       }
       if (TEAM_TOOL_NAMES.has(block.name)) {
         const result = toolResults?.get(block.id)
-        return <TeamEventCard key={key} name={block.name} input={block.input} output={result?.content} />
+        return (
+          <TeamEventCard key={key} name={block.name} input={block.input} output={result?.content} />
+        )
       }
       if (block.name === TASK_TOOL_NAME) {
+        if (block.input.run_in_background) {
+          const result = toolResults?.get(block.id)
+          return (
+            <TeamEventCard
+              key={key}
+              name={block.name}
+              input={block.input}
+              output={result?.content}
+            />
+          )
+        }
         const result = toolResults?.get(block.id)
-        return <SubAgentCard key={key} name={block.name} toolUseId={block.id} input={block.input} output={result?.content} isLive={!!isStreaming} />
+        return (
+          <SubAgentCard
+            key={key}
+            name={block.name}
+            toolUseId={block.id}
+            input={block.input}
+            output={result?.content}
+            isLive={!!isStreaming}
+          />
+        )
       }
       if (['Write', 'Edit', 'MultiEdit', 'Delete'].includes(block.name)) {
         const result = toolResults?.get(block.id)
@@ -414,8 +544,12 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
             onClick={() => setToolsCollapsed((v) => !v)}
             className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted-foreground/10 transition-colors"
           >
-            {toolsCollapsed ? <ChevronsUpDown className="size-3" /> : <ChevronsDownUp className="size-3" />}
-            {toolsCollapsed ? `Show ${toolCount} tool calls` : `Collapse ${toolCount} tool calls`}
+            {toolsCollapsed ? (
+              <ChevronsUpDown className="size-3" />
+            ) : (
+              <ChevronsDownUp className="size-3" />
+            )}
+            {toolsCollapsed ? t('assistantMessage.showToolCalls', { count: toolCount }) : t('assistantMessage.collapseToolCalls', { count: toolCount })}
           </button>
         )}
         {renderItems.map((item) => {
@@ -438,21 +572,36 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
                 if (!hasThinkInBlock) {
                   return (
                     <div key={item.index} className="prose prose-sm dark:prose-invert max-w-none">
-                      <StreamingMarkdownContent text={block.text} isStreaming={item.index === lastTextIdx} />
+                      <StreamingMarkdownContent
+                        text={block.text}
+                        isStreaming={item.index === lastTextIdx}
+                      />
                     </div>
                   )
                 }
                 const isBlockStreaming = !!(isStreaming && item.index === lastTextIdx)
-                const lastTxtSeg = textSegments.reduce((acc: number, s, j) => (s.type === 'text' ? j : acc), -1)
+                const lastTxtSeg = textSegments.reduce(
+                  (acc: number, s, j) => (s.type === 'text' ? j : acc),
+                  -1
+                )
                 return (
                   <div key={item.index}>
                     {textSegments.map((seg, j) => {
                       if (seg.type === 'think') {
-                        return <ThinkingBlock key={j} thinking={seg.content} isStreaming={isBlockStreaming && !seg.closed} />
+                        return (
+                          <ThinkingBlock
+                            key={j}
+                            thinking={seg.content}
+                            isStreaming={isBlockStreaming && !seg.closed}
+                          />
+                        )
                       }
                       return (
                         <div key={j} className="prose prose-sm dark:prose-invert max-w-none">
-                          <StreamingMarkdownContent text={seg.content} isStreaming={isBlockStreaming && j === lastTxtSeg} />
+                          <StreamingMarkdownContent
+                            text={seg.content}
+                            isStreaming={isBlockStreaming && j === lastTxtSeg}
+                          />
                         </div>
                       )
                     })}
@@ -468,7 +617,9 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
 
           // kind === 'group': render grouped tool calls
           if (toolsCollapsed) return null
-          const groupBlocks = item.indices.map((idx) => content[idx] as Extract<ContentBlock, { type: 'tool_use' }>)
+          const groupBlocks = item.indices.map(
+            (idx) => content[idx] as Extract<ContentBlock, { type: 'tool_use' }>
+          )
           const groupKey = `group-${item.indices[0]}`
 
           // Single item in group — render directly without wrapper
@@ -499,10 +650,12 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
               name: block.name,
               input: block.input,
               output: liveTc?.output ?? result?.content,
-              status: (liveTc?.status ?? (result?.isError ? 'error' : 'completed')) as import('@renderer/lib/agent/types').ToolCallStatus | 'completed',
+              status: (liveTc?.status ?? (result?.isError ? 'error' : 'completed')) as
+                | import('@renderer/lib/agent/types').ToolCallStatus
+                | 'completed',
               error: liveTc?.error,
               startedAt: liveTc?.startedAt,
-              completedAt: liveTc?.completedAt,
+              completedAt: liveTc?.completedAt
             }
           })
 
@@ -532,23 +685,60 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
     )
   }
 
-  const plainText = typeof content === 'string'
-    ? stripThinkTags(content)
-    : content.filter((b) => b.type === 'text').map((b) => stripThinkTags(b.text)).join('\n')
+  const plainText =
+    typeof content === 'string'
+      ? stripThinkTags(content)
+      : content
+          .filter((b) => b.type === 'text')
+          .map((b) => stripThinkTags(b.text))
+          .join('\n')
+
+  const timingSummary = useMemo(() => {
+    if (!usage) return null
+    const totalDuration = usage.totalDurationMs ? formatMs(usage.totalDurationMs) : null
+    const perRequest = usage.requestTimings ?? []
+    const lastTiming = perRequest.length > 0 ? perRequest[perRequest.length - 1] : null
+    if (!totalDuration && !lastTiming) return null
+
+    let lastDetail: string | null = null
+    if (lastTiming) {
+      const parts: string[] = []
+      parts.push(`${t('assistantMessage.req', { count: perRequest.length })} ${formatMs(lastTiming.totalMs)}`)
+      if (lastTiming.ttftMs !== undefined) parts.push(`${t('assistantMessage.ttft')} ${formatMs(lastTiming.ttftMs)}`)
+      if (lastTiming.tps !== undefined) parts.push(`${t('assistantMessage.tps')} ${lastTiming.tps.toFixed(1)}`)
+      lastDetail = parts.join(' · ')
+    }
+
+    return {
+      totalDuration,
+      lastDetail,
+    }
+  }, [t, usage])
 
   const activeProvider = useProviderStore((s) => {
     const pid = s.activeProviderId
-    return pid ? s.providers.find((p) => p.id === pid) ?? null : null
+    return pid ? (s.providers.find((p) => p.id === pid) ?? null) : null
   })
   const activeModelId = useProviderStore((s) => s.activeModelId)
   const activeModelCfg = activeProvider?.models.find((m) => m.id === activeModelId)
-  const modelDisplayName = activeModelCfg?.name || activeModelId?.split('/').pop()?.replace(/-\d{8}$/, '') || 'Assistant'
+  const modelDisplayName =
+    activeModelCfg?.name ||
+    activeModelId
+      ?.split('/')
+      .pop()
+      ?.replace(/-\d{8}$/, '') ||
+    'Assistant'
 
   return (
     <div className="group/msg flex gap-3">
       <Avatar className="size-7 shrink-0 ring-1 ring-border/50">
         <AvatarFallback className="bg-gradient-to-br from-secondary to-muted text-secondary-foreground text-xs">
-          <ModelIcon icon={activeModelCfg?.icon} modelId={activeModelId} providerBuiltinId={activeProvider?.builtinId} size={16} />
+          <ModelIcon
+            icon={activeModelCfg?.icon}
+            modelId={activeModelId}
+            providerBuiltinId={activeProvider?.builtinId}
+            size={16}
+          />
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1 pt-0.5 overflow-hidden">
@@ -564,21 +754,37 @@ export function AssistantMessage({ content, isStreaming, usage, toolResults, msg
         {renderContent()}
         {!isStreaming && plainText && (
           <p className="mt-1 text-[10px] text-muted-foreground/40 tabular-nums">
-            {usage ? (() => {
-              const total = usage.inputTokens + usage.outputTokens
-              const modelCfg = useProviderStore.getState().getActiveModelConfig()
-              const cost = calculateCost(usage, modelCfg)
-              return (
-                <>
-                  {`${formatTokens(total)} tokens (${formatTokens(usage.inputTokens)}↓ ${formatTokens(usage.outputTokens)}↑`}
-                  {usage.cacheReadTokens ? ` · ${formatTokens(usage.cacheReadTokens)} cached` : ''}
-                  {usage.reasoningTokens ? ` · ${formatTokens(usage.reasoningTokens)} reasoning` : ''}
-                  {')' }
-                  {cost !== null && <span className="text-emerald-500/70"> · {formatCost(cost)}</span>}
-                </>
-              )
-            })() : `~${formatTokens(fallbackTokens)} tokens`}
+            {usage
+              ? (() => {
+                  const total = usage.inputTokens + usage.outputTokens
+                  const modelCfg = useProviderStore.getState().getActiveModelConfig()
+                  const cost = calculateCost(usage, modelCfg)
+                  return (
+                    <>
+                      {`${formatTokens(total)} ${t('unit.tokens', { ns: 'common' })} (${formatTokens(usage.inputTokens)}↓ ${formatTokens(usage.outputTokens)}↑`}
+                      {usage.cacheReadTokens
+                        ? ` · ${formatTokens(usage.cacheReadTokens)} ${t('unit.cached', { ns: 'common' })}`
+                        : ''}
+                      {usage.reasoningTokens
+                        ? ` · ${formatTokens(usage.reasoningTokens)} ${t('unit.reasoning', { ns: 'common' })}`
+                        : ''}
+                      {')'}
+                      {cost !== null && (
+                        <span className="text-emerald-500/70"> · {formatCost(cost)}</span>
+                      )}
+                    </>
+                  )
+                })()
+              : `~${formatTokens(fallbackTokens)} ${t('unit.tokens', { ns: 'common' })}`}
           </p>
+        )}
+        {!isStreaming && timingSummary && (
+          <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground/40 tabular-nums">
+            {timingSummary.totalDuration && (
+              <div>{t('assistantMessage.totalDuration', { duration: timingSummary.totalDuration })}</div>
+            )}
+            {timingSummary.lastDetail && <div>{timingSummary.lastDetail}</div>}
+          </div>
         )}
       </div>
     </div>

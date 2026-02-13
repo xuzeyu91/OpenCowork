@@ -1,4 +1,4 @@
-import { registerTodoTools } from './todo-tool'
+import { registerTaskTools } from './todo-tool'
 import { registerFsTools } from './fs-tool'
 import { registerSearchTools } from './search-tool'
 import { registerBashTools } from './bash-tool'
@@ -24,11 +24,11 @@ export async function registerAllTools(): Promise<void> {
   if (_allToolsRegistered) return
   _allToolsRegistered = true
 
-  registerTodoTools()
+  registerTaskTools()
   registerFsTools()
   registerSearchTools()
   registerBashTools()
-  registerSkillTools()
+  await registerSkillTools()
   registerPreviewTools()
 
   // SubAgents (loaded from ~/.open-cowork/agents/*.md via IPC, then registered as unified Task tool)
@@ -36,4 +36,7 @@ export async function registerAllTools(): Promise<void> {
 
   // Agent Team tools
   registerTeamTools()
+
+  // Plugin tools are registered/unregistered dynamically via plugin-store toggle
+  // They are NOT registered here — see plugin-tools.ts registerPluginTools/unregisterPluginTools
 }

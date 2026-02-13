@@ -1,4 +1,12 @@
-import { Users, ClipboardList, MessageSquare, Trash2, UserPlus, RefreshCw, List } from 'lucide-react'
+import {
+  Users,
+  ClipboardList,
+  MessageSquare,
+  Trash2,
+  RefreshCw,
+  UserPlus
+} from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@renderer/lib/utils'
 import type { ToolResultContent } from '@renderer/lib/api/types'
 
@@ -8,42 +16,37 @@ interface TeamEventCardProps {
   output?: ToolResultContent
 }
 
-const toolConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+const toolConfig: Record<string, { icon: React.ReactNode; color: string; labelKey: string }> = {
   TeamCreate: {
     icon: <Users className="size-3.5" />,
     color: 'border-cyan-500/30 bg-cyan-500/5',
-    label: 'Team Created',
+    labelKey: 'teamEvent.teamCreated'
   },
   TaskCreate: {
     icon: <ClipboardList className="size-3.5" />,
     color: 'border-cyan-500/20 bg-cyan-500/[0.02]',
-    label: 'Task Created',
+    labelKey: 'teamEvent.taskCreated'
   },
   TaskUpdate: {
     icon: <RefreshCw className="size-3.5" />,
     color: 'border-cyan-500/20 bg-cyan-500/[0.02]',
-    label: 'Task Updated',
+    labelKey: 'teamEvent.taskUpdated'
   },
-  TaskList: {
-    icon: <List className="size-3.5" />,
-    color: 'border-muted bg-muted/30',
-    label: 'Task List',
-  },
-  SpawnTeammate: {
-    icon: <UserPlus className="size-3.5" />,
-    color: 'border-cyan-500/30 bg-cyan-500/5',
-    label: 'Teammate Spawned',
-  },
-  TeamSendMessage: {
+  SendMessage: {
     icon: <MessageSquare className="size-3.5" />,
     color: 'border-cyan-500/20 bg-cyan-500/[0.02]',
-    label: 'Message Sent',
+    labelKey: 'teamEvent.messageSent'
   },
   TeamDelete: {
     icon: <Trash2 className="size-3.5" />,
     color: 'border-muted bg-muted/30',
-    label: 'Team Deleted',
+    labelKey: 'teamEvent.teamDeleted'
   },
+  Task: {
+    icon: <UserPlus className="size-3.5" />,
+    color: 'border-cyan-500/30 bg-cyan-500/5',
+    labelKey: 'teamEvent.teammateSpawned'
+  }
 }
 
 function parseOutput(output?: ToolResultContent): Record<string, unknown> | null {
@@ -56,10 +59,11 @@ function parseOutput(output?: ToolResultContent): Record<string, unknown> | null
 }
 
 export function TeamEventCard({ name, input, output }: TeamEventCardProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const config = toolConfig[name] ?? {
     icon: <Users className="size-3.5" />,
     color: 'border-muted bg-muted/30',
-    label: name,
+    labelKey: ''
   }
 
   const parsed = parseOutput(output)
@@ -81,31 +85,33 @@ export function TeamEventCard({ name, input, output }: TeamEventCardProps): Reac
       if (input.status) summary += ` → ${input.status}`
       if (input.owner) summary += ` (${input.owner})`
       break
-    case 'TaskList':
-      if (parsed && !isError) summary = `${parsed.filtered ?? 0} tasks`
-      break
-    case 'SpawnTeammate':
+    case 'Task':
       summary = `${input.name ?? ''}`
-      if (input.task_id) summary += ` → task #${input.task_id}`
+      if (input.description) summary += ` — ${input.description}`
       break
-    case 'TeamSendMessage':
+    case 'SendMessage':
       summary = `→ ${input.recipient ?? 'all'}: ${String(input.content ?? '').slice(0, 80)}`
       break
     case 'TeamDelete':
-      if (parsed && !isError) summary = `${parsed.team_name ?? ''} (${parsed.tasks_completed ?? 0}/${parsed.tasks_total ?? 0} tasks done)`
+      if (parsed && !isError)
+        summary = `${parsed.team_name ?? ''} (${parsed.tasks_completed ?? 0}/${parsed.tasks_total ?? 0} tasks done)`
       break
   }
 
   return (
-    <div className={cn('my-5 rounded-lg border px-3 py-2 transition-all', config.color, isError && 'border-destructive/30 bg-destructive/5')}>
+    <div
+      className={cn(
+        'my-5 rounded-lg border px-3 py-2 transition-all',
+        config.color,
+        isError && 'border-destructive/30 bg-destructive/5'
+      )}
+    >
       <div className="flex items-center gap-2">
         <span className="text-cyan-500 shrink-0">{config.icon}</span>
         <span className="text-[11px] font-medium text-cyan-600 dark:text-cyan-400">
-          {config.label}
+          {config.labelKey ? t(config.labelKey) : name}
         </span>
-        {isError && (
-          <span className="text-[9px] text-destructive font-medium">failed</span>
-        )}
+        {isError && <span className="text-[9px] text-destructive font-medium">{t('teamEvent.failed')}</span>}
         <span className="flex-1" />
       </div>
       {summary && (

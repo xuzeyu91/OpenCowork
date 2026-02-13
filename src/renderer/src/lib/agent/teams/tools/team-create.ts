@@ -11,15 +11,15 @@ export const teamCreateTool: ToolHandler = {
       properties: {
         team_name: {
           type: 'string',
-          description: 'Short, descriptive name for the team (e.g. "pr-review", "bug-fix-squad")',
+          description: 'Short, descriptive name for the team (e.g. "pr-review", "bug-fix-squad")'
         },
         description: {
           type: 'string',
-          description: 'What this team is working on',
-        },
+          description: 'What this team is working on'
+        }
       },
-      required: ['team_name', 'description'],
-    },
+      required: ['team_name', 'description']
+    }
   },
   execute: async (input) => {
     const teamName = String(input.team_name)
@@ -30,8 +30,8 @@ export const teamCreateTool: ToolHandler = {
     return JSON.stringify({
       success: true,
       team_name: teamName,
-      message: `Team "${teamName}" created. Now create tasks with TaskCreate and spawn teammates with SpawnTeammate.`,
+      message: `Team "${teamName}" created. Now create tasks with TaskCreate and spawn teammates with Task (run_in_background=true).`
     })
   },
-  requiresApproval: () => false,
+  requiresApproval: () => false
 }

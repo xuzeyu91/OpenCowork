@@ -9,11 +9,12 @@ export interface SessionRow {
   updated_at: number
   working_folder: string | null
   pinned: number
+  plugin_id: string | null
 }
 
 export function listSessions(): SessionRow[] {
   const db = getDb()
-  return db.prepare('SELECT * FROM sessions ORDER BY updated_at DESC').all() as SessionRow[]
+  return db.prepare('SELECT * FROM sessions WHERE plugin_id IS NULL ORDER BY updated_at DESC').all() as SessionRow[]
 }
 
 export function getSession(id: string): SessionRow | undefined {
@@ -30,11 +31,12 @@ export function createSession(session: {
   updatedAt: number
   workingFolder?: string
   pinned?: boolean
+  pluginId?: string
 }): void {
   const db = getDb()
   db.prepare(
-    `INSERT INTO sessions (id, title, icon, mode, created_at, updated_at, working_folder, pinned)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO sessions (id, title, icon, mode, created_at, updated_at, working_folder, pinned, plugin_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     session.id,
     session.title,
@@ -43,7 +45,8 @@ export function createSession(session: {
     session.createdAt,
     session.updatedAt,
     session.workingFolder ?? null,
-    session.pinned ? 1 : 0
+    session.pinned ? 1 : 0,
+    session.pluginId ?? null
   )
 }
 
@@ -56,6 +59,7 @@ export function updateSession(
     updatedAt: number
     workingFolder: string | null
     pinned: boolean
+    pluginId: string | null
   }>
 ): void {
   const db = getDb()
@@ -86,6 +90,10 @@ export function updateSession(
     sets.push('pinned = ?')
     values.push(patch.pinned ? 1 : 0)
   }
+  if (patch.pluginId !== undefined) {
+    sets.push('plugin_id = ?')
+    values.push(patch.pluginId)
+  }
 
   if (sets.length === 0) return
 
@@ -100,6 +108,9 @@ export function deleteSession(id: string): void {
 
 export function clearAllSessions(): void {
   const db = getDb()
-  db.prepare('DELETE FROM messages').run()
-  db.prepare('DELETE FROM sessions').run()
+  // Only clear non-plugin sessions and their messages
+  db.prepare(
+    `DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE plugin_id IS NULL)`
+  ).run()
+  db.prepare('DELETE FROM sessions WHERE plugin_id IS NULL').run()
 }

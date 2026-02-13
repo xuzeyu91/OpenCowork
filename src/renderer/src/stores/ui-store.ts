@@ -23,7 +23,7 @@ export interface PreviewPanelState {
 
 
 
-export type SettingsTab = 'general' | 'provider' | 'model' | 'about'
+export type SettingsTab = 'general' | 'provider' | 'plugin' | 'model' | 'about'
 
 export type DetailPanelContent =
 

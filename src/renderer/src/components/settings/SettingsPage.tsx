@@ -1,11 +1,7 @@
-import {
-  Settings,
-  BrainCircuit,
-  Info,
-  Server,
-} from 'lucide-react'
+import { Settings, BrainCircuit, Info, Server, Puzzle } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { useUIStore, type SettingsTab } from '@renderer/stores/ui-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { formatTokens } from '@renderer/lib/format-tokens'
@@ -21,29 +17,25 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from '@renderer/components/ui/select'
 import { useProviderStore } from '@renderer/stores/provider-store'
 import { ProviderPanel } from './ProviderPanel'
+import { PluginPanel } from './PluginPanel'
 import { WindowControls } from '@renderer/components/layout/WindowControls'
 
-interface MenuItem {
-  id: SettingsTab
-  label: string
-  icon: React.ReactNode
-  description: string
-}
-
-const menuItems: MenuItem[] = [
-  { id: 'general', label: '通用设置', icon: <Settings className="size-4" />, description: '主题、语言与基本偏好' },
-  { id: 'provider', label: 'AI 服务商', icon: <Server className="size-4" />, description: '管理 AI 模型服务商' },
-  { id: 'model', label: '模型配置', icon: <BrainCircuit className="size-4" />, description: '模型选择与生成参数' },
-  { id: 'about', label: '关于', icon: <Info className="size-4" />, description: '版本信息与项目链接' },
+const menuItemDefs: { id: SettingsTab; icon: React.ReactNode; labelKey: string; descKey: string }[] = [
+  { id: 'general', icon: <Settings className="size-4" />, labelKey: 'general.title', descKey: 'general.subtitle' },
+  { id: 'provider', icon: <Server className="size-4" />, labelKey: 'provider.title', descKey: 'provider.subtitle' },
+  { id: 'plugin', icon: <Puzzle className="size-4" />, labelKey: 'plugin.title', descKey: 'plugin.subtitle' },
+  { id: 'model', icon: <BrainCircuit className="size-4" />, labelKey: 'model.title', descKey: 'model.subtitle' },
+  { id: 'about', icon: <Info className="size-4" />, labelKey: 'about.title', descKey: 'about.subtitle' },
 ]
 
 // ─── General Settings Panel ───
 
 function GeneralPanel(): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const settings = useSettingsStore()
   const { setTheme } = useTheme()
   const promptTokens = useDebouncedTokens(settings.systemPrompt)
@@ -51,15 +43,15 @@ function GeneralPanel(): React.JSX.Element {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold">通用设置</h2>
-        <p className="text-sm text-muted-foreground">主题、语言与基本偏好</p>
+        <h2 className="text-lg font-semibold">{t('general.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('general.subtitle')}</p>
       </div>
 
       {/* Theme */}
       <section className="space-y-3">
         <div>
-          <label className="text-sm font-medium">主题</label>
-          <p className="text-xs text-muted-foreground">选择应用的外观主题</p>
+          <label className="text-sm font-medium">{t('general.theme')}</label>
+          <p className="text-xs text-muted-foreground">{t('general.themeDesc')}</p>
         </div>
         <Select
           value={settings.theme}
@@ -72,9 +64,15 @@ function GeneralPanel(): React.JSX.Element {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="light" className="text-xs">浅色</SelectItem>
-            <SelectItem value="dark" className="text-xs">深色</SelectItem>
-            <SelectItem value="system" className="text-xs">跟随系统</SelectItem>
+            <SelectItem value="light" className="text-xs">
+              {t('general.light')}
+            </SelectItem>
+            <SelectItem value="dark" className="text-xs">
+              {t('general.dark')}
+            </SelectItem>
+            <SelectItem value="system" className="text-xs">
+              {t('general.system')}
+            </SelectItem>
           </SelectContent>
         </Select>
       </section>
@@ -84,8 +82,8 @@ function GeneralPanel(): React.JSX.Element {
       {/* Language */}
       <section className="space-y-3">
         <div>
-          <label className="text-sm font-medium">语言</label>
-          <p className="text-xs text-muted-foreground">设置界面显示语言</p>
+          <label className="text-sm font-medium">{t('general.language')}</label>
+          <p className="text-xs text-muted-foreground">{t('general.languageDesc')}</p>
         </div>
         <Select
           value={settings.language}
@@ -95,8 +93,12 @@ function GeneralPanel(): React.JSX.Element {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="zh" className="text-xs">中文</SelectItem>
-            <SelectItem value="en" className="text-xs">English</SelectItem>
+            <SelectItem value="zh" className="text-xs">
+              {t('general.chinese')}
+            </SelectItem>
+            <SelectItem value="en" className="text-xs">
+              {t('general.english')}
+            </SelectItem>
           </SelectContent>
         </Select>
       </section>
@@ -107,15 +109,17 @@ function GeneralPanel(): React.JSX.Element {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <label className="text-sm font-medium">系统提示词</label>
-            <p className="text-xs text-muted-foreground">自定义指令，将追加到内置系统提示词之后</p>
+            <label className="text-sm font-medium">{t('general.systemPrompt')}</label>
+            <p className="text-xs text-muted-foreground">{t('general.systemPromptDesc')}</p>
           </div>
           {settings.systemPrompt && (
-            <span className="text-[10px] text-muted-foreground/50 tabular-nums">{promptTokens > 0 ? `~${formatTokens(promptTokens)} tokens` : ''}</span>
+            <span className="text-[10px] text-muted-foreground/50 tabular-nums">
+              {promptTokens > 0 ? `~${formatTokens(promptTokens)} tokens` : ''}
+            </span>
           )}
         </div>
         <Textarea
-          placeholder="添加自定义指令..."
+          placeholder={t('general.systemPromptPlaceholder')}
           value={settings.systemPrompt}
           onChange={(e) => settings.updateSettings({ systemPrompt: e.target.value })}
           rows={4}
@@ -129,8 +133,10 @@ function GeneralPanel(): React.JSX.Element {
       <section className="space-y-3">
         <div className="flex items-center justify-between max-w-lg">
           <div>
-            <label className="text-sm font-medium">Team Tools</label>
-            <p className="text-xs text-muted-foreground">启用 Agent Team 协作功能，允许 AI 创建和管理并行团队</p>
+            <label className="text-sm font-medium">{t('general.teamTools')}</label>
+            <p className="text-xs text-muted-foreground">
+              {t('general.teamToolsDesc')}
+            </p>
           </div>
           <Switch
             checked={settings.teamToolsEnabled}
@@ -138,7 +144,32 @@ function GeneralPanel(): React.JSX.Element {
           />
         </div>
         {settings.teamToolsEnabled && (
-          <p className="text-xs text-muted-foreground/70">已启用：AI 可使用 TeamCreate、SpawnTeammate 等工具进行多智能体协作</p>
+          <p className="text-xs text-muted-foreground/70">
+            {t('general.teamToolsEnabled')}
+          </p>
+        )}
+      </section>
+
+      <Separator />
+
+      {/* Context Compression */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between max-w-lg">
+          <div>
+            <label className="text-sm font-medium">{t('general.contextCompression')}</label>
+            <p className="text-xs text-muted-foreground">
+              {t('general.contextCompressionDesc')}
+            </p>
+          </div>
+          <Switch
+            checked={settings.contextCompressionEnabled}
+            onCheckedChange={(checked) => settings.updateSettings({ contextCompressionEnabled: checked })}
+          />
+        </div>
+        {settings.contextCompressionEnabled && (
+          <p className="text-xs text-muted-foreground/70">
+            {t('general.contextCompressionEnabled')}
+          </p>
         )}
       </section>
 
@@ -148,19 +179,20 @@ function GeneralPanel(): React.JSX.Element {
       <section className="space-y-3">
         <div className="flex items-center justify-between max-w-lg">
           <div>
-            <label className="text-sm font-medium">自动批准工具调用</label>
-            <p className="text-xs text-muted-foreground">跳过所有工具调用的权限确认对话框</p>
+            <label className="text-sm font-medium">{t('general.autoApprove')}</label>
+            <p className="text-xs text-muted-foreground">{t('general.autoApproveDesc')}</p>
           </div>
           <Switch
             checked={settings.autoApprove}
             onCheckedChange={(checked) => {
-              if (checked && !window.confirm('启用自动批准？所有工具调用将不经确认直接执行。')) return
+              if (checked && !window.confirm(t('general.autoApproveWarning')))
+                return
               settings.updateSettings({ autoApprove: checked })
             }}
           />
         </div>
         {settings.autoApprove && (
-          <p className="text-xs text-destructive">危险：所有工具调用将自动执行，无需确认</p>
+          <p className="text-xs text-destructive">{t('general.autoApproveWarning')}</p>
         )}
       </section>
 
@@ -170,8 +202,8 @@ function GeneralPanel(): React.JSX.Element {
       <section className="space-y-3">
         <div className="flex items-center justify-between max-w-lg">
           <div>
-            <label className="text-sm font-medium">开发者模式</label>
-            <p className="text-xs text-muted-foreground">出错时在 AI 回复中显示请求调试信息</p>
+            <label className="text-sm font-medium">{t('general.devMode')}</label>
+            <p className="text-xs text-muted-foreground">{t('general.devModeDesc')}</p>
           </div>
           <Switch
             checked={settings.devMode}
@@ -189,7 +221,7 @@ function GeneralPanel(): React.JSX.Element {
           size="sm"
           className="text-xs text-muted-foreground"
           onClick={() => {
-            if (!window.confirm('重置所有设置为默认值？API Key 将被保留。')) return
+            if (!window.confirm(t('general.resetConfirm'))) return
             const currentKey = settings.apiKey
             settings.updateSettings({
               provider: 'anthropic',
@@ -200,13 +232,13 @@ function GeneralPanel(): React.JSX.Element {
               temperature: 0.7,
               systemPrompt: '',
               theme: 'system',
-              apiKey: currentKey,
+              apiKey: currentKey
             })
             setTheme('system')
-            toast.success('已重置为默认设置')
+            toast.success(t('general.resetDone'))
           }}
         >
-          重置为默认
+          {t('general.resetDefault')}
         </Button>
       </section>
     </div>
@@ -216,6 +248,7 @@ function GeneralPanel(): React.JSX.Element {
 // ─── Model Configuration Panel ───
 
 function ModelPanel(): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const settings = useSettingsStore()
   const providers = useProviderStore((s) => s.providers)
   const activeProviderId = useProviderStore((s) => s.activeProviderId)
@@ -234,29 +267,28 @@ function ModelPanel(): React.JSX.Element {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold">模型配置</h2>
-        <p className="text-sm text-muted-foreground">选择 AI 服务商和模型，调整生成参数</p>
+        <h2 className="text-lg font-semibold">{t('model.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('model.subtitle')}</p>
       </div>
 
       {noProviders ? (
         <div className="rounded-lg border border-dashed p-6 text-center space-y-2">
-          <p className="text-sm text-muted-foreground">尚未启用任何 AI 服务商</p>
-          <p className="text-xs text-muted-foreground/60">请先前往「AI 服务商」页面启用并配置服务商</p>
+          <p className="text-sm text-muted-foreground">{t('model.noProviders')}</p>
+          <p className="text-xs text-muted-foreground/60">
+            {t('model.noProvidersHint')}
+          </p>
         </div>
       ) : (
         <>
           {/* Provider Selection */}
           <section className="space-y-3">
             <div>
-              <label className="text-sm font-medium">AI 服务商</label>
-              <p className="text-xs text-muted-foreground">选择已启用的服务商</p>
+              <label className="text-sm font-medium">{t('model.provider')}</label>
+              <p className="text-xs text-muted-foreground">{t('model.providerDesc')}</p>
             </div>
-            <Select
-              value={activeProviderId ?? ''}
-              onValueChange={(v) => setActiveProvider(v)}
-            >
+            <Select value={activeProviderId ?? ''} onValueChange={(v) => setActiveProvider(v)}>
               <SelectTrigger className="w-80 text-xs">
-                <SelectValue placeholder="选择服务商" />
+                <SelectValue placeholder={t('dialog.selectProvider')} />
               </SelectTrigger>
               <SelectContent>
                 {enabledProviders.map((p) => (
@@ -273,13 +305,13 @@ function ModelPanel(): React.JSX.Element {
           {/* Main Model */}
           <section className="space-y-3">
             <div>
-              <label className="text-sm font-medium">主模型</label>
-              <p className="text-xs text-muted-foreground">用于对话和主要任务的模型</p>
+              <label className="text-sm font-medium">{t('model.mainModel')}</label>
+              <p className="text-xs text-muted-foreground">{t('model.mainModelDesc')}</p>
             </div>
             {enabledModels.length > 0 ? (
               <Select value={activeModelId} onValueChange={(v) => setActiveModel(v)}>
                 <SelectTrigger className="w-80 text-xs">
-                  <SelectValue placeholder="选择模型" />
+                  <SelectValue placeholder={t('model.selectModel')} />
                 </SelectTrigger>
                 <SelectContent>
                   {enabledModels.map((m) => (
@@ -292,7 +324,7 @@ function ModelPanel(): React.JSX.Element {
               </Select>
             ) : (
               <p className="text-xs text-muted-foreground/60">
-                当前服务商无可用模型，请前往「AI 服务商」页面添加模型
+                {t('model.noModelsHint')}
               </p>
             )}
           </section>
@@ -300,9 +332,9 @@ function ModelPanel(): React.JSX.Element {
           {/* Fast Model */}
           <section className="space-y-3">
             <div>
-              <label className="text-sm font-medium">快速模型</label>
+              <label className="text-sm font-medium">{t('model.fastModel')}</label>
               <p className="text-xs text-muted-foreground">
-                用于会话标题生成和子代理任务（更便宜、更快）
+                {t('model.fastModelDesc')}
               </p>
             </div>
             {enabledModels.length > 0 ? (
@@ -311,7 +343,7 @@ function ModelPanel(): React.JSX.Element {
                 onValueChange={(v) => setActiveFastModel(v)}
               >
                 <SelectTrigger className="w-80 text-xs">
-                  <SelectValue placeholder="选择快速模型" />
+                  <SelectValue placeholder={t('model.selectFastModel')} />
                 </SelectTrigger>
                 <SelectContent>
                   {enabledModels.map((m) => (
@@ -323,9 +355,7 @@ function ModelPanel(): React.JSX.Element {
                 </SelectContent>
               </Select>
             ) : (
-              <p className="text-xs text-muted-foreground/60">
-                当前服务商无可用模型
-              </p>
+              <p className="text-xs text-muted-foreground/60">{t('model.noModelsAvailable')}</p>
             )}
           </section>
         </>
@@ -337,8 +367,8 @@ function ModelPanel(): React.JSX.Element {
       <section className="space-y-3">
         <div className="flex items-center justify-between max-w-lg">
           <div>
-            <label className="text-sm font-medium">Temperature</label>
-            <p className="text-xs text-muted-foreground">控制生成文本的随机性</p>
+            <label className="text-sm font-medium">{t('model.temperature')}</label>
+            <p className="text-xs text-muted-foreground">{t('model.temperatureDesc')}</p>
           </div>
           <span className="text-sm font-mono text-muted-foreground">{settings.temperature}</span>
         </div>
@@ -352,10 +382,10 @@ function ModelPanel(): React.JSX.Element {
         />
         <div className="flex items-center justify-between max-w-lg">
           {[
-            { v: 0, label: '精确' },
-            { v: 0.3, label: '平衡' },
-            { v: 0.7, label: '创意' },
-            { v: 1, label: '随机' },
+            { v: 0, label: t('model.precise') },
+            { v: 0.3, label: t('model.balanced') },
+            { v: 0.7, label: t('model.creative') },
+            { v: 1, label: t('model.random') }
           ].map(({ v, label }) => (
             <button
               key={v}
@@ -371,8 +401,8 @@ function ModelPanel(): React.JSX.Element {
       {/* Max Tokens */}
       <section className="space-y-3">
         <div>
-          <label className="text-sm font-medium">最大 Token 数</label>
-          <p className="text-xs text-muted-foreground">单次响应的最大 Token 限制</p>
+          <label className="text-sm font-medium">{t('model.maxTokens')}</label>
+          <p className="text-xs text-muted-foreground">{t('model.maxTokensDesc')}</p>
         </div>
         <Input
           type="number"
@@ -401,11 +431,12 @@ function ModelPanel(): React.JSX.Element {
 // ─── About Panel ───
 
 function AboutPanel(): React.JSX.Element {
+  const { t } = useTranslation('settings')
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold">关于</h2>
-        <p className="text-sm text-muted-foreground">版本信息与项目链接</p>
+        <h2 className="text-lg font-semibold">{t('about.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('about.subtitle')}</p>
       </div>
 
       <div className="flex items-center gap-4">
@@ -416,7 +447,7 @@ function AboutPanel(): React.JSX.Element {
         />
         <div>
           <h3 className="text-xl font-bold">OpenCowork</h3>
-          <p className="text-sm text-muted-foreground">AI 协作工作台</p>
+          <p className="text-sm text-muted-foreground">{t('about.appDesc')}</p>
         </div>
       </div>
 
@@ -424,13 +455,13 @@ function AboutPanel(): React.JSX.Element {
 
       <section className="space-y-4">
         <div className="grid grid-cols-[120px_1fr] gap-y-3 text-sm">
-          <span className="text-muted-foreground">版本</span>
+          <span className="text-muted-foreground">{t('about.version')}</span>
           <span className="font-mono">0.1.0</span>
-          <span className="text-muted-foreground">框架</span>
+          <span className="text-muted-foreground">{t('about.framework')}</span>
           <span>Electron + React + TypeScript</span>
-          <span className="text-muted-foreground">UI</span>
+          <span className="text-muted-foreground">{t('about.ui')}</span>
           <span>shadcn/ui + TailwindCSS</span>
-          <span className="text-muted-foreground">许可证</span>
+          <span className="text-muted-foreground">{t('about.license')}</span>
           <span>MIT</span>
         </div>
       </section>
@@ -439,7 +470,7 @@ function AboutPanel(): React.JSX.Element {
 
       <section className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          OpenCowork 是一个开源的 AI 协作平台，支持多种大语言模型提供商。
+          {t('about.description')}
         </p>
         <div className="flex gap-2">
           <Button
@@ -448,7 +479,7 @@ function AboutPanel(): React.JSX.Element {
             className="text-xs"
             onClick={() => window.open('https://github.com/AIDotNet/OpenCowork', '_blank')}
           >
-            GitHub
+            {t('about.github')}
           </Button>
         </div>
       </section>
@@ -461,11 +492,13 @@ function AboutPanel(): React.JSX.Element {
 const panelMap: Record<SettingsTab, () => React.JSX.Element> = {
   general: GeneralPanel,
   provider: ProviderPanel,
+  plugin: PluginPanel,
   model: ModelPanel,
-  about: AboutPanel,
+  about: AboutPanel
 }
 
 export function SettingsPage(): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const settingsTab = useUIStore((s) => s.settingsTab)
   const setSettingsTab = useUIStore((s) => s.setSettingsTab)
 
@@ -480,13 +513,13 @@ export function SettingsPage(): React.JSX.Element {
 
         {/* Header */}
         <div className="px-5 pb-5">
-          <h1 className="text-xl font-bold">设置</h1>
-          <p className="mt-1 text-xs text-muted-foreground">偏好与模型设置</p>
+          <h1 className="text-xl font-bold">{t('page.title')}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{t('page.subtitle')}</p>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 overflow-y-auto">
-          {menuItems.map((item) => (
+          {menuItemDefs.map((item) => (
             <button
               key={item.id}
               onClick={() => setSettingsTab(item.id)}
@@ -496,19 +529,21 @@ export function SettingsPage(): React.JSX.Element {
                   : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
               }`}
             >
-              <span className={`flex items-center justify-center size-5 ${
-                settingsTab === item.id ? 'text-accent-foreground' : 'text-muted-foreground'
-              }`}>
+              <span
+                className={`flex items-center justify-center size-5 ${
+                  settingsTab === item.id ? 'text-accent-foreground' : 'text-muted-foreground'
+                }`}
+              >
                 {item.icon}
               </span>
-              <span>{item.label}</span>
+              <span>{t(item.labelKey)}</span>
             </button>
           ))}
         </nav>
 
         {/* Footer */}
         <div className="px-5 py-4 text-[11px] text-muted-foreground/50">
-          Powered by <span className="font-medium text-muted-foreground/70">OpenCowork</span>
+          {t('page.poweredBy')}
         </div>
       </div>
 
@@ -520,7 +555,7 @@ export function SettingsPage(): React.JSX.Element {
           <WindowControls />
         </div>
         {/* Content */}
-        {settingsTab === 'provider' ? (
+        {settingsTab === 'provider' || settingsTab === 'plugin' ? (
           <div className="flex-1 min-h-0 px-6 pb-4">
             <ActivePanel />
           </div>

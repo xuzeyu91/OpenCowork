@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback } from '@renderer/components/ui/avatar'
 import { Button } from '@renderer/components/ui/button'
 import { User, Pencil, Check, X, Copy } from 'lucide-react'
@@ -14,6 +15,7 @@ interface UserMessageProps {
 }
 
 export function UserMessage({ content, images, isLast, onEdit }: UserMessageProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const memoizedTokens = useMemoizedTokens(content)
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(content)
@@ -59,7 +61,7 @@ export function UserMessage({ content, images, isLast, onEdit }: UserMessageProp
       </Avatar>
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex items-center gap-2 mb-1">
-          <p className="text-sm font-medium">You</p>
+          <p className="text-sm font-medium">{t('userMessage.you')}</p>
           {!editing && (
             <span className="opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center gap-0.5">
               <button
@@ -67,7 +69,7 @@ export function UserMessage({ content, images, isLast, onEdit }: UserMessageProp
                 className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted-foreground/10 transition-colors"
               >
                 {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? t('userMessage.copied') : t('action.copy', { ns: 'common' })}
               </button>
               {isLast && onEdit && (
                 <button
@@ -75,7 +77,7 @@ export function UserMessage({ content, images, isLast, onEdit }: UserMessageProp
                   className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted-foreground/10 transition-colors"
                 >
                   <Pencil className="size-3" />
-                  Edit
+                  {t('userMessage.edit')}
                 </button>
               )}
             </span>
@@ -94,11 +96,11 @@ export function UserMessage({ content, images, isLast, onEdit }: UserMessageProp
             <div className="flex items-center gap-1.5">
               <Button size="sm" className="h-6 gap-1 px-2 text-xs" onClick={handleSave}>
                 <Check className="size-3" />
-                Save & Resend
+                {t('userMessage.saveAndResend')}
               </Button>
               <Button size="sm" variant="ghost" className="h-6 gap-1 px-2 text-xs" onClick={handleCancel}>
                 <X className="size-3" />
-                Cancel
+                {t('action.cancel', { ns: 'common' })}
               </Button>
             </div>
           </div>
@@ -127,7 +129,7 @@ export function UserMessage({ content, images, isLast, onEdit }: UserMessageProp
         )}
         {!editing && content.length > 50 && (
           <p className="mt-1 text-[10px] text-muted-foreground/0 group-hover/user:text-muted-foreground/40 transition-colors tabular-nums">
-            {formatTokens(memoizedTokens)} tokens
+            {formatTokens(memoizedTokens)} {t('unit.tokens', { ns: 'common' })}
           </p>
         )}
       </div>

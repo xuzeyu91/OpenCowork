@@ -40,7 +40,7 @@ export function registerApiProxyHandlers(): void {
           let responseBody = ''
           res.on('data', (chunk: Buffer) => { responseBody += chunk.toString() })
           res.on('end', () => {
-            resolve({ statusCode: res.statusCode, body: responseBody.slice(0, 2000) })
+            resolve({ statusCode: res.statusCode, body: responseBody })
           })
         })
 

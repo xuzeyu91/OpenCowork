@@ -15,9 +15,11 @@ import { Button } from '@renderer/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@renderer/components/ui/select'
 import { Input } from '@renderer/components/ui/input'
 import { Settings } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { ProviderIcon, ModelIcon } from './provider-icons'
 
 export function SettingsDialog(): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const open = useUIStore((s) => s.settingsOpen)
   const setOpen = useUIStore((s) => s.setSettingsOpen)
   const openSettingsPage = useUIStore((s) => s.openSettingsPage)
@@ -40,8 +42,8 @@ export function SettingsDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Quick Settings</DialogTitle>
-          <DialogDescription>Fast model switching and parameter tuning</DialogDescription>
+          <DialogTitle>{t('dialog.title')}</DialogTitle>
+          <DialogDescription>{t('dialog.subtitle')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-2">
@@ -49,13 +51,13 @@ export function SettingsDialog(): React.JSX.Element {
           {enabledProviders.length > 0 ? (
             <>
               <section className="space-y-2">
-                <label className="text-sm font-medium">AI Provider</label>
+                <label className="text-sm font-medium">{t('dialog.provider')}</label>
                 <Select
                   value={activeProviderId ?? ''}
                   onValueChange={(v) => setActiveProvider(v)}
                 >
                   <SelectTrigger className="w-full text-xs">
-                    <SelectValue placeholder="Select provider" />
+                    <SelectValue placeholder={t('dialog.selectProvider')} />
                   </SelectTrigger>
                   <SelectContent>
                     {enabledProviders.map((p) => (
@@ -71,7 +73,7 @@ export function SettingsDialog(): React.JSX.Element {
               </section>
 
               <section className="space-y-2">
-                <label className="text-sm font-medium">Model</label>
+                <label className="text-sm font-medium">{t('dialog.model')}</label>
                 {enabledModels.length > 0 ? (
                   <Select value={activeModelId} onValueChange={(v) => setActiveModel(v)}>
                     <SelectTrigger className="w-full text-xs">
@@ -89,14 +91,14 @@ export function SettingsDialog(): React.JSX.Element {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="text-xs text-muted-foreground">No models available</p>
+                  <p className="text-xs text-muted-foreground">{t('dialog.noModels')}</p>
                 )}
               </section>
 
               <section className="space-y-2">
-                <label className="text-sm font-medium">Fast Model</label>
+                <label className="text-sm font-medium">{t('dialog.fastModel')}</label>
                 <p className="text-[10px] text-muted-foreground/60">
-                  For title generation and SubAgent tasks
+                  {t('dialog.fastModelDesc')}
                 </p>
                 {enabledModels.length > 0 ? (
                   <Select
@@ -118,13 +120,13 @@ export function SettingsDialog(): React.JSX.Element {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="text-xs text-muted-foreground">No models available</p>
+                  <p className="text-xs text-muted-foreground">{t('dialog.noModels')}</p>
                 )}
               </section>
             </>
           ) : (
             <section className="space-y-3 rounded-lg border border-dashed p-4 text-center">
-              <p className="text-sm text-muted-foreground">No AI providers enabled</p>
+              <p className="text-sm text-muted-foreground">{t('dialog.noProvidersEnabled')}</p>
               <Button
                 variant="outline"
                 size="sm"
@@ -132,7 +134,7 @@ export function SettingsDialog(): React.JSX.Element {
                 onClick={() => { setOpen(false); openSettingsPage('provider') }}
               >
                 <Settings className="size-3.5" />
-                Configure Providers
+                {t('dialog.configureProviders')}
               </Button>
             </section>
           )}
@@ -142,7 +144,7 @@ export function SettingsDialog(): React.JSX.Element {
           {/* Temperature */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Temperature</label>
+              <label className="text-sm font-medium">{t('dialog.temperature')}</label>
               <span className="text-xs text-muted-foreground">{settings.temperature}</span>
             </div>
             <Slider
@@ -156,7 +158,7 @@ export function SettingsDialog(): React.JSX.Element {
 
           {/* Max Tokens */}
           <section className="space-y-2">
-            <label className="text-sm font-medium">Max Tokens</label>
+            <label className="text-sm font-medium">{t('dialog.maxTokens')}</label>
             <Input
               type="number"
               value={settings.maxTokens}
@@ -181,7 +183,7 @@ export function SettingsDialog(): React.JSX.Element {
 
           {/* Theme */}
           <section className="space-y-2">
-            <label className="text-sm font-medium">Theme</label>
+            <label className="text-sm font-medium">{t('dialog.theme')}</label>
             <Select
               value={settings.theme}
               onValueChange={(v: 'light' | 'dark' | 'system') => { settings.updateSettings({ theme: v }); setTheme(v) }}
@@ -190,8 +192,8 @@ export function SettingsDialog(): React.JSX.Element {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(['light', 'dark', 'system'] as const).map((t) => (
-                  <SelectItem key={t} value={t} className="text-xs capitalize">{t}</SelectItem>
+                {(['light', 'dark', 'system'] as const).map((themeVal) => (
+                  <SelectItem key={themeVal} value={themeVal} className="text-xs capitalize">{themeVal}</SelectItem>
               ))}
               </SelectContent>
             </Select>
@@ -208,7 +210,7 @@ export function SettingsDialog(): React.JSX.Element {
               onClick={() => { setOpen(false); openSettingsPage('general') }}
             >
               <Settings className="size-3.5" />
-              Open Full Settings
+              {t('dialog.openFullSettings')}
             </Button>
           </section>
         </div>

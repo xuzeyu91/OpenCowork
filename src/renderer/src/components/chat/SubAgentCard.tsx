@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Brain,
   Loader2,
@@ -12,10 +13,14 @@ import {
   Clock,
   Copy,
   Check,
-  Maximize2,
+  Maximize2
 } from 'lucide-react'
 import { Badge } from '@renderer/components/ui/badge'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@renderer/components/ui/collapsible'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from '@renderer/components/ui/collapsible'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 import { formatTokens } from '@renderer/lib/format-tokens'
@@ -31,7 +36,7 @@ import type { ToolResultContent } from '@renderer/lib/api/types'
 const subAgentIcons: Record<string, React.ReactNode> = {
   CodeSearch: <Search className="size-4" />,
   CodeReview: <ShieldCheck className="size-4" />,
-  Planner: <ListChecks className="size-4" />,
+  Planner: <ListChecks className="size-4" />
 }
 
 // --- Elapsed time formatter ---
@@ -46,7 +51,12 @@ function CopyOutputBtn({ text }: { text: string }): React.JSX.Element {
   const [copied, setCopied] = React.useState(false)
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+      onClick={(e) => {
+        e.stopPropagation()
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }}
       className="rounded p-0.5 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
       title="Copy output"
     >
@@ -60,7 +70,7 @@ interface SubAgentCardProps {
   name: string
   /** The tool_use block id, used to match live state for parallel same-name SubAgent calls */
   toolUseId: string
-  /** Input passed by parent agent (includes subType, description, prompt for unified Task) */
+  /** Input passed by parent agent (includes subagent_type, description, prompt for unified Task) */
   input: Record<string, unknown>
   /** Final output (from completed tool_use result), undefined while running */
   output?: ToolResultContent
@@ -68,19 +78,24 @@ interface SubAgentCardProps {
   isLive?: boolean
 }
 
-export function SubAgentCard({ name, toolUseId, input, output, isLive = false }: SubAgentCardProps): React.JSX.Element {
+export function SubAgentCard({
+  name,
+  toolUseId,
+  input,
+  output,
+  isLive = false
+}: SubAgentCardProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [toolsExpanded, setToolsExpanded] = React.useState(true)
   const [outputExpanded, setOutputExpanded] = React.useState(false)
 
-  // Resolve display name: for unified Task tool, use input.subType; otherwise legacy name
-  const displayName = String(input.subType ?? name)
+  // Resolve display name: for unified Task tool, use input.subagent_type; otherwise legacy name
+  const displayName = String(input.subagent_type ?? name)
 
   // Live state from agent store — match by toolUseId for precise identification
   const activeSubAgents = useAgentStore((s) => s.activeSubAgents)
   const completedSubAgents = useAgentStore((s) => s.completedSubAgents)
-  const live = isLive
-    ? (activeSubAgents[toolUseId] ?? completedSubAgents[toolUseId] ?? null)
-    : null
+  const live = isLive ? (activeSubAgents[toolUseId] ?? completedSubAgents[toolUseId] ?? null) : null
 
   // Extract string from ToolResultContent for backward-compat
   const outputStr = typeof output === 'string' ? output : undefined
@@ -96,7 +111,9 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
   // Determine status
   const isRunning = live?.isRunning ?? false
   const isCompleted = !isRunning && (!!output || (live && !live.isRunning))
-  const isError = outputStr ? (histText.startsWith('{"error"') || outputStr.startsWith('{"error"')) : false
+  const isError = outputStr
+    ? histText.startsWith('{"error"') || outputStr.startsWith('{"error"')
+    : false
 
   // Auto-expand output when SubAgent completes
   const prevRunningRef = React.useRef(isRunning)
@@ -116,11 +133,9 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
     return () => clearInterval(timer)
   }, [live?.isRunning])
 
-  const elapsed = live
-    ? (live.completedAt ?? now) - live.startedAt
-    : histMeta?.elapsed ?? null
+  const elapsed = live ? (live.completedAt ?? now) - live.startedAt : (histMeta?.elapsed ?? null)
 
-  // Icon — resolve by displayName (subType for unified Task, or legacy name)
+  // Icon — resolve by displayName (subagent_type for unified Task, or legacy name)
   const icon = subAgentIcons[displayName] ?? <Brain className="size-4" />
 
   // Query/task description from input (unified Task uses description/prompt)
@@ -143,7 +158,7 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
         isRunning && 'border-violet-500/40 shadow-lg shadow-violet-500/5',
         isCompleted && !isError && 'border-violet-500/20',
         isError && 'border-destructive/30',
-        !isRunning && !isCompleted && 'border-muted',
+        !isRunning && !isCompleted && 'border-muted'
       )}
     >
       {/* Header */}
@@ -152,23 +167,27 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
           'flex items-center gap-2.5 px-4 py-2.5',
           isRunning && 'bg-violet-500/5',
           isCompleted && !isError && 'bg-violet-500/[0.02]',
-          isError && 'bg-destructive/5',
+          isError && 'bg-destructive/5'
         )}
       >
-        <div className={cn(
-          'flex items-center justify-center rounded-lg p-1.5',
-          isRunning ? 'bg-violet-500/15 text-violet-500' : 'bg-muted text-muted-foreground',
-        )}>
+        <div
+          className={cn(
+            'flex items-center justify-center rounded-lg p-1.5',
+            isRunning ? 'bg-violet-500/15 text-violet-500' : 'bg-muted text-muted-foreground'
+          )}
+        >
           {icon}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-violet-600 dark:text-violet-400">{displayName}</span>
+            <span className="text-sm font-semibold text-violet-600 dark:text-violet-400">
+              {displayName}
+            </span>
             <Badge
               variant={isRunning ? 'default' : isError ? 'destructive' : 'secondary'}
               className={cn('text-[9px] px-1.5 h-4', isRunning && 'bg-violet-500 animate-pulse')}
             >
-              {isRunning ? 'working' : isError ? 'failed' : 'done'}
+              {isRunning ? t('subAgent.working') : isError ? t('subAgent.failed') : t('subAgent.done')}
             </Badge>
           </div>
           {queryText && (
@@ -178,9 +197,13 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
         <div className="flex items-center gap-2 shrink-0 text-[10px] text-muted-foreground/50">
           {(live || histMeta) && (
             <>
-              <span className="tabular-nums">iter {live?.iteration ?? histMeta?.iterations ?? 0}</span>
+              <span className="tabular-nums">
+                {t('subAgent.iter', { count: live?.iteration ?? histMeta?.iterations ?? 0 })}
+              </span>
               <span>·</span>
-              <span className="tabular-nums">{live?.toolCalls.length ?? histMeta?.toolCalls.length ?? 0} calls</span>
+              <span className="tabular-nums">
+                {t('subAgent.calls', { count: live?.toolCalls.length ?? histMeta?.toolCalls.length ?? 0 })}
+              </span>
             </>
           )}
           {(live || histMeta) && elapsed != null && <span>·</span>}
@@ -193,14 +216,19 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
           {histMeta && (
             <>
               <span>·</span>
-              <span className="tabular-nums">{formatTokens(histMeta.usage.inputTokens + histMeta.usage.outputTokens)} tok</span>
+              <span className="tabular-nums">
+                {formatTokens(histMeta.usage.inputTokens + histMeta.usage.outputTokens)} tok
+              </span>
             </>
           )}
         </div>
         <button
-          onClick={(e) => { e.stopPropagation(); handleOpenPreview() }}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleOpenPreview()
+          }}
           className="rounded-md p-1 text-muted-foreground/30 hover:text-violet-500 hover:bg-violet-500/10 transition-colors shrink-0"
-          title="View details"
+          title={t('subAgent.viewDetails')}
         >
           <Maximize2 className="size-3.5" />
         </button>
@@ -213,10 +241,16 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
             <CollapsibleTrigger asChild>
               <button className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">
                 <Wrench className="size-2.5" />
-                <span className="font-medium uppercase tracking-wider">Tool Calls</span>
-                <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{live.toolCalls.length}</Badge>
+                <span className="font-medium uppercase tracking-wider">{t('subAgent.toolCalls', { ns: 'chat' })}</span>
+                <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">
+                  {live.toolCalls.length}
+                </Badge>
                 <span className="flex-1" />
-                {toolsExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                {toolsExpanded ? (
+                  <ChevronDown className="size-3" />
+                ) : (
+                  <ChevronRight className="size-3" />
+                )}
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -246,10 +280,16 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
             <CollapsibleTrigger asChild>
               <button className="flex w-full items-center gap-1.5 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">
                 <Wrench className="size-2.5" />
-                <span className="font-medium uppercase tracking-wider">Tool Calls</span>
-                <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{histMeta.toolCalls.length}</Badge>
+                <span className="font-medium uppercase tracking-wider">{t('subAgent.toolCalls', { ns: 'chat' })}</span>
+                <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">
+                  {histMeta.toolCalls.length}
+                </Badge>
                 <span className="flex-1" />
-                {toolsExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                {toolsExpanded ? (
+                  <ChevronDown className="size-3" />
+                ) : (
+                  <ChevronRight className="size-3" />
+                )}
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -276,11 +316,20 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
       {live?.isRunning && !live.streamingText && live.toolCalls.length === 0 && (
         <div className="border-t border-violet-500/10 px-4 py-2 flex items-center gap-2">
           <span className="flex gap-1">
-            <span className="size-1.5 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="size-1.5 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="size-1.5 rounded-full bg-violet-400/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span
+              className="size-1.5 rounded-full bg-violet-400/50 animate-bounce"
+              style={{ animationDelay: '0ms' }}
+            />
+            <span
+              className="size-1.5 rounded-full bg-violet-400/50 animate-bounce"
+              style={{ animationDelay: '150ms' }}
+            />
+            <span
+              className="size-1.5 rounded-full bg-violet-400/50 animate-bounce"
+              style={{ animationDelay: '300ms' }}
+            />
           </span>
-          <span className="text-[11px] text-violet-400/60">Thinking...</span>
+          <span className="text-[11px] text-violet-400/60">{t('subAgent.thinking')}</span>
         </div>
       )}
 
@@ -318,11 +367,19 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
             <CollapsibleTrigger asChild>
               <button className="flex w-full items-center gap-1.5 px-4 py-1.5 text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">
                 <Zap className="size-2.5" />
-                <span className="font-medium">Result</span>
-                <span className="text-muted-foreground/30 ml-1">{histText.length > 500 ? `${Math.round(histText.length / 1000)}k chars` : `${histText.length} chars`}</span>
+                <span className="font-medium">{t('subAgent.result')}</span>
+                <span className="text-muted-foreground/30 ml-1">
+                  {histText.length > 500
+                    ? t('subAgent.kChars', { count: Math.round(histText.length / 1000) })
+                    : t('subAgent.nChars', { count: histText.length })}
+                </span>
                 <span className="flex-1" />
                 <CopyOutputBtn text={histText} />
-                {outputExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                {outputExpanded ? (
+                  <ChevronDown className="size-3" />
+                ) : (
+                  <ChevronRight className="size-3" />
+                )}
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -356,7 +413,7 @@ export function SubAgentCard({ name, toolUseId, input, output, isLive = false }:
         <div className="border-t border-violet-500/10 px-4 py-1.5 flex items-center gap-2">
           <Loader2 className="size-3 animate-spin text-violet-400" />
           <span className="text-[10px] text-violet-400/70 font-medium">
-            {displayName} is exploring...
+            {t('subAgent.exploring', { name: displayName })}
           </span>
         </div>
       )}

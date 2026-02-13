@@ -20,10 +20,15 @@ class AnthropicProvider implements APIProvider {
     config: ProviderConfig,
     signal?: AbortSignal
   ): AsyncIterable<StreamEvent> {
+    const requestStartedAt = Date.now()
+    let firstTokenAt: number | null = null
+    let outputTokens = 0
     const body: Record<string, unknown> = {
       model: config.model,
       max_tokens: config.maxTokens ?? 32000,
-      ...(config.systemPrompt ? { system: config.systemPrompt } : {}),
+      ...(config.systemPrompt
+        ? { system: [{ type: 'text', text: config.systemPrompt, cache_control: { type: 'ephemeral' } }] }
+        : {}),
       messages: this.formatMessages(messages),
       ...(tools.length > 0 ? { tools: this.formatTools(tools), tool_choice: { type: 'auto' } } : {}),
       stream: true,
@@ -42,10 +47,11 @@ class AnthropicProvider implements APIProvider {
     const baseUrl = (config.baseUrl || 'https://api.anthropic.com').trim().replace(/\/+$/, '')
     const url = `${baseUrl}/v1/messages`
 
-    const headers = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'x-api-key': config.apiKey,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31,interleaved-thinking-2025-05-14',
     }
     const bodyStr = JSON.stringify(body)
 
@@ -104,6 +110,7 @@ class AnthropicProvider implements APIProvider {
           break
 
         case 'content_block_delta':
+          if (firstTokenAt === null) firstTokenAt = Date.now()
           if (data.delta.type === 'text_delta') {
             yield { type: 'text_delta', text: data.delta.text }
           } else if (data.delta.type === 'thinking_delta') {
@@ -125,14 +132,22 @@ class AnthropicProvider implements APIProvider {
           }
           break
 
-        case 'message_delta':
+        case 'message_delta': {
+          const requestCompletedAt = Date.now()
           pendingUsage.outputTokens = data.usage?.output_tokens ?? 0
+          outputTokens = pendingUsage.outputTokens
           yield {
             type: 'message_end',
             stopReason: data.delta.stop_reason,
             usage: { ...pendingUsage },
+            timing: {
+              totalMs: requestCompletedAt - requestStartedAt,
+              ttftMs: firstTokenAt ? firstTokenAt - requestStartedAt : undefined,
+              tps: computeTps(outputTokens, firstTokenAt, requestCompletedAt),
+            },
           }
           break
+        }
 
         case 'error':
           yield { type: 'error', error: data.error }
@@ -193,4 +208,11 @@ class AnthropicProvider implements APIProvider {
 
 export function registerAnthropicProvider(): void {
   registerProvider('anthropic', () => new AnthropicProvider())
+}
+
+function computeTps(outputTokens: number, firstTokenAt: number | null, completedAt: number): number | undefined {
+  if (!firstTokenAt || outputTokens <= 0) return undefined
+  const durationMs = completedAt - firstTokenAt
+  if (durationMs <= 0) return undefined
+  return outputTokens / (durationMs / 1000)
 }

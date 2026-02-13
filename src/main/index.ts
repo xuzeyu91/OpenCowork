@@ -19,7 +19,16 @@ import { registerAgentsHandlers } from './ipc/agents-handlers'
 import { registerProcessManagerHandlers, killAllManagedProcesses } from './ipc/process-manager'
 import { registerDbHandlers } from './ipc/db-handlers'
 import { registerConfigHandlers } from './ipc/secure-key-store'
+import { registerPluginHandlers } from './ipc/plugin-handlers'
+import { PluginManager } from './plugins/plugin-manager'
 import { closeDb } from './db/database'
+
+import { createFeishuService } from './plugins/providers/feishu/feishu-service'
+import { createDingTalkService } from './plugins/providers/dingtalk/dingtalk-service'
+
+const pluginManager = new PluginManager()
+pluginManager.registerFactory('feishu-bot', createFeishuService)
+pluginManager.registerFactory('dingtalk-bot', createDingTalkService)
 
 
 
@@ -184,6 +193,7 @@ app.whenReady().then(() => {
   registerProcessManagerHandlers()
   registerDbHandlers()
   registerConfigHandlers()
+  registerPluginHandlers(pluginManager)
 
 
 
@@ -212,6 +222,7 @@ app.whenReady().then(() => {
 // explicitly with Cmd + Q.
 
 app.on('window-all-closed', () => {
+  pluginManager.stopAll()
   killAllManagedProcesses()
   closeDb()
   if (process.platform !== 'darwin') {

@@ -15,20 +15,25 @@ export const taskUpdateTool: ToolHandler = {
       properties: {
         task_id: {
           type: 'string',
-          description: 'ID of the task to update',
+          description: 'ID of the task to update'
         },
         status: {
           type: 'string',
           enum: ['pending', 'in_progress', 'completed'],
-          description: 'New status for the task',
+          description: 'New status for the task'
         },
         owner: {
           type: 'string',
-          description: 'Name of the teammate claiming this task',
+          description: 'Name of the teammate claiming this task'
         },
+        report: {
+          type: 'string',
+          description:
+            'Final report to attach when completing a task. Include all findings, data collected, and results. This report is sent to the lead agent automatically.'
+        }
       },
-      required: ['task_id'],
-    },
+      required: ['task_id']
+    }
   },
   execute: async (input) => {
     const taskId = String(input.task_id)
@@ -44,10 +49,19 @@ export const taskUpdateTool: ToolHandler = {
 
     const patch: Record<string, unknown> = {}
     if (input.status && VALID_STATUSES.includes(input.status as TeamTaskStatus)) {
+      // Guard: never roll back a completed task
+      if (task.status === 'completed' && input.status !== 'completed') {
+        return JSON.stringify({
+          error: `Task "${taskId}" is already completed and cannot be reverted to "${input.status}".`
+        })
+      }
       patch.status = input.status
     }
     if (input.owner !== undefined) {
       patch.owner = String(input.owner)
+    }
+    if (input.report !== undefined && patch.status === 'completed') {
+      patch.report = String(input.report)
     }
 
     teamEvents.emit({ type: 'team_task_update', taskId, patch })
@@ -55,8 +69,8 @@ export const taskUpdateTool: ToolHandler = {
     return JSON.stringify({
       success: true,
       task_id: taskId,
-      updated: patch,
+      updated: patch
     })
   },
-  requiresApproval: () => false,
+  requiresApproval: () => false
 }

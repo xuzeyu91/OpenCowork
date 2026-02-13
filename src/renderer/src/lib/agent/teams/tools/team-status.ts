@@ -4,7 +4,7 @@ import { useTeamStore } from '../../../../stores/team-store'
 /**
  * TeamStatus — non-blocking snapshot of the current team state.
  * Returns members, tasks, and recent messages without waiting.
- * Complementary to TeamAwait (which blocks until all members finish).
+ * Use this to check progress without waiting.
  */
 export const teamStatusTool: ToolHandler = {
   definition: {
@@ -14,8 +14,8 @@ export const teamStatusTool: ToolHandler = {
     inputSchema: {
       type: 'object',
       properties: {},
-      required: [],
-    },
+      required: []
+    }
   },
   execute: async () => {
     const team = useTeamStore.getState().activeTeam
@@ -39,23 +39,23 @@ export const teamStatusTool: ToolHandler = {
         iteration: m.iteration,
         tool_calls_count: m.toolCalls.length,
         started_at: m.startedAt,
-        completed_at: m.completedAt,
+        completed_at: m.completedAt
       })),
       tasks: team.tasks.map((t) => ({
         id: t.id,
         subject: t.subject,
         status: t.status,
         owner: t.owner,
-        depends_on: t.dependsOn,
+        depends_on: t.dependsOn
       })),
       recent_messages: team.messages.slice(-10).map((msg) => ({
         from: msg.from,
         to: msg.to,
         type: msg.type,
         content: msg.content,
-        summary: msg.summary,
-      })),
+        summary: msg.summary
+      }))
     })
   },
-  requiresApproval: () => false,
+  requiresApproval: () => false
 }

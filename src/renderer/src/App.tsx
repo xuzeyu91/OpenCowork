@@ -9,7 +9,9 @@ import { useChatStore } from './stores/chat-store'
 import { registerAllTools } from './lib/tools'
 import { registerAllProviders } from './lib/api'
 import { registerAllViewers } from './lib/preview/register-viewers'
+import { initPluginEventListener } from './stores/plugin-store'
 import { toast } from 'sonner'
+import i18n from './locales'
 
 // Register synchronous providers and viewers immediately at startup
 registerAllProviders()
@@ -18,6 +20,9 @@ initProviderStore()
 
 // Register tools (async because SubAgents are loaded from .md files via IPC)
 registerAllTools().catch((err) => console.error('[App] Failed to register tools:', err))
+
+// Initialize plugin incoming event listener
+initPluginEventListener()
 
 function App(): React.JSX.Element {
   const theme = useSettingsStore((s) => s.theme)
@@ -36,6 +41,14 @@ function App(): React.JSX.Element {
         // Ignore — main process may not have a stored key yet
       })
   }, [])
+
+  // Sync i18n language with settings store
+  const language = useSettingsStore((s) => s.language)
+  useEffect(() => {
+    if (i18n.language !== language) {
+      i18n.changeLanguage(language)
+    }
+  }, [language])
 
   // Global unhandled promise rejection handler
   useEffect(() => {

@@ -84,7 +84,7 @@ export async function generateSessionTitle(userMessage: string): Promise<Session
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
         if (parsed.title && parsed.icon) {
-          let t = String(parsed.title).trim().replace(/^["']|["']$/g, '').trim()
+          let t = String(parsed.title).replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^["']|["']$/g, '').trim()
           if (t.length > 40) t = t.slice(0, 40) + '...'
           return { title: t, icon: String(parsed.icon).trim() }
         }
@@ -92,7 +92,7 @@ export async function generateSessionTitle(userMessage: string): Promise<Session
     } catch { /* fall through to plain-text fallback */ }
 
     // Fallback: treat entire response as title, use default icon
-    let plainTitle = cleaned.replace(/^["']|["']$/g, '').replace(/[{}]/g, '').trim()
+    let plainTitle = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^["']|["']$/g, '').replace(/[{}]/g, '').trim()
     if (plainTitle.length > 40) plainTitle = plainTitle.slice(0, 40) + '...'
     return { title: plainTitle, icon: 'message-square' }
   } catch {

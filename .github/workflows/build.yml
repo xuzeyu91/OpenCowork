@@ -1,16 +1,17 @@
 name: Build & Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # 在 GitHub 上发布 Release 时自动触发构建
+  release:
+    types: [published]
+
+  # 手动触发 (用于调试或重新构建)
   workflow_dispatch:
     inputs:
-      create_release:
-        description: 'Create GitHub Release'
-        required: false
-        default: false
-        type: boolean
+      version:
+        description: '版本号 (如 1.2.3，不带 v 前缀)'
+        required: true
+        type: string
 
 # 同一时间只允许一个构建流水线运行
 concurrency:
@@ -19,25 +20,90 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
+  # ── 准备阶段：提取版本号与发布内容 ──
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_body: ${{ steps.meta.outputs.release_body }}
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      release_id: ${{ steps.meta.outputs.release_id }}
+    steps:
+      - name: Checkout (gh cli needs repo context)
+        uses: actions/checkout@v4
+
+      - name: Extract release metadata
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            # 从 Release 事件中获取版本号 (去掉 v 前缀)
+            VERSION="${RELEASE_TAG#v}"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "tag_name=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=${RELEASE_PRERELEASE}" >> "$GITHUB_OUTPUT"
+            echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+
+            # 获取 Release body 内容 (base64 编码避免多行问题)
+            BODY=$(printf '%s' "$RELEASE_BODY" | base64 -w 0)
+            echo "release_body=${BODY}" >> "$GITHUB_OUTPUT"
+          else
+            # workflow_dispatch 手动触发：通过 tag 查找已有 Release，找不到则创建
+            TAG="v${INPUT_VERSION}"
+            echo "version=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "tag_name=${TAG}" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "release_body=$(printf '%s' '手动触发构建' | base64 -w 0)" >> "$GITHUB_OUTPUT"
+
+            # 尝试获取已有 Release 的 ID
+            EXISTING_ID=$(gh release view "$TAG" --json id --jq '.id' 2>/dev/null || true)
+            if [ -n "$EXISTING_ID" ]; then
+              echo "release_id=${EXISTING_ID}" >> "$GITHUB_OUTPUT"
+              echo "✅ Found existing Release: ${TAG} (ID: ${EXISTING_ID})"
+            else
+              # 创建 draft Release
+              NEW_ID=$(gh release create "$TAG" --title "Release ${TAG}" --notes "手动触发构建" --draft --json id --jq '.id')
+              echo "release_id=${NEW_ID}" >> "$GITHUB_OUTPUT"
+              echo "✅ Created draft Release: ${TAG} (ID: ${NEW_ID})"
+            fi
+          fi
+
+      - name: Print build info
+        run: |
+          echo "📦 Version: ${{ steps.meta.outputs.version }}"
+          echo "🏷️ Tag: ${{ steps.meta.outputs.tag_name }}"
+          echo "🚀 Pre-release: ${{ steps.meta.outputs.is_prerelease }}"
+
+  # ── 多平台构建 ──
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
             platform: win
-            build_script: build:win
           - os: macos-latest
             platform: mac
-            build_script: build:mac
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,8 +119,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (${{ matrix.platform }})
-        run: npm run ${{ matrix.build_script }}
+      # 将 Release 版本号同步写入 package.json
+      - name: Sync version to package.json
+        run: npm version ${{ needs.prepare.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Build (electron-vite)
+        run: npx electron-vite build
+
+      - name: Package (${{ matrix.platform }})
+        run: npx electron-builder --${{ matrix.platform }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS 代码签名 (可选，配置 secrets 后自动生效)
@@ -73,7 +146,7 @@ jobs:
           name: open-cowork-windows
           path: |
             dist/*.exe
-            dist/*.zip
+            dist/*.exe.blockmap
           if-no-files-found: error
           retention-days: 30
 
@@ -84,17 +157,20 @@ jobs:
           name: open-cowork-macos
           path: |
             dist/*.dmg
+            dist/*.dmg.blockmap
             dist/*.zip
           if-no-files-found: error
           retention-days: 30
 
-  # ── 发布 Release ──
-  release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+  # ── 上传产物到 Release ──
+  upload:
+    needs: [prepare, build]
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout (gh cli needs repo context)
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -104,14 +180,16 @@ jobs:
       - name: List artifacts
         run: ls -lhR artifacts/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          draft: true
-          prerelease: false
-          generate_release_notes: true
-          files: artifacts/*
+      # 使用 gh cli 精确上传到触发的 Release
+      - name: Upload assets to Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+        run: |
+          echo "📦 Uploading assets to Release: ${TAG_NAME}"
+          for file in artifacts/*; do
+            [ -f "$file" ] || continue
+            echo "  ⬆️  $(basename "$file")"
+            gh release upload "${TAG_NAME}" "$file" --clobber
+          done
+          echo "✅ All assets uploaded successfully"

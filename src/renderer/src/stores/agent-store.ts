@@ -12,6 +12,7 @@ const approvalResolvers = new Map<string, (approved: boolean) => void>()
 interface SubAgentState {
   name: string
   toolUseId: string
+  sessionId?: string
   isRunning: boolean
   iteration: number
   toolCalls: ToolCallState[]
@@ -52,7 +53,10 @@ interface AgentStore {
   abort: () => void
 
   // SubAgent events
-  handleSubAgentEvent: (event: SubAgentEvent) => void
+  handleSubAgentEvent: (event: SubAgentEvent, sessionId?: string) => void
+
+  /** Remove all subagent / tool-call data that belongs to the given session */
+  clearSessionData: (sessionId: string) => void
 
   // Approval flow
   requestApproval: (toolCallId: string) => Promise<boolean>
@@ -176,7 +180,7 @@ export const useAgentStore = create<AgentStore>()(
       })
     },
 
-    handleSubAgentEvent: (event) => {
+    handleSubAgentEvent: (event, sessionId) => {
       set((state) => {
         const id = event.toolUseId
         switch (event.type) {
@@ -184,6 +188,7 @@ export const useAgentStore = create<AgentStore>()(
             state.activeSubAgents[id] = {
               name: event.subAgentName,
               toolUseId: id,
+              sessionId,
               isRunning: true,
               iteration: 0,
               toolCalls: [],
@@ -239,6 +244,21 @@ export const useAgentStore = create<AgentStore>()(
     requestApproval: (toolCallId) => {
       return new Promise<boolean>((resolve) => {
         approvalResolvers.set(toolCallId, resolve)
+      })
+    },
+
+    clearSessionData: (sessionId) => {
+      set((state) => {
+        // Remove active subagents belonging to the session
+        for (const [key, sa] of Object.entries(state.activeSubAgents)) {
+          if (sa.sessionId === sessionId) delete state.activeSubAgents[key]
+        }
+        // Remove completed subagents belonging to the session
+        for (const [key, sa] of Object.entries(state.completedSubAgents)) {
+          if (sa.sessionId === sessionId) delete state.completedSubAgents[key]
+        }
+        // Remove history entries belonging to the session
+        state.subAgentHistory = state.subAgentHistory.filter((sa) => sa.sessionId !== sessionId)
       })
     },
 

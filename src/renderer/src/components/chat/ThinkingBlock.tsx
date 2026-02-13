@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -12,6 +13,7 @@ interface ThinkingBlockProps {
 }
 
 export function ThinkingBlock({ thinking, isStreaming = false, startedAt, completedAt }: ThinkingBlockProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   // isThinking: thinking is actively streaming (has content, no completedAt yet, message still streaming)
   const isThinking = isStreaming && thinking.length > 0 && !completedAt
 
@@ -53,12 +55,12 @@ export function ThinkingBlock({ thinking, isStreaming = false, startedAt, comple
     : null
 
   const durationLabel = persistedDuration !== null
-    ? `Thought for ${persistedDuration}s`
+    ? t('thinking.thoughtFor', { seconds: persistedDuration })
     : isThinking && liveElapsed > 0
-      ? `Thinking for ${liveElapsed}s`
+      ? t('thinking.thinkingFor', { seconds: liveElapsed })
       : isThinking
-        ? 'Thinking…'
-        : 'Thoughts'
+        ? t('thinking.thinkingEllipsis')
+        : t('thinking.thoughts')
 
   return (
     <div className="my-5">

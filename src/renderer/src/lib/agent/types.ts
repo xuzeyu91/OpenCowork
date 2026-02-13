@@ -1,4 +1,5 @@
-import type { ProviderConfig, ToolDefinition, UnifiedMessage, TokenUsage, ToolResultContent, RequestDebugInfo } from '../api/types'
+import type { ProviderConfig, ToolDefinition, UnifiedMessage, TokenUsage, ToolResultContent, RequestDebugInfo, RequestTiming } from '../api/types'
+import type { CompressionConfig } from './context-compression'
 
 // --- Tool Call Runtime State ---
 
@@ -56,6 +57,12 @@ export interface AgentLoopConfig {
   signal: AbortSignal
   /** Optional message queue for injecting messages mid-loop (used by teammates). */
   messageQueue?: MessageQueue
+  /** Context compression configuration */
+  contextCompression?: {
+    config: CompressionConfig
+    /** Compress messages using the main model. Returns the compressed message array. */
+    compressFn: (messages: UnifiedMessage[]) => Promise<UnifiedMessage[]>
+  }
 }
 
 // --- Agent Loop Events ---
@@ -65,7 +72,7 @@ export type AgentEvent =
   | { type: 'iteration_start'; iteration: number }
   | { type: 'text_delta'; text: string }
   | { type: 'thinking_delta'; thinking: string }
-  | { type: 'message_end'; usage?: TokenUsage }
+  | { type: 'message_end'; usage?: TokenUsage; timing?: RequestTiming }
   | { type: 'tool_use_streaming_start'; toolCallId: string; toolName: string }
   | { type: 'tool_use_args_delta'; toolCallId: string; partialInput: Record<string, unknown> }
   | { type: 'tool_use_generated'; toolUseBlock: { id: string; name: string; input: Record<string, unknown> } }
@@ -76,6 +83,8 @@ export type AgentEvent =
   | { type: 'loop_end'; reason: 'completed' | 'max_iterations' | 'aborted' | 'error' }
   | { type: 'error'; error: Error }
   | { type: 'request_debug'; debugInfo: RequestDebugInfo }
+  | { type: 'context_compression_start' }
+  | { type: 'context_compressed'; originalCount: number; newCount: number }
 
 // --- Agent Loop Stop Reasons ---
 

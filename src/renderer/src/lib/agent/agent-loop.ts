@@ -5,6 +5,7 @@ import { createProvider } from '../api/provider'
 import { toolRegistry } from './tool-registry'
 import type { AgentEvent, AgentLoopConfig, ToolCallState } from './types'
 import type { ToolContext } from '../tools/tool-types'
+import { shouldCompress, shouldPreCompress, preCompressMessages } from './context-compression'
 
 /**
  * Core Agentic Loop - an AsyncGenerator that yields AgentEvents.
@@ -21,10 +22,34 @@ export async function* runAgentLoop(
   yield { type: 'loop_start' }
 
   const provider = createProvider(config.provider)
-  const conversationMessages = [...messages]
+  let conversationMessages = [...messages]
   let iteration = 0
+  let lastInputTokens = 0
 
   while (iteration < config.maxIterations) {
+    // --- Context management (between iterations) ---
+    if (lastInputTokens > 0 && config.contextCompression && !config.signal.aborted) {
+      const cc = config.contextCompression
+      if (shouldCompress(lastInputTokens, cc.config)) {
+        // Full compression: summarize middle history via main model
+        yield { type: 'context_compression_start' }
+        try {
+          const originalCount = conversationMessages.length
+          conversationMessages = await cc.compressFn(conversationMessages)
+          yield {
+            type: 'context_compressed',
+            originalCount,
+            newCount: conversationMessages.length
+          }
+          lastInputTokens = 0
+        } catch (compErr) {
+          console.error('[Agent Loop] Context compression failed:', compErr)
+        }
+      } else if (shouldPreCompress(lastInputTokens, cc.config)) {
+        // Lightweight pre-compression: clear stale tool results + thinking blocks (no API call)
+        conversationMessages = preCompressMessages(conversationMessages)
+      }
+    }
     if (config.signal.aborted) {
       yield { type: 'loop_end', reason: 'aborted' }
       return
@@ -127,7 +152,10 @@ export async function* runAgentLoop(
 
           case 'message_end':
             if (event.usage) {
-              yield { type: 'message_end', usage: event.usage }
+              lastInputTokens = event.usage.inputTokens
+            }
+            if (event.usage || event.timing) {
+              yield { type: 'message_end', usage: event.usage, timing: event.timing }
             }
             break
 

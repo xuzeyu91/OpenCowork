@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-
+import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
 
 import { SidebarProvider, SidebarInset } from '@renderer/components/ui/sidebar'
@@ -50,6 +50,7 @@ import { sessionToMarkdown } from '@renderer/lib/utils/export-chat'
 
 
 export function Layout(): React.JSX.Element {
+  const { t } = useTranslation('layout')
 
   const mode = useUIStore((s) => s.mode)
 
@@ -164,7 +165,7 @@ export function Layout(): React.JSX.Element {
 
         createSession(nextMode)
 
-        toast.success(`New ${nextMode} session`)
+        toast.success(t('layout.newModeSession', { mode: nextMode }))
 
         return
 
@@ -232,11 +233,11 @@ export function Layout(): React.JSX.Element {
 
           const session = useChatStore.getState().sessions.find((s) => s.id === activeSessionId)
 
-          if (session && session.messages.length > 0 && !window.confirm(`Clear ${session.messages.length} messages?`)) return
+          if (session && session.messages.length > 0 && !window.confirm(t('layout.clearConfirm', { count: session.messages.length }))) return
 
           useChatStore.getState().clearSessionMessages(activeSessionId)
 
-          if (session && session.messages.length > 0) toast.success('Conversation cleared')
+          if (session && session.messages.length > 0) toast.success(t('layout.conversationCleared'))
 
         }
 
@@ -252,7 +253,7 @@ export function Layout(): React.JSX.Element {
 
           useChatStore.getState().duplicateSession(activeSessionId)
 
-          toast.success('Session duplicated')
+          toast.success(t('layout.sessionDuplicated'))
 
         }
 
@@ -270,7 +271,7 @@ export function Layout(): React.JSX.Element {
 
           useChatStore.getState().togglePinSession(activeSessionId)
 
-          toast.success(session?.pinned ? 'Unpinned' : 'Pinned')
+          toast.success(session?.pinned ? t('layout.unpinned') : t('layout.pinned'))
 
         }
 
@@ -352,7 +353,7 @@ export function Layout(): React.JSX.Element {
 
           navigator.clipboard.writeText(sessionToMarkdown(session))
 
-          toast.success('Conversation copied to clipboard')
+          toast.success(t('layout.conversationCopied'))
 
         }
 
@@ -368,11 +369,11 @@ export function Layout(): React.JSX.Element {
 
         const current = useSettingsStore.getState().autoApprove
 
-        if (!current && !window.confirm('Enable auto-approve? All tool calls will execute without confirmation.')) return
+        if (!current && !window.confirm(t('layout.autoApproveConfirm'))) return
 
         useSettingsStore.getState().updateSettings({ autoApprove: !current })
 
-        toast.success(current ? 'Auto-approve OFF' : 'Auto-approve ON (Dangerous)')
+        toast.success(current ? t('layout.autoApproveOff') : t('layout.autoApproveOn'))
 
         return
 
@@ -388,11 +389,11 @@ export function Layout(): React.JSX.Element {
 
         const count = store.sessions.length
 
-        if (count > 0 && window.confirm(`Delete all ${count} sessions? This cannot be undone.`)) {
+        if (count > 0 && window.confirm(t('layout.deleteAllConfirm', { count }))) {
 
           store.clearAllSessions()
 
-          toast.success(`Deleted ${count} sessions`)
+          toast.success(t('layout.deletedSessions', { count }))
 
         }
 
@@ -432,7 +433,7 @@ export function Layout(): React.JSX.Element {
 
         ntSetTheme(next)
 
-        toast.success(`Theme: ${next}`)
+        toast.success(`${t('layout.theme')}: ${next}`)
 
         return
 
@@ -488,17 +489,17 @@ export function Layout(): React.JSX.Element {
 
             if (imported > 0) {
 
-              toast.success(`Imported ${imported} session${imported > 1 ? 's' : ''}`)
+              toast.success(t('layout.importedSessions', { count: imported }))
 
             } else {
 
-              toast.info('No new sessions to import (all already exist)')
+              toast.info(t('layout.noNewSessions'))
 
             }
 
           } catch (err) {
 
-            toast.error(`Import failed: ${err instanceof Error ? err.message : String(err)}`)
+            toast.error(t('layout.importFailed', { error: err instanceof Error ? err.message : String(err) }))
 
           }
 
@@ -518,7 +519,7 @@ export function Layout(): React.JSX.Element {
 
         const allSessions = useChatStore.getState().sessions
 
-        if (allSessions.length === 0) { toast.error('No sessions to backup'); return }
+        if (allSessions.length === 0) { toast.error(t('layout.noSessionsToBackup')); return }
 
         const json = JSON.stringify(allSessions, null, 2)
 
@@ -536,7 +537,7 @@ export function Layout(): React.JSX.Element {
 
         URL.revokeObjectURL(url)
 
-        toast.success(`Backed up ${allSessions.length} sessions`)
+        toast.success(t('layout.backedUpSessions', { count: allSessions.length }))
 
         return
 
@@ -570,7 +571,7 @@ export function Layout(): React.JSX.Element {
 
           URL.revokeObjectURL(url)
 
-          toast.success('Exported conversation')
+          toast.success(t('layout.exportedConversation'))
 
         }
 
@@ -590,9 +591,19 @@ export function Layout(): React.JSX.Element {
 
     const result = (await ipcClient.invoke('fs:select-folder')) as { canceled?: boolean; path?: string }
 
-    if (!result.canceled && result.path && activeSessionId) {
+    if (result.canceled || !result.path) {
 
-      useChatStore.getState().setWorkingFolder(activeSessionId, result.path)
+      return
+
+    }
+
+    const chatStore = useChatStore.getState()
+
+    const sessionId = chatStore.activeSessionId ?? chatStore.createSession(mode)
+
+    if (sessionId) {
+
+      chatStore.setWorkingFolder(sessionId, result.path)
 
     }
 
@@ -633,9 +644,9 @@ export function Layout(): React.JSX.Element {
 
                 <div className="space-y-1">
 
-                  <h3 className="text-sm font-semibold text-foreground">Something went wrong</h3>
+                  <h3 className="text-sm font-semibold text-foreground">{t('layout.somethingWentWrong')}</h3>
 
-                  <p className="max-w-md text-xs text-muted-foreground">{error?.message || 'An unexpected error occurred.'}</p>
+                  <p className="max-w-md text-xs text-muted-foreground">{error?.message || t('layout.unexpectedError')}</p>
 
                 </div>
 
@@ -649,7 +660,7 @@ export function Layout(): React.JSX.Element {
 
                   >
 
-                    Try Again
+                    {t('layout.tryAgain')}
 
                   </button>
 
@@ -661,7 +672,7 @@ export function Layout(): React.JSX.Element {
 
                   >
 
-                    Reload App
+                    {t('layout.reloadApp')}
 
                   </button>
 
@@ -679,7 +690,7 @@ export function Layout(): React.JSX.Element {
 
                   >
 
-                    Copy Error
+                    {t('layout.copyError')}
 
                   </button>
 
@@ -689,7 +700,7 @@ export function Layout(): React.JSX.Element {
 
                   <details className="w-full max-w-lg text-left">
 
-                    <summary className="cursor-pointer text-[10px] text-muted-foreground hover:text-foreground transition-colors">Error details</summary>
+                    <summary className="cursor-pointer text-[10px] text-muted-foreground hover:text-foreground transition-colors">{t('layout.errorDetails')}</summary>
 
                     <pre className="mt-1 max-h-32 overflow-auto rounded-md bg-muted p-2 text-[10px] leading-relaxed text-muted-foreground">{error.stack}</pre>
 

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   FolderOpen,
   Folder,
@@ -199,6 +200,7 @@ function TreeItem({
   editState: TreeEditState
   actions: TreeActions
 }): React.JSX.Element {
+  const { t } = useTranslation('cowork')
   const [copied, setCopied] = useState(false)
   const isDir = node.type === 'directory'
   const isIgnored = isDir && IGNORED_DIRS.has(node.name)
@@ -274,7 +276,7 @@ function TreeItem({
         <button
           className="ml-auto hidden group-hover:block shrink-0 text-muted-foreground/30 hover:text-muted-foreground transition-colors"
           onClick={(e) => { e.stopPropagation(); handleCopy() }}
-          title="Copy path"
+          title={t('fileTree.copyPath')}
         >
           {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
         </button>
@@ -292,26 +294,26 @@ function TreeItem({
           {isDir && !isIgnored && (
             <>
               <ContextMenuItem className="gap-2 text-xs" onSelect={() => actions.onNewFile(node.path)}>
-                <FilePlus2 className="size-3.5" /> New File
+                <FilePlus2 className="size-3.5" /> {t('fileTree.newFile')}
               </ContextMenuItem>
               <ContextMenuItem className="gap-2 text-xs" onSelect={() => actions.onNewFolder(node.path)}>
-                <FolderPlus className="size-3.5" /> New Folder
+                <FolderPlus className="size-3.5" /> {t('fileTree.newFolder')}
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           )}
           <ContextMenuItem className="gap-2 text-xs" onSelect={() => actions.onRenameStart(node.path, node.name)}>
-            <Pencil className="size-3.5" /> Rename
+            <Pencil className="size-3.5" /> {t('action.rename', { ns: 'common' })}
           </ContextMenuItem>
           <ContextMenuItem className="gap-2 text-xs" onSelect={handleCopy}>
-            <Copy className="size-3.5" /> Copy Path
+            <Copy className="size-3.5" /> {t('action.copyPath', { ns: 'common' })}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             className="gap-2 text-xs text-destructive focus:text-destructive"
             onSelect={() => actions.onDelete(node.path, node.name, isDir)}
           >
-            <Trash2 className="size-3.5" /> Delete
+            <Trash2 className="size-3.5" /> {t('action.delete', { ns: 'common' })}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -349,6 +351,7 @@ function TreeItem({
 // --- Main Panel ---
 
 export function FileTreePanel(): React.JSX.Element {
+  const { t } = useTranslation('cowork')
   const sessions = useChatStore((s) => s.sessions)
   const activeSessionId = useChatStore((s) => s.activeSessionId)
   const activeSession = sessions.find((s) => s.id === activeSessionId)
@@ -454,7 +457,7 @@ export function FileTreePanel(): React.JSX.Element {
   const sep = workingFolder?.includes('/') ? '/' : '\\'
 
   const handleDelete = useCallback(async (nodePath: string, nodeName: string, isDir: boolean) => {
-    const confirmed = window.confirm(`Delete ${isDir ? 'folder' : 'file'} "${nodeName}"?`)
+    const confirmed = window.confirm(t('fileTree.deleteConfirm', { type: isDir ? t('fileTree.folder') : t('fileTree.file'), name: nodeName }))
     if (!confirmed) return
     try {
       await ipcClient.invoke('fs:delete', { path: nodePath })
@@ -576,10 +579,10 @@ export function FileTreePanel(): React.JSX.Element {
         const content = lines.length > 80 ? lines.slice(0, 80).join('\n') + '\n…' : raw
         setPreview({ path: filePath, name, content })
       } else {
-        setPreview({ path: filePath, name, content: '(Unable to read file)' })
+        setPreview({ path: filePath, name, content: t('fileTree.unableToRead') })
       }
     } catch {
-      setPreview({ path: filePath, name, content: '(Unable to read file)' })
+      setPreview({ path: filePath, name, content: t('fileTree.unableToRead') })
     } finally {
       setPreviewLoading(false)
     }
@@ -589,7 +592,7 @@ export function FileTreePanel(): React.JSX.Element {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground/60">
         <FolderPlus className="size-8" />
-        <p className="text-xs">Select a working folder to view files</p>
+        <p className="text-xs">{t('fileTree.selectFolder')}</p>
       </div>
     )
   }
@@ -608,7 +611,7 @@ export function FileTreePanel(): React.JSX.Element {
           className="size-5"
           onClick={loadRoot}
           disabled={loading}
-          title="Refresh"
+          title={t('action.refresh', { ns: 'common' })}
         >
           <RefreshCw className={cn('size-3', loading && 'animate-spin')} />
         </Button>
@@ -656,14 +659,14 @@ export function FileTreePanel(): React.JSX.Element {
               <button
                 className="text-muted-foreground/30 hover:text-muted-foreground transition-colors"
                 onClick={() => { handleCopyPath(preview.path) }}
-                title="Insert path into chat"
+                title={t('fileTree.insertPath')}
               >
                 <Copy className="size-3" />
               </button>
               <button
                 className="text-muted-foreground/30 hover:text-muted-foreground transition-colors"
                 onClick={() => setPreview(null)}
-                title="Close preview"
+                title={t('fileTree.closePreview')}
               >
                 <X className="size-3" />
               </button>
@@ -698,7 +701,7 @@ export function FileTreePanel(): React.JSX.Element {
       {/* Stats */}
       {tree.length > 0 && !preview && (
         <div className="text-[9px] text-muted-foreground/30 px-1">
-          {tree.filter((n) => n.type === 'directory').length} folders · {tree.filter((n) => n.type === 'file').length} files
+          {t('fileTree.stats', { folders: tree.filter((n) => n.type === 'directory').length, files: tree.filter((n) => n.type === 'file').length })}
         </div>
       )}
     </div>

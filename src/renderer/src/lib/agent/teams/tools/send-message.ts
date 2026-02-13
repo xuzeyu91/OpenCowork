@@ -4,11 +4,16 @@ import { teamEvents } from '../events'
 import { useTeamStore } from '../../../../stores/team-store'
 import type { TeamMessage, TeamMessageType } from '../types'
 
-const VALID_TYPES: TeamMessageType[] = ['message', 'broadcast', 'shutdown_request', 'shutdown_response']
+const VALID_TYPES: TeamMessageType[] = [
+  'message',
+  'broadcast',
+  'shutdown_request',
+  'shutdown_response'
+]
 
 export const sendMessageTool: ToolHandler = {
   definition: {
-    name: 'TeamSendMessage',
+    name: 'SendMessage',
     description:
       'Send a message to a teammate, broadcast to all teammates, or send a shutdown request. Use this for inter-agent communication within the team.',
     inputSchema: {
@@ -17,27 +22,29 @@ export const sendMessageTool: ToolHandler = {
         type: {
           type: 'string',
           enum: ['message', 'broadcast', 'shutdown_request', 'shutdown_response'],
-          description: 'Message type: "message" for direct, "broadcast" for all, "shutdown_request" to ask a teammate to stop',
+          description:
+            'Message type: "message" for direct, "broadcast" for all, "shutdown_request" to ask a teammate to stop'
         },
         recipient: {
           type: 'string',
-          description: 'Name of the recipient teammate (required for "message" and "shutdown_request")',
+          description:
+            'Name of the recipient teammate (required for "message" and "shutdown_request")'
         },
         content: {
           type: 'string',
-          description: 'Message content',
+          description: 'Message content'
         },
         sender: {
           type: 'string',
-          description: 'Your name as the sender (defaults to "lead")',
+          description: 'Your name as the sender (defaults to "lead")'
         },
         summary: {
           type: 'string',
-          description: 'Optional short summary of the message',
-        },
+          description: 'Optional short summary of the message'
+        }
       },
-      required: ['type', 'content'],
-    },
+      required: ['type', 'content']
+    }
   },
   execute: async (input) => {
     const team = useTeamStore.getState().activeTeam
@@ -59,7 +66,7 @@ export const sendMessageTool: ToolHandler = {
       type: msgType,
       content: String(input.content),
       summary: input.summary ? String(input.summary) : undefined,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
 
     teamEvents.emit({ type: 'team_message', message: msg })
@@ -68,8 +75,8 @@ export const sendMessageTool: ToolHandler = {
       success: true,
       message_id: msg.id,
       type: msgType,
-      to: recipient,
+      to: recipient
     })
   },
-  requiresApproval: () => false,
+  requiresApproval: () => false
 }

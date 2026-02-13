@@ -1,5 +1,22 @@
 import * as React from 'react'
-import { ChevronDown, CheckCircle2, XCircle, Copy, Check, ArrowRight, Terminal, FileCode, Search, FolderTree, Folder, File, ListChecks, Circle, CircleDot } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import {
+  ChevronDown,
+  CheckCircle2,
+  XCircle,
+  Copy,
+  Check,
+  ArrowRight,
+  Terminal,
+  FileCode,
+  Search,
+  FolderTree,
+  Folder,
+  File,
+  ListChecks,
+  Circle,
+  CircleDot
+} from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import type { ToolCallStatus } from '@renderer/lib/agent/types'
 import type { ToolResultContent } from '@renderer/lib/api/types'
@@ -22,7 +39,9 @@ interface ToolCallCardProps {
 function outputAsString(output: ToolResultContent | undefined): string | undefined {
   if (output === undefined) return undefined
   if (typeof output === 'string') return output
-  const texts = output.filter((b) => b.type === 'text').map((b) => b.type === 'text' ? b.text : '')
+  const texts = output
+    .filter((b) => b.type === 'text')
+    .map((b) => (b.type === 'text' ? b.text : ''))
   return texts.join('\n') || undefined
 }
 
@@ -30,7 +49,6 @@ function outputAsString(output: ToolResultContent | undefined): string | undefin
 function hasImageBlocks(output: ToolResultContent | undefined): boolean {
   return Array.isArray(output) && output.some((b) => b.type === 'image')
 }
-
 
 export function inputSummary(name: string, input: Record<string, unknown>): string {
   // Tool-specific smart summaries
@@ -40,12 +58,18 @@ export function inputSummary(name: string, input: Record<string, unknown>): stri
     return p.split(/[\\/]/).slice(-2).join('/')
   }
   if (name === 'Edit') {
-    const p = String(input.file_path ?? input.path ?? '').split(/[\\/]/).slice(-2).join('/')
+    const p = String(input.file_path ?? input.path ?? '')
+      .split(/[\\/]/)
+      .slice(-2)
+      .join('/')
     const expl = typeof input.explanation === 'string' ? ` — ${input.explanation.slice(0, 50)}` : ''
     return `${p}${expl}`
   }
   if (name === 'MultiEdit') {
-    const p = String(input.file_path ?? input.path ?? '').split(/[\\/]/).slice(-2).join('/')
+    const p = String(input.file_path ?? input.path ?? '')
+      .split(/[\\/]/)
+      .slice(-2)
+      .join('/')
     const count = Array.isArray(input.edits) ? ` (${input.edits.length} edits)` : ''
     const expl = typeof input.explanation === 'string' ? ` — ${input.explanation.slice(0, 40)}` : ''
     return `${p}${count}${expl}`
@@ -56,9 +80,12 @@ export function inputSummary(name: string, input: Record<string, unknown>): stri
   }
   if (name === 'Glob' && input.pattern) return `pattern: ${input.pattern}`
   if (name === 'Grep' && input.pattern) return `grep: ${input.pattern}`
-  if (name === 'TodoWrite' && input.todos) return `${(input.todos as unknown[]).length} items`
-  if (name === 'TodoRead') return 'read todos'
-  if (name === 'Task') return `[${input.subType ?? '?'}] ${String(input.description ?? '').slice(0, 50)}`
+  if (name === 'TaskCreate' && input.subject) return String(input.subject).slice(0, 60)
+  if (name === 'TaskUpdate' && input.taskId) return `#${input.taskId}${input.status ? ` → ${input.status}` : ''}`
+  if (name === 'TaskGet' && input.taskId) return `#${input.taskId}`
+  if (name === 'TaskList') return 'list tasks'
+  if (name === 'Task')
+    return `[${input.subagent_type ?? '?'}] ${String(input.description ?? '').slice(0, 50)}`
   const keys = Object.keys(input)
   if (keys.length === 0) return ''
   const first = input[keys[0]]
@@ -70,7 +97,11 @@ function CopyBtn({ text }: { text: string }): React.JSX.Element {
   const [copied, setCopied] = React.useState(false)
   return (
     <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+      onClick={() => {
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      }}
       className="ml-auto rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
       title="Copy"
     >
@@ -80,6 +111,7 @@ function CopyBtn({ text }: { text: string }): React.JSX.Element {
 }
 
 function ImageOutputBlock({ output }: { output: ToolResultContent }): React.JSX.Element | null {
+  const { t } = useTranslation('chat')
   if (!Array.isArray(output)) return null
   const images = output.filter((b) => b.type === 'image')
   if (images.length === 0) return null
@@ -87,11 +119,12 @@ function ImageOutputBlock({ output }: { output: ToolResultContent }): React.JSX.
     <div className="space-y-2">
       {images.map((img, i) => {
         if (img.type !== 'image') return null
-        const src = img.source.url || `data:${img.source.mediaType || 'image/png'};base64,${img.source.data}`
+        const src =
+          img.source.url || `data:${img.source.mediaType || 'image/png'};base64,${img.source.data}`
         return (
           <div key={i}>
             <div className="mb-1 flex items-center gap-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Image</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('toolCall.image')}</p>
               <span className="text-[9px] text-muted-foreground/40">{img.source.mediaType}</span>
             </div>
             <img
@@ -107,13 +140,14 @@ function ImageOutputBlock({ output }: { output: ToolResultContent }): React.JSX.
 }
 
 function OutputBlock({ output }: { output: string }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [expanded, setExpanded] = React.useState(false)
   const isLong = output.length > 500
   const displayed = isLong && !expanded ? output.slice(0, 500) + '…' : output
   return (
     <div>
       <div className="mb-1 flex items-center">
-        <p className="text-xs font-medium text-muted-foreground">Output</p>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.output')}</p>
         <CopyBtn text={output} />
       </div>
       <pre
@@ -127,19 +161,31 @@ function OutputBlock({ output }: { output: string }): React.JSX.Element {
           onClick={() => setExpanded(!expanded)}
           className="mt-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
         >
-          {expanded ? 'Show less' : `Show all (${output.length} chars, ${output.split('\n').length} lines)`}
+          {expanded
+            ? t('action.showLess', { ns: 'common' })
+            : t('toolCall.showAll', { chars: output.length, lines: output.split('\n').length })}
         </button>
       )}
     </div>
   )
 }
 
-function ReadOutputBlock({ output, filePath }: { output: string; filePath: string }): React.JSX.Element {
+function ReadOutputBlock({
+  output,
+  filePath
+}: {
+  output: string
+  filePath: string
+}): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [expanded, setExpanded] = React.useState(false)
   // Detect line-number prefixed content (e.g. "1\tcode") from fs:read-file with offset/limit
   const hasLineNums = /^\d+\t/.test(output)
   const rawContent = hasLineNums
-    ? output.split('\n').map((l) => l.replace(/^\d+\t/, '')).join('\n')
+    ? output
+        .split('\n')
+        .map((l) => l.replace(/^\d+\t/, ''))
+        .join('\n')
     : output
   const lines = rawContent.split('\n')
   const isLong = lines.length > 40
@@ -151,15 +197,19 @@ function ReadOutputBlock({ output, filePath }: { output: string; filePath: strin
         <FileCode className="size-3 text-blue-400" />
         <span
           className="text-xs font-medium text-muted-foreground cursor-pointer hover:text-blue-400 transition-colors truncate"
-          title={`Click to insert: ${filePath}`}
+          title={t('toolCall.clickToInsert', { path: filePath })}
           onClick={() => {
             const short = filePath.split(/[\\/]/).slice(-2).join('/')
-            import('@renderer/stores/ui-store').then(({ useUIStore }) => useUIStore.getState().setPendingInsertText(short))
+            import('@renderer/stores/ui-store').then(({ useUIStore }) =>
+              useUIStore.getState().setPendingInsertText(short)
+            )
           }}
         >
           {filePath.split(/[\\/]/).slice(-2).join('/')}
         </span>
-        <span className="text-[9px] text-muted-foreground/40 font-mono">{lang} · {lines.length} lines</span>
+        <span className="text-[9px] text-muted-foreground/40 font-mono">
+          {lang} · {lines.length} lines
+        </span>
         <CopyBtn text={rawContent} />
       </div>
       <SyntaxHighlighter
@@ -184,7 +234,7 @@ function ReadOutputBlock({ output, filePath }: { output: string; filePath: strin
           onClick={() => setExpanded(!expanded)}
           className="mt-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
         >
-          {expanded ? 'Show first 40 lines' : `Show all ${lines.length} lines`}
+          {expanded ? t('toolCall.showFirst40') : t('toolCall.showAllLines', { count: lines.length })}
         </button>
       )}
     </div>
@@ -192,17 +242,32 @@ function ReadOutputBlock({ output, filePath }: { output: string; filePath: strin
 }
 
 function BashOutputBlock({ output }: { output: string }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [expanded, setExpanded] = React.useState(false)
   const scrollRef = React.useRef<HTMLDivElement>(null)
   // Try to parse JSON output from shell tool (may contain stdout, stderr, exitCode)
   const parsed = React.useMemo(() => {
     try {
-      const obj = JSON.parse(output) as { stdout?: string; stderr?: string; exitCode?: number; output?: string }
-      if (typeof obj === 'object' && obj !== null && ('stdout' in obj || 'output' in obj || 'exitCode' in obj)) return obj
-    } catch { /* not JSON */ }
+      const obj = JSON.parse(output) as {
+        stdout?: string
+        stderr?: string
+        exitCode?: number
+        output?: string
+      }
+      if (
+        typeof obj === 'object' &&
+        obj !== null &&
+        ('stdout' in obj || 'output' in obj || 'exitCode' in obj)
+      )
+        return obj
+    } catch {
+      /* not JSON */
+    }
     return null
   }, [output])
-  const text = parsed ? (parsed.stdout ?? parsed.output ?? '') + (parsed.stderr ? `\n${parsed.stderr}` : '') : output
+  const text = parsed
+    ? (parsed.stdout ?? parsed.output ?? '') + (parsed.stderr ? `\n${parsed.stderr}` : '')
+    : output
   const exitCode = parsed?.exitCode
   const isLong = text.length > 1000
   const displayed = isLong && !expanded ? text.slice(0, 1000) + '\n…' : text
@@ -220,10 +285,15 @@ function BashOutputBlock({ output }: { output: string }): React.JSX.Element {
     <div>
       <div className="mb-1 flex items-center gap-1.5">
         <Terminal className="size-3 text-green-400" />
-        <p className="text-xs font-medium text-muted-foreground">Terminal</p>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.terminal')}</p>
         {exitCode !== undefined && (
-          <span className={cn('text-[9px] font-mono px-1 rounded', exitCode === 0 ? 'bg-green-500/10 text-green-400/70' : 'bg-red-500/10 text-red-400/70')}>
-            exit {exitCode}
+          <span
+            className={cn(
+              'text-[9px] font-mono px-1 rounded',
+              exitCode === 0 ? 'bg-green-500/10 text-green-400/70' : 'bg-red-500/10 text-red-400/70'
+            )}
+          >
+            {t('toolCall.exitCode', { code: exitCode })}
           </span>
         )}
         <span className="text-[9px] text-muted-foreground/30">{lineCount} lines</span>
@@ -235,7 +305,9 @@ function BashOutputBlock({ output }: { output: string }): React.JSX.Element {
         style={{ fontFamily: MONO_FONT }}
       >
         {text && (
-          <pre className="px-3 py-2 whitespace-pre-wrap break-words text-zinc-300/80">{displayed}</pre>
+          <pre className="px-3 py-2 whitespace-pre-wrap break-words text-zinc-300/80">
+            {displayed}
+          </pre>
         )}
       </div>
       {isLong && (
@@ -243,7 +315,9 @@ function BashOutputBlock({ output }: { output: string }): React.JSX.Element {
           onClick={() => setExpanded(!expanded)}
           className="mt-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
         >
-          {expanded ? 'Show less' : `Show all (~${formatTokens(tokenCount)} tokens, ${lineCount} lines)`}
+          {expanded
+            ? t('action.showLess', { ns: 'common' })
+            : t('toolCall.showAllTokens', { tokens: formatTokens(tokenCount), lines: lineCount })}
         </button>
       )}
     </div>
@@ -262,7 +336,9 @@ function HighlightText({ text, pattern }: { text: string; pattern?: string }): R
       <>
         {parts.map((part, i) =>
           i % 2 === 1 ? (
-            <span key={i} className="bg-amber-500/25 text-amber-300 rounded-sm px-px">{part}</span>
+            <span key={i} className="bg-amber-500/25 text-amber-300 rounded-sm px-px">
+              {part}
+            </span>
           ) : (
             <span key={i}>{part}</span>
           )
@@ -274,9 +350,20 @@ function HighlightText({ text, pattern }: { text: string; pattern?: string }): R
   }
 }
 
-function GrepOutputBlock({ output, pattern }: { output: string; pattern?: string }): React.JSX.Element {
+function GrepOutputBlock({
+  output,
+  pattern
+}: {
+  output: string
+  pattern?: string
+}): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const parsed = React.useMemo(() => {
-    try { return JSON.parse(output) as Array<{ file: string; line: number; text: string }> } catch { return null }
+    try {
+      return JSON.parse(output) as Array<{ file: string; line: number; text: string }>
+    } catch {
+      return null
+    }
   }, [output])
   if (!parsed || !Array.isArray(parsed)) return <OutputBlock output={output} />
 
@@ -295,9 +382,11 @@ function GrepOutputBlock({ output, pattern }: { output: string; pattern?: string
     <div>
       <div className="mb-1 flex items-center gap-1.5">
         <Search className="size-3 text-amber-400" />
-        <p className="text-xs font-medium text-muted-foreground">Grep Results</p>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.grepResults')}</p>
         {pattern && <span className="text-[9px] font-mono text-amber-400/50">/{pattern}/</span>}
-        <span className="text-[9px] text-muted-foreground/40">{parsed.length} matches in {groups.length} files</span>
+        <span className="text-[9px] text-muted-foreground/40">
+          {t('toolCall.matchesInFiles', { matches: parsed.length, files: groups.length })}
+        </span>
         <CopyBtn text={output} />
       </div>
       <div
@@ -311,7 +400,9 @@ function GrepOutputBlock({ output, pattern }: { output: string; pattern?: string
               title={`Click to insert: ${file}`}
               onClick={() => {
                 const short = file.split(/[\\/]/).slice(-2).join('/')
-                import('@renderer/stores/ui-store').then(({ useUIStore }) => useUIStore.getState().setPendingInsertText(short))
+                import('@renderer/stores/ui-store').then(({ useUIStore }) =>
+                  useUIStore.getState().setPendingInsertText(short)
+                )
               }}
             >
               {file.split(/[\\/]/).slice(-3).join('/')}
@@ -319,7 +410,9 @@ function GrepOutputBlock({ output, pattern }: { output: string; pattern?: string
             {matches.map((m, i) => (
               <div key={i} className="flex gap-2 text-zinc-400">
                 <span className="select-none text-zinc-600 w-5 text-right shrink-0">{m.line}</span>
-                <span className="truncate"><HighlightText text={m.text} pattern={pattern} /></span>
+                <span className="truncate">
+                  <HighlightText text={m.text} pattern={pattern} />
+                </span>
               </div>
             ))}
           </div>
@@ -330,8 +423,13 @@ function GrepOutputBlock({ output, pattern }: { output: string; pattern?: string
 }
 
 function GlobOutputBlock({ output }: { output: string }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const parsed = React.useMemo(() => {
-    try { return JSON.parse(output) as string[] } catch { return null }
+    try {
+      return JSON.parse(output) as string[]
+    } catch {
+      return null
+    }
   }, [output])
   if (!parsed || !Array.isArray(parsed)) return <OutputBlock output={output} />
 
@@ -339,7 +437,7 @@ function GlobOutputBlock({ output }: { output: string }): React.JSX.Element {
     <div>
       <div className="mb-1 flex items-center gap-1.5">
         <FolderTree className="size-3 text-amber-400" />
-        <p className="text-xs font-medium text-muted-foreground">Matches</p>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.globMatches')}</p>
         <span className="text-[9px] text-muted-foreground/40">{parsed.length} files</span>
         <CopyBtn text={parsed.join('\n')} />
       </div>
@@ -354,7 +452,9 @@ function GlobOutputBlock({ output }: { output: string }): React.JSX.Element {
             title={`Click to insert: ${p}`}
             onClick={() => {
               const short = p.split(/[\\/]/).slice(-2).join('/')
-              import('@renderer/stores/ui-store').then(({ useUIStore }) => useUIStore.getState().setPendingInsertText(short))
+              import('@renderer/stores/ui-store').then(({ useUIStore }) =>
+                useUIStore.getState().setPendingInsertText(short)
+              )
             }}
           >
             {p}
@@ -366,8 +466,13 @@ function GlobOutputBlock({ output }: { output: string }): React.JSX.Element {
 }
 
 function LSOutputBlock({ output }: { output: string }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const parsed = React.useMemo(() => {
-    try { return JSON.parse(output) as Array<{ name: string; type: string; path: string }> } catch { return null }
+    try {
+      return JSON.parse(output) as Array<{ name: string; type: string; path: string }>
+    } catch {
+      return null
+    }
   }, [output])
   if (!parsed || !Array.isArray(parsed)) return <OutputBlock output={output} />
 
@@ -378,8 +483,10 @@ function LSOutputBlock({ output }: { output: string }): React.JSX.Element {
     <div>
       <div className="mb-1 flex items-center gap-1.5">
         <FolderTree className="size-3 text-amber-400" />
-        <p className="text-xs font-medium text-muted-foreground">Directory Listing</p>
-        <span className="text-[9px] text-muted-foreground/40">{dirs.length} folders · {files.length} files</span>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.directoryListing')}</p>
+        <span className="text-[9px] text-muted-foreground/40">
+          {t('toolCall.foldersAndFiles', { folders: dirs.length, files: files.length })}
+        </span>
         <CopyBtn text={parsed.map((e) => e.name).join('\n')} />
       </div>
       <div
@@ -399,7 +506,9 @@ function LSOutputBlock({ output }: { output: string }): React.JSX.Element {
             title={`Click to insert: ${e.path || e.name}`}
             onClick={() => {
               const short = (e.path || e.name).split(/[\\/]/).slice(-2).join('/')
-              import('@renderer/stores/ui-store').then(({ useUIStore }) => useUIStore.getState().setPendingInsertText(short))
+              import('@renderer/stores/ui-store').then(({ useUIStore }) =>
+                useUIStore.getState().setPendingInsertText(short)
+              )
             }}
           >
             <File className="size-3 shrink-0 text-zinc-500" />
@@ -411,49 +520,40 @@ function LSOutputBlock({ output }: { output: string }): React.JSX.Element {
   )
 }
 
-function TodoInputBlock({ input }: { input: Record<string, unknown> }): React.JSX.Element | null {
-  const todos = input.todos as Array<{ id: string; content: string; status: string; priority: string }> | undefined
-  if (!todos || !Array.isArray(todos)) return null
-
-  const statusIcon = (s: string): React.ReactNode => {
-    if (s === 'completed') return <CheckCircle2 className="size-3 text-green-500" />
-    if (s === 'in_progress') return <CircleDot className="size-3 text-blue-500" />
-    return <Circle className="size-3 text-muted-foreground/40" />
-  }
-  const prioClass = (p: string): string => {
-    if (p === 'high') return 'text-red-400 bg-red-500/10'
-    if (p === 'medium') return 'text-amber-400 bg-amber-500/10'
-    return 'text-muted-foreground/50 bg-muted/30'
-  }
+function TaskCreateInputBlock({ input }: { input: Record<string, unknown> }): React.JSX.Element | null {
+  const { t } = useTranslation('chat')
+  const subject = input.subject ? String(input.subject) : null
+  const description = input.description ? String(input.description) : null
+  if (!subject) return null
 
   return (
     <div>
       <div className="mb-1 flex items-center gap-1.5">
         <ListChecks className="size-3 text-blue-400" />
-        <p className="text-xs font-medium text-muted-foreground">Task List</p>
-        <span className="text-[9px] text-muted-foreground/40">{todos.length} items</span>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.taskList')}</p>
       </div>
-      <div className="rounded-md border bg-muted/10 divide-y divide-border/50 text-[12px]">
-        {todos.map((t) => (
-          <div key={t.id} className="flex items-center gap-2 px-2.5 py-1.5">
-            {statusIcon(t.status)}
-            <span className={cn('flex-1', t.status === 'completed' && 'line-through text-muted-foreground/50')}>{t.content}</span>
-            <span className={cn('rounded px-1 py-0.5 text-[9px] font-medium', prioClass(t.priority))}>{t.priority}</span>
-          </div>
-        ))}
+      <div className="rounded-md border bg-muted/10 px-2.5 py-1.5 text-[12px] space-y-0.5">
+        <div className="flex items-center gap-2">
+          <Circle className="size-3 text-muted-foreground/40" />
+          <span className="flex-1 font-medium">{subject}</span>
+        </div>
+        {description && (
+          <p className="pl-5 text-[11px] text-muted-foreground/60 line-clamp-2">{description}</p>
+        )}
       </div>
     </div>
   )
 }
 
-
-function TodoOutputBlock({ output }: { output: string }): React.JSX.Element {
+function TaskListOutputBlock({ output }: { output: string }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const parsed = React.useMemo(() => {
     try {
       const data = JSON.parse(output)
-      if (Array.isArray(data)) return data as Array<{ id: string; content: string; status: string; priority: string }>
-      if (data.todos && Array.isArray(data.todos)) return data.todos as Array<{ id: string; content: string; status: string; priority: string }>
-    } catch { /* not JSON */ }
+      if (data.tasks && Array.isArray(data.tasks)) return data.tasks as Array<{ id: string; subject: string; status: string; owner?: string | null }>
+    } catch {
+      /* not JSON */
+    }
     return null
   }, [output])
 
@@ -465,25 +565,31 @@ function TodoOutputBlock({ output }: { output: string }): React.JSX.Element {
     if (s === 'in_progress') return <CircleDot className="size-3 text-blue-500" />
     return <Circle className="size-3 text-muted-foreground/40" />
   }
-  const prioClass = (p: string): string => {
-    if (p === 'high') return 'text-red-400 bg-red-500/10'
-    if (p === 'medium') return 'text-amber-400 bg-amber-500/10'
-    return 'text-muted-foreground/50 bg-muted/30'
-  }
 
   return (
     <div>
       <div className="mb-1 flex items-center gap-1.5">
         <ListChecks className="size-3 text-blue-400" />
-        <p className="text-xs font-medium text-muted-foreground">Todos</p>
-        <span className="text-[9px] text-muted-foreground/40">{completed}/{parsed.length} done</span>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.taskList')}</p>
+        <span className="text-[9px] text-muted-foreground/40">
+          {completed}/{parsed.length}
+        </span>
       </div>
       <div className="rounded-md border bg-muted/10 divide-y divide-border/50 text-[12px]">
-        {parsed.map((t) => (
-          <div key={t.id} className="flex items-center gap-2 px-2.5 py-1.5">
-            {statusIcon(t.status)}
-            <span className={cn('flex-1', t.status === 'completed' && 'line-through text-muted-foreground/50')}>{t.content}</span>
-            <span className={cn('rounded px-1 py-0.5 text-[9px] font-medium', prioClass(t.priority))}>{t.priority}</span>
+        {parsed.map((task) => (
+          <div key={task.id} className="flex items-center gap-2 px-2.5 py-1.5">
+            {statusIcon(task.status)}
+            <span
+              className={cn(
+                'flex-1',
+                task.status === 'completed' && 'line-through text-muted-foreground/50'
+              )}
+            >
+              {task.subject}
+            </span>
+            {task.owner && (
+              <span className="text-[9px] text-muted-foreground/40">{task.owner}</span>
+            )}
           </div>
         ))}
       </div>
@@ -492,22 +598,54 @@ function TodoOutputBlock({ output }: { output: string }): React.JSX.Element {
 }
 
 function detectLang(filePath: string): string {
-  const ext = filePath.includes('.') ? filePath.split('.').pop()?.toLowerCase() ?? '' : ''
+  const ext = filePath.includes('.') ? (filePath.split('.').pop()?.toLowerCase() ?? '') : ''
   const map: Record<string, string> = {
-    ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
-    py: 'python', rs: 'rust', go: 'go', json: 'json',
-    css: 'css', scss: 'scss', less: 'less',
-    html: 'html', htm: 'html', xml: 'xml', svg: 'xml',
-    md: 'markdown', mdx: 'markdown',
-    yaml: 'yaml', yml: 'yaml', toml: 'toml',
-    sh: 'bash', bash: 'bash', zsh: 'bash',
-    sql: 'sql', graphql: 'graphql', gql: 'graphql',
-    c: 'c', h: 'c', cpp: 'cpp', cxx: 'cpp', cc: 'cpp', hpp: 'cpp',
-    java: 'java', kt: 'kotlin', kts: 'kotlin',
-    rb: 'ruby', php: 'php', swift: 'swift',
-    dockerfile: 'docker', makefile: 'makefile',
-    r: 'r', lua: 'lua', dart: 'dart',
-    ini: 'ini', env: 'bash', conf: 'ini',
+    ts: 'typescript',
+    tsx: 'tsx',
+    js: 'javascript',
+    jsx: 'jsx',
+    py: 'python',
+    rs: 'rust',
+    go: 'go',
+    json: 'json',
+    css: 'css',
+    scss: 'scss',
+    less: 'less',
+    html: 'html',
+    htm: 'html',
+    xml: 'xml',
+    svg: 'xml',
+    md: 'markdown',
+    mdx: 'markdown',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'toml',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    sql: 'sql',
+    graphql: 'graphql',
+    gql: 'graphql',
+    c: 'c',
+    h: 'c',
+    cpp: 'cpp',
+    cxx: 'cpp',
+    cc: 'cpp',
+    hpp: 'cpp',
+    java: 'java',
+    kt: 'kotlin',
+    kts: 'kotlin',
+    rb: 'ruby',
+    php: 'php',
+    swift: 'swift',
+    dockerfile: 'docker',
+    makefile: 'makefile',
+    r: 'r',
+    lua: 'lua',
+    dart: 'dart',
+    ini: 'ini',
+    env: 'bash',
+    conf: 'ini'
   }
   return map[ext] ?? 'text'
 }
@@ -517,13 +655,14 @@ type DiffLine = { type: 'keep' | 'add' | 'del'; text: string; oldNum?: number; n
 function computeDiff(oldStr: string, newStr: string): DiffLine[] {
   const a = oldStr.split('\n')
   const b = newStr.split('\n')
-  const m = a.length, n = b.length
+  const m = a.length,
+    n = b.length
 
   // Simple LCS DP for small inputs; fall back to naive for large diffs
   if (m * n > 100000) {
     return [
       ...a.map((t, i): DiffLine => ({ type: 'del', text: t, oldNum: i + 1 })),
-      ...b.map((t, i): DiffLine => ({ type: 'add', text: t, newNum: i + 1 })),
+      ...b.map((t, i): DiffLine => ({ type: 'add', text: t, newNum: i + 1 }))
     ]
   }
 
@@ -533,11 +672,13 @@ function computeDiff(oldStr: string, newStr: string): DiffLine[] {
       dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
 
   const result: DiffLine[] = []
-  let i = m, j = n
+  let i = m,
+    j = n
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
       result.push({ type: 'keep', text: a[i - 1], oldNum: i, newNum: j })
-      i--; j--
+      i--
+      j--
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
       result.push({ type: 'add', text: b[j - 1], newNum: j })
       j--
@@ -549,7 +690,9 @@ function computeDiff(oldStr: string, newStr: string): DiffLine[] {
   return result.reverse()
 }
 
-type DiffChunk = { type: 'lines'; lines: DiffLine[] } | { type: 'collapsed'; count: number; lines: DiffLine[] }
+type DiffChunk =
+  | { type: 'lines'; lines: DiffLine[] }
+  | { type: 'collapsed'; count: number; lines: DiffLine[] }
 
 function foldContext(lines: DiffLine[], ctx: number = 2): DiffChunk[] {
   const chunks: DiffChunk[] = []
@@ -560,7 +703,11 @@ function foldContext(lines: DiffLine[], ctx: number = 2): DiffChunk[] {
       chunks.push({ type: 'lines', lines: keepRun })
     } else {
       chunks.push({ type: 'lines', lines: keepRun.slice(0, ctx) })
-      chunks.push({ type: 'collapsed', count: keepRun.length - ctx * 2, lines: keepRun.slice(ctx, -ctx) })
+      chunks.push({
+        type: 'collapsed',
+        count: keepRun.length - ctx * 2,
+        lines: keepRun.slice(ctx, -ctx)
+      })
       chunks.push({ type: 'lines', lines: keepRun.slice(-ctx) })
     }
     keepRun = []
@@ -572,7 +719,7 @@ function foldContext(lines: DiffLine[], ctx: number = 2): DiffChunk[] {
     } else {
       if (keepRun.length > 0) flushKeep()
       if (chunks.length > 0 && chunks[chunks.length - 1].type === 'lines') {
-        (chunks[chunks.length - 1] as { type: 'lines'; lines: DiffLine[] }).lines.push(line)
+        ;(chunks[chunks.length - 1] as { type: 'lines'; lines: DiffLine[] }).lines.push(line)
       } else {
         chunks.push({ type: 'lines', lines: [line] })
       }
@@ -582,7 +729,16 @@ function foldContext(lines: DiffLine[], ctx: number = 2): DiffChunk[] {
   return chunks
 }
 
-function DiffBlock({ oldStr, newStr, filePath }: { oldStr: string; newStr: string; filePath?: string }): React.JSX.Element {
+function DiffBlock({
+  oldStr,
+  newStr,
+  filePath
+}: {
+  oldStr: string
+  newStr: string
+  filePath?: string
+}): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const lines = React.useMemo(() => computeDiff(oldStr, newStr), [oldStr, newStr])
   const chunks = React.useMemo(() => foldContext(lines), [lines])
   const [expandedChunks, setExpandedChunks] = React.useState<Set<number>>(new Set())
@@ -590,20 +746,36 @@ function DiffBlock({ oldStr, newStr, filePath }: { oldStr: string; newStr: strin
   const removed = lines.filter((l) => l.type === 'del').length
 
   const renderLine = (line: DiffLine, i: number): React.JSX.Element => (
-    <div key={i} className={cn('flex', line.type === 'del' && 'bg-red-500/10', line.type === 'add' && 'bg-green-500/10')}>
-      <span className={cn(
-        'select-none w-5 shrink-0 text-right pr-1',
-        line.type === 'del' ? 'text-red-400/40' : line.type === 'add' ? 'text-green-400/40' : 'text-zinc-600'
-      )}>
+    <div
+      key={i}
+      className={cn(
+        'flex',
+        line.type === 'del' && 'bg-red-500/10',
+        line.type === 'add' && 'bg-green-500/10'
+      )}
+    >
+      <span
+        className={cn(
+          'select-none w-5 shrink-0 text-right pr-1',
+          line.type === 'del'
+            ? 'text-red-400/40'
+            : line.type === 'add'
+              ? 'text-green-400/40'
+              : 'text-zinc-600'
+        )}
+      >
         {line.oldNum ?? line.newNum ?? ''}
       </span>
-      <span className={cn(
-        'px-1.5 flex-1',
-        line.type === 'del' && 'text-red-300/80',
-        line.type === 'add' && 'text-green-300/80',
-        line.type === 'keep' && 'text-zinc-500',
-      )}>
-        {line.type === 'del' ? '- ' : line.type === 'add' ? '+ ' : '  '}{line.text}
+      <span
+        className={cn(
+          'px-1.5 flex-1',
+          line.type === 'del' && 'text-red-300/80',
+          line.type === 'add' && 'text-green-300/80',
+          line.type === 'keep' && 'text-zinc-500'
+        )}
+      >
+        {line.type === 'del' ? '- ' : line.type === 'add' ? '+ ' : '  '}
+        {line.text}
       </span>
     </div>
   )
@@ -612,9 +784,11 @@ function DiffBlock({ oldStr, newStr, filePath }: { oldStr: string; newStr: strin
     <div>
       <div className="mb-1 flex items-center gap-1.5">
         <ArrowRight className="size-3 text-muted-foreground" />
-        <p className="text-xs font-medium text-muted-foreground">Diff</p>
+        <p className="text-xs font-medium text-muted-foreground">{t('toolCall.diff')}</p>
         {filePath && (
-          <span className="text-[10px] text-muted-foreground/40 font-mono truncate">{filePath.split(/[\\/]/).slice(-2).join('/')}</span>
+          <span className="text-[10px] text-muted-foreground/40 font-mono truncate">
+            {filePath.split(/[\\/]/).slice(-2).join('/')}
+          </span>
         )}
         <span className="text-[9px] text-muted-foreground/30">
           {removed > 0 && <span className="text-red-400/60">-{removed}</span>}
@@ -639,7 +813,7 @@ function DiffBlock({ oldStr, newStr, filePath }: { oldStr: string; newStr: strin
               className="flex w-full items-center justify-center py-0.5 text-[9px] text-zinc-500/50 hover:text-zinc-400 hover:bg-zinc-800/30 transition-colors border-y border-zinc-800/30"
               onClick={() => setExpandedChunks((prev) => new Set([...prev, ci]))}
             >
-              ··· {chunk.count} unchanged lines ···
+              {t('toolCall.unchangedLines', { count: chunk.count })}
             </button>
           )
         })}
@@ -649,14 +823,28 @@ function DiffBlock({ oldStr, newStr, filePath }: { oldStr: string; newStr: strin
 }
 
 /** Structured input field row */
-function InputField({ label, value, mono, icon }: { label: string; value: string; mono?: boolean; icon?: React.ReactNode }): React.JSX.Element | null {
+function InputField({
+  label,
+  value,
+  mono,
+  icon
+}: {
+  label: string
+  value: string
+  mono?: boolean
+  icon?: React.ReactNode
+}): React.JSX.Element | null {
   if (!value) return null
   return (
     <div className="flex items-start gap-2 text-[12px]">
       <span className="shrink-0 text-muted-foreground/50 min-w-[70px] text-right select-none flex items-center justify-end gap-1">
-        {icon}{label}
+        {icon}
+        {label}
       </span>
-      <span className={cn('break-all', mono && 'font-mono text-[11px]')} style={mono ? { fontFamily: MONO_FONT } : undefined}>
+      <span
+        className={cn('break-all', mono && 'font-mono text-[11px]')}
+        style={mono ? { fontFamily: MONO_FONT } : undefined}
+      >
         {value}
       </span>
     </div>
@@ -664,7 +852,13 @@ function InputField({ label, value, mono, icon }: { label: string; value: string
 }
 
 /** Render tool input as structured UI instead of raw JSON */
-function StructuredInput({ name, input }: { name: string; input: Record<string, unknown> }): React.JSX.Element {
+function StructuredInput({
+  name,
+  input
+}: {
+  name: string
+  input: Record<string, unknown>
+}): React.JSX.Element {
   // Bash: command in terminal-style block + description/timeout as fields
   if (name === 'Bash') {
     const command = String(input.command ?? '')
@@ -672,9 +866,7 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
     const timeout = input.timeout ? String(input.timeout) : null
     return (
       <div className="space-y-1.5">
-        {description && (
-          <p className="text-xs text-muted-foreground/60 italic">{description}</p>
-        )}
+        {description && <p className="text-xs text-muted-foreground/60 italic">{description}</p>}
         <div
           className="rounded-md border bg-zinc-950 text-[11px] font-mono overflow-auto max-h-40"
           style={{ fontFamily: MONO_FONT }}
@@ -700,11 +892,15 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
       <div className="space-y-0.5">
         <div className="flex items-center gap-1.5 text-xs">
           <FileCode className="size-3 text-blue-400" />
-          <span className="font-mono text-[11px] break-all" style={{ fontFamily: MONO_FONT }}>{filePath}</span>
+          <span className="font-mono text-[11px] break-all" style={{ fontFamily: MONO_FONT }}>
+            {filePath}
+          </span>
         </div>
         {(offset || limit) && (
           <div className="flex items-center gap-2 pl-[18px]">
-            {offset && <span className="text-[10px] text-muted-foreground/40">offset: {offset}</span>}
+            {offset && (
+              <span className="text-[10px] text-muted-foreground/40">offset: {offset}</span>
+            )}
             {limit && <span className="text-[10px] text-muted-foreground/40">limit: {limit}</span>}
           </div>
         )}
@@ -718,7 +914,9 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
     return (
       <div className="flex items-center gap-1.5 text-xs">
         <Folder className="size-3 text-amber-400" />
-        <span className="font-mono text-[11px] break-all" style={{ fontFamily: MONO_FONT }}>{path}</span>
+        <span className="font-mono text-[11px] break-all" style={{ fontFamily: MONO_FONT }}>
+          {path}
+        </span>
       </div>
     )
   }
@@ -729,7 +927,12 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
     return (
       <div className="flex items-center gap-1.5 text-xs">
         <File className="size-3 text-red-400" />
-        <span className="font-mono text-[11px] break-all text-red-400/70" style={{ fontFamily: MONO_FONT }}>{filePath}</span>
+        <span
+          className="font-mono text-[11px] break-all text-red-400/70"
+          style={{ fontFamily: MONO_FONT }}
+        >
+          {filePath}
+        </span>
       </div>
     )
   }
@@ -742,11 +945,21 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
       <div className="space-y-0.5">
         <div className="flex items-center gap-1.5 text-xs">
           <FolderTree className="size-3 text-amber-400" />
-          <span className="font-mono text-[11px] text-amber-400/80" style={{ fontFamily: MONO_FONT }}>{pattern}</span>
+          <span
+            className="font-mono text-[11px] text-amber-400/80"
+            style={{ fontFamily: MONO_FONT }}
+          >
+            {pattern}
+          </span>
         </div>
         {path && (
           <div className="pl-[18px]">
-            <span className="text-[10px] text-muted-foreground/40 font-mono" style={{ fontFamily: MONO_FONT }}>in {path}</span>
+            <span
+              className="text-[10px] text-muted-foreground/40 font-mono"
+              style={{ fontFamily: MONO_FONT }}
+            >
+              in {path}
+            </span>
           </div>
         )}
       </div>
@@ -762,12 +975,31 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
       <div className="space-y-0.5">
         <div className="flex items-center gap-1.5 text-xs">
           <Search className="size-3 text-amber-400" />
-          <span className="font-mono text-[11px] text-amber-400/80" style={{ fontFamily: MONO_FONT }}>/{pattern}/</span>
+          <span
+            className="font-mono text-[11px] text-amber-400/80"
+            style={{ fontFamily: MONO_FONT }}
+          >
+            /{pattern}/
+          </span>
         </div>
         {(path || include) && (
           <div className="flex items-center gap-2 pl-[18px]">
-            {path && <span className="text-[10px] text-muted-foreground/40 font-mono" style={{ fontFamily: MONO_FONT }}>in {path}</span>}
-            {include && <span className="text-[10px] text-muted-foreground/40 font-mono" style={{ fontFamily: MONO_FONT }}>include: {include}</span>}
+            {path && (
+              <span
+                className="text-[10px] text-muted-foreground/40 font-mono"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                in {path}
+              </span>
+            )}
+            {include && (
+              <span
+                className="text-[10px] text-muted-foreground/40 font-mono"
+                style={{ fontFamily: MONO_FONT }}
+              >
+                include: {include}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -778,10 +1010,17 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
   if (name === 'Task') {
     return (
       <div className="space-y-0.5">
-        <InputField label="subType" value={String(input.subType ?? '')} />
+        <InputField label="subagent_type" value={String(input.subagent_type ?? '')} />
         <InputField label="description" value={String(input.description ?? '')} />
         {input.prompt != null && (
-          <InputField label="prompt" value={String(input.prompt).length > 200 ? String(input.prompt).slice(0, 200) + '…' : String(input.prompt)} />
+          <InputField
+            label="prompt"
+            value={
+              String(input.prompt).length > 200
+                ? String(input.prompt).slice(0, 200) + '…'
+                : String(input.prompt)
+            }
+          />
         )}
       </div>
     )
@@ -809,9 +1048,13 @@ function StructuredInput({ name, input }: { name: string; input: Record<string, 
 }
 
 // Tools that auto-expand when they have output (mutation/action tools)
-const EXPAND_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'Delete', 'Bash', 'TodoWrite'])
+const EXPAND_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'Delete', 'Bash', 'TaskCreate'])
 
-export function ToolStatusDot({ status }: { status: ToolCallCardProps['status'] }): React.JSX.Element {
+export function ToolStatusDot({
+  status
+}: {
+  status: ToolCallCardProps['status']
+}): React.JSX.Element {
   switch (status) {
     case 'completed':
       return (
@@ -862,8 +1105,9 @@ export function ToolCallCard({
   status,
   error,
   startedAt,
-  completedAt,
+  completedAt
 }: ToolCallCardProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   // Auto-expand for errors and mutation tools with output; keep read-heavy tools collapsed
   const shouldAutoExpand = status === 'error' || (!!output && EXPAND_TOOLS.has(name))
   const [open, setOpen] = React.useState(shouldAutoExpand)
@@ -873,7 +1117,8 @@ export function ToolCallCard({
   }, [shouldAutoExpand])
 
   const summary = inputSummary(name, input)
-  const elapsed = startedAt && completedAt ? ((completedAt - startedAt) / 1000).toFixed(1) + 's' : null
+  const elapsed =
+    startedAt && completedAt ? ((completedAt - startedAt) / 1000).toFixed(1) + 's' : null
 
   return (
     <div className="my-5 min-w-0 overflow-hidden">
@@ -885,7 +1130,7 @@ export function ToolCallCard({
         <ToolStatusDot status={status} />
         <span className="font-medium">{name}</span>
         {status === 'streaming' && (
-          <span className="text-violet-400/70 text-[10px] animate-pulse">receiving args...</span>
+          <span className="text-violet-400/70 text-[10px] animate-pulse">{t('toolCall.receivingArgs')}</span>
         )}
         {status !== 'streaming' && summary && !open && (
           <span className="truncate text-muted-foreground/50 max-w-[300px]">{summary}</span>
@@ -905,13 +1150,15 @@ export function ToolCallCard({
       {open && (
         <div className="mt-1.5 space-y-2 pl-5 min-w-0 overflow-hidden">
           {/* Diff view for Edit tools */}
-          {(name === 'Edit' || name === 'MultiEdit') && !!input.old_string && !!input.new_string && (
-            <DiffBlock
-              oldStr={String(input.old_string)}
-              newStr={String(input.new_string)}
-              filePath={String(input.file_path ?? input.path ?? '')}
-            />
-          )}
+          {(name === 'Edit' || name === 'MultiEdit') &&
+            !!input.old_string &&
+            !!input.new_string && (
+              <DiffBlock
+                oldStr={String(input.old_string)}
+                newStr={String(input.new_string)}
+                filePath={String(input.file_path ?? input.path ?? '')}
+              />
+            )}
           {/* MultiEdit: show all edits as diffs */}
           {name === 'MultiEdit' && Array.isArray(input.edits) && (
             <div className="space-y-2">
@@ -919,12 +1166,22 @@ export function ToolCallCard({
                 <div key={i}>
                   {(input.edits as unknown[]).length > 1 && (
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-[9px] text-muted-foreground/40 font-mono">edit {i + 1}/{(input.edits as unknown[]).length}</span>
-                      {typeof edit.explanation === 'string' && <span className="text-[9px] text-muted-foreground/30 truncate">{edit.explanation}</span>}
+                      <span className="text-[9px] text-muted-foreground/40 font-mono">
+                        edit {i + 1}/{(input.edits as unknown[]).length}
+                      </span>
+                      {typeof edit.explanation === 'string' && (
+                        <span className="text-[9px] text-muted-foreground/30 truncate">
+                          {edit.explanation}
+                        </span>
+                      )}
                     </div>
                   )}
                   {edit.old_string && edit.new_string ? (
-                    <DiffBlock oldStr={String(edit.old_string)} newStr={String(edit.new_string)} filePath={String(input.file_path ?? input.path ?? '')} />
+                    <DiffBlock
+                      oldStr={String(edit.old_string)}
+                      newStr={String(edit.new_string)}
+                      filePath={String(input.file_path ?? input.path ?? '')}
+                    />
                   ) : null}
                 </div>
               ))}
@@ -934,9 +1191,10 @@ export function ToolCallCard({
           {name === 'Write' && !!input.content && (
             <div>
               <div className="mb-1 flex items-center gap-1.5">
-                <p className="text-xs font-medium text-muted-foreground">Content</p>
+                <p className="text-xs font-medium text-muted-foreground">{t('toolCall.content')}</p>
                 <span className="text-[9px] text-muted-foreground/40 font-mono">
-                  {detectLang(String(input.file_path ?? input.path ?? ''))} · {String(input.content).split('\n').length} lines
+                  {detectLang(String(input.file_path ?? input.path ?? ''))} ·{' '}
+                  {String(input.content).split('\n').length} lines
                 </span>
                 <CopyBtn text={String(input.content)} />
               </div>
@@ -959,26 +1217,33 @@ export function ToolCallCard({
               </SyntaxHighlighter>
             </div>
           )}
-          {/* TodoWrite: checklist-style input */}
-          {name === 'TodoWrite' && Array.isArray(input.todos) && (
-            <TodoInputBlock input={input} />
-          )}
+          {/* TaskCreate: checklist-style input */}
+          {name === 'TaskCreate' && input.subject && <TaskCreateInputBlock input={input} />}
           {/* Structured Input — tool-specific rendering */}
-          {!((name === 'Edit' && !!input.old_string) || (name === 'MultiEdit' && (!!input.old_string || Array.isArray(input.edits))) || (name === 'Write' && !!input.content) || (name === 'TodoWrite' && Array.isArray(input.todos))) && (
-            <StructuredInput name={name} input={input} />
-          )}
+          {!(
+            (name === 'Edit' && !!input.old_string) ||
+            (name === 'MultiEdit' && (!!input.old_string || Array.isArray(input.edits))) ||
+            (name === 'Write' && !!input.content) ||
+            (name === 'TaskCreate' && !!input.subject)
+          ) && <StructuredInput name={name} input={input} />}
           {/* Output — tool-specific rendering */}
           {output && name === 'Read' && hasImageBlocks(output) && (
             <ImageOutputBlock output={output} />
           )}
           {output && name === 'Read' && !hasImageBlocks(output) && outputAsString(output) && (
-            <ReadOutputBlock output={outputAsString(output)!} filePath={String(input.file_path ?? input.path ?? '')} />
+            <ReadOutputBlock
+              output={outputAsString(output)!}
+              filePath={String(input.file_path ?? input.path ?? '')}
+            />
           )}
           {output && name === 'Bash' && outputAsString(output) && (
             <BashOutputBlock output={outputAsString(output)!} />
           )}
           {output && name === 'Grep' && outputAsString(output) && (
-            <GrepOutputBlock output={outputAsString(output)!} pattern={String(input.pattern ?? '')} />
+            <GrepOutputBlock
+              output={outputAsString(output)!}
+              pattern={String(input.pattern ?? '')}
+            />
           )}
           {output && name === 'Glob' && outputAsString(output) && (
             <GlobOutputBlock output={outputAsString(output)!} />
@@ -986,37 +1251,59 @@ export function ToolCallCard({
           {output && name === 'LS' && outputAsString(output) && (
             <LSOutputBlock output={outputAsString(output)!} />
           )}
-          {output && (name === 'TodoRead' || name === 'TodoWrite') && outputAsString(output) && (
-            <TodoOutputBlock output={outputAsString(output)!} />
+          {output && name === 'TaskList' && outputAsString(output) && (
+            <TaskListOutputBlock output={outputAsString(output)!} />
           )}
-          {output && ['Edit', 'MultiEdit', 'Write', 'Delete'].includes(name) && (() => {
-            const s = outputAsString(output) ?? ''
-            return (
-              <div className="flex items-center gap-1.5 text-xs">
-                {s.includes('"success"') || s.includes('success') ? (
-                  <>
-                    <CheckCircle2 className="size-3 text-green-500" />
-                    <span className="text-green-500/70">Applied successfully</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="size-3 text-destructive" />
-                    <span className="text-destructive/70 font-mono truncate">{s.slice(0, 100)}</span>
-                  </>
-                )}
-              </div>
-            )
-          })()}
-          {output && !['Read', 'Bash', 'Grep', 'Glob', 'LS', 'TodoWrite', 'TodoRead', 'Edit', 'MultiEdit', 'Write', 'Delete'].includes(name) && (
-            hasImageBlocks(output)
-              ? <ImageOutputBlock output={output} />
-              : outputAsString(output) ? <OutputBlock output={outputAsString(output)!} /> : null
-          )}
+          {output &&
+            ['Edit', 'MultiEdit', 'Write', 'Delete'].includes(name) &&
+            (() => {
+              const s = outputAsString(output) ?? ''
+              return (
+                <div className="flex items-center gap-1.5 text-xs">
+                  {s.includes('"success"') || s.includes('success') ? (
+                    <>
+                      <CheckCircle2 className="size-3 text-green-500" />
+                      <span className="text-green-500/70">{t('toolCall.appliedSuccessfully')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="size-3 text-destructive" />
+                      <span className="text-destructive/70 font-mono truncate">
+                        {s.slice(0, 100)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )
+            })()}
+          {output &&
+            ![
+              'Read',
+              'Bash',
+              'Grep',
+              'Glob',
+              'LS',
+              'TaskCreate',
+              'TaskUpdate',
+              'TaskGet',
+              'TaskList',
+              'Edit',
+              'MultiEdit',
+              'Write',
+              'Delete'
+            ].includes(name) &&
+            (hasImageBlocks(output) ? (
+              <ImageOutputBlock output={output} />
+            ) : outputAsString(output) ? (
+              <OutputBlock output={outputAsString(output)!} />
+            ) : null)}
           {/* Error */}
           {error && (
             <div>
-              <p className="mb-1 text-xs font-medium text-destructive">Error</p>
-              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words text-xs text-destructive font-mono">{error}</pre>
+              <p className="mb-1 text-xs font-medium text-destructive">{t('error.label')}</p>
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words text-xs text-destructive font-mono">
+                {error}
+              </pre>
             </div>
           )}
         </div>

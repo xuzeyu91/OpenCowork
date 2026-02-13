@@ -2,30 +2,23 @@ import { toolRegistry } from '../tool-registry'
 import { teamEvents } from './events'
 import { useTeamStore } from '../../../stores/team-store'
 import { useUIStore } from '../../../stores/ui-store'
+import { useChatStore } from '../../../stores/chat-store'
 import { teamCreateTool } from './tools/team-create'
-import { taskCreateTool } from './tools/task-create'
-import { taskUpdateTool } from './tools/task-update'
-import { taskListTool } from './tools/task-list'
-import { spawnTeammateTool } from './tools/spawn-teammate'
 import { sendMessageTool } from './tools/send-message'
 import { teamDeleteTool } from './tools/team-delete'
-import { teamAwaitTool } from './tools/team-await'
 import { teamStatusTool } from './tools/team-status'
 
 const TEAM_TOOLS = [
   teamCreateTool,
-  taskCreateTool,
-  taskUpdateTool,
-  taskListTool,
-  spawnTeammateTool,
   sendMessageTool,
-  teamAwaitTool,
   teamStatusTool,
-  teamDeleteTool,
+  teamDeleteTool
 ]
 
 /** All team tool names for identification in UI rendering */
-export const TEAM_TOOL_NAMES = new Set(TEAM_TOOLS.map((t) => t.definition.name))
+export const TEAM_TOOL_NAMES = new Set(
+  TEAM_TOOLS.map((t) => t.definition.name)
+)
 
 /**
  * Register all Agent Team tools into the global tool registry
@@ -50,7 +43,8 @@ export function registerTeamTools(): void {
 
   // Persistent global subscription: forward all team events to the store
   teamEvents.on((event) => {
-    useTeamStore.getState().handleTeamEvent(event)
+    const sessionId = useChatStore.getState().activeSessionId ?? undefined
+    useTeamStore.getState().handleTeamEvent(event, sessionId)
 
     // Auto-switch to Team tab when a team is created
     if (event.type === 'team_start') {

@@ -3,7 +3,7 @@ import { teamEvents } from '../events'
 import { useTeamStore } from '../../../../stores/team-store'
 import { useAgentStore } from '../../../../stores/agent-store'
 import { abortAllTeammates } from '../teammate-runner'
-import { removeTeamLimiter } from './spawn-teammate'
+import { removeTeamLimiter } from '../../sub-agents/create-tool'
 
 export const teamDeleteTool: ToolHandler = {
   definition: {
@@ -13,8 +13,8 @@ export const teamDeleteTool: ToolHandler = {
     inputSchema: {
       type: 'object',
       properties: {},
-      required: [],
-    },
+      required: []
+    }
   },
   execute: async () => {
     const team = useTeamStore.getState().activeTeam
@@ -44,8 +44,8 @@ export const teamDeleteTool: ToolHandler = {
       team_name: teamName,
       members_removed: memberCount,
       tasks_total: taskCount,
-      tasks_completed: completedCount,
+      tasks_completed: completedCount
     })
   },
-  requiresApproval: () => true,
+  requiresApproval: () => true
 }

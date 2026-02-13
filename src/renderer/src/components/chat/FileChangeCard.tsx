@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileCode, FilePlus2, FileX2, FileEdit, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -159,12 +160,13 @@ function FileIcon({ name }: { name: string }): React.JSX.Element {
 // ── Change Stats Badge ───────────────────────────────────────────
 
 function ChangeStats({ name, input }: { name: string; input: Record<string, unknown> }): React.JSX.Element | null {
+  const { t } = useTranslation('chat')
   if (name === 'Write') {
     const content = String(input.content ?? '')
     const lines = content.split('\n').length
     return (
       <span className="flex items-center gap-1.5 text-[10px]">
-        <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-green-500 font-medium">new</span>
+        <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-green-500 font-medium">{t('fileChange.new')}</span>
         <span className="text-green-400/70">+{lines}</span>
       </span>
     )
@@ -197,7 +199,7 @@ function ChangeStats({ name, input }: { name: string; input: Record<string, unkn
   }
   if (name === 'Delete') {
     return (
-      <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-400 font-medium">deleted</span>
+      <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-400 font-medium">{t('fileChange.deleted')}</span>
     )
   }
   return null
@@ -206,6 +208,7 @@ function ChangeStats({ name, input }: { name: string; input: Record<string, unkn
 // ── Inline Diff View ─────────────────────────────────────────────
 
 function InlineDiff({ oldStr, newStr }: { oldStr: string; newStr: string }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const lines = React.useMemo(() => computeDiff(oldStr, newStr), [oldStr, newStr])
   const chunks = React.useMemo(() => foldContext(lines), [lines])
   const [expandedChunks, setExpandedChunks] = React.useState<Set<number>>(new Set())
@@ -247,7 +250,7 @@ function InlineDiff({ oldStr, newStr }: { oldStr: string; newStr: string }): Rea
             className="flex w-full items-center justify-center py-0.5 text-[9px] text-zinc-500/50 hover:text-zinc-400 hover:bg-zinc-800/30 transition-colors border-y border-zinc-800/30"
             onClick={() => setExpandedChunks((prev) => new Set([...prev, ci]))}
           >
-            ··· {chunk.count} unchanged lines ···
+            {t('fileChange.unchangedLines', { count: chunk.count })}
           </button>
         )
       })}
@@ -258,6 +261,7 @@ function InlineDiff({ oldStr, newStr }: { oldStr: string; newStr: string }): Rea
 // ── New File Content View ────────────────────────────────────────
 
 function NewFileContent({ content, filePath, isStreaming }: { content: string; filePath: string; isStreaming?: boolean }): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const lang = detectLang(filePath)
   const lines = content.split('\n').length
   const truncated = !isStreaming && lines > 50
@@ -298,7 +302,7 @@ function NewFileContent({ content, filePath, isStreaming }: { content: string; f
           onClick={() => setExpanded(true)}
           className="w-full py-1 text-[10px] text-center text-zinc-500/60 hover:text-zinc-400 transition-colors border-t border-zinc-800/30"
         >
-          +{lines - 50} more lines
+          {t('fileChange.moreLines', { count: lines - 50 })}
         </button>
       )}
     </div>
@@ -316,6 +320,7 @@ export function FileChangeCard({
   startedAt,
   completedAt,
 }: FileChangeCardProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [collapsed, setCollapsed] = React.useState(false)
 
   // Auto-collapse when tool completes successfully
@@ -354,7 +359,7 @@ export function FileChangeCard({
       >
         <FileIcon name={name} />
         <span className="text-xs font-medium truncate min-w-0 flex-1" title={filePath || undefined}>
-          {filePath ? fileName(filePath) : <span className="text-muted-foreground/50 italic animate-pulse">receiving...</span>}
+          {filePath ? fileName(filePath) : <span className="text-muted-foreground/50 italic animate-pulse">{t('toolCall.receivingArgs')}</span>}
         </span>
         <span className="text-[10px] text-muted-foreground/40 font-mono truncate max-w-[120px] hidden sm:block" title={filePath}>
           {shortPath(filePath)}
@@ -400,7 +405,7 @@ export function FileChangeCard({
           {/* Delete: minimal indicator */}
           {name === 'Delete' && (
             <div className="px-3 py-2 text-[11px] text-red-400/60 italic">
-              File will be deleted
+              {t('fileChange.fileWillBeDeleted')}
             </div>
           )}
         </div>

@@ -4,7 +4,6 @@ import { toolRegistry } from '../tool-registry'
 import type { AgentLoopConfig } from '../types'
 import type { UnifiedMessage, ProviderConfig, TokenUsage } from '../../api/types'
 import type { SubAgentRunConfig, SubAgentResult } from './types'
-import { ipcClient } from '../../ipc/ipc-client'
 
 /**
  * Run a SubAgent — executes an inner agent loop with a focused system prompt
@@ -14,7 +13,8 @@ import { ipcClient } from '../../ipc/ipc-client'
  * to the parent via onApprovalNeeded callback.
  */
 export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentResult> {
-  const { definition, parentProvider, toolContext, input, toolUseId, onEvent, onApprovalNeeded } = config
+  const { definition, parentProvider, toolContext, input, toolUseId, onEvent, onApprovalNeeded } =
+    config
 
   // Create an inner AbortController linked to the parent signal.
   // This allows us to immediately abort inner streams on error/exit,
@@ -37,32 +37,22 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
     ...parentProvider,
     systemPrompt: definition.systemPrompt,
     model: definition.model ?? parentProvider.model,
-    temperature: definition.temperature ?? parentProvider.temperature,
+    temperature: definition.temperature ?? parentProvider.temperature
   }
 
   // 3. Build initial user message from SubAgent input
   const userMessage = formatInputAsMessage(definition.name, input)
 
-  // 4. Fetch available skills and append to system prompt
-  let systemPrompt = definition.systemPrompt
-  try {
-    const skills = await ipcClient.invoke('skills:list') as { name: string; description: string }[]
-    if (Array.isArray(skills) && skills.length > 0) {
-      const skillLines = skills.map((s) => `- **${s.name}**: ${s.description}`).join('\n')
-      systemPrompt += `\n\n<skills_priority_rule>\n**CRITICAL — READ THIS FIRST:**\nYou have access to the **Skill** tool. Before using ANY of your core tools, check the list below. If the user's task matches a Skill's description (e.g. web searching, web scraping, PDF analysis), you **MUST** call the Skill tool FIRST to load its expert instructions, then follow those instructions strictly.\n\nDo NOT attempt to solve tasks covered by a Skill using only your core tools. Skills contain curated scripts and workflows that produce far better results.\n\n**Retry on failure**: If a Skill's script fails (e.g. missing dependency, import error), fix the issue (install the dependency) and then **re-run the exact same script command**. NEVER replace a Skill's script with your own inline code (\`python -c "..."\`) or ad-hoc scripts.\n\nAvailable skills:\n${skillLines}\n</skills_priority_rule>`
-    }
-  } catch {
-    // Skills unavailable — proceed without them
-  }
+  const systemPrompt = definition.systemPrompt
 
-  // 5. Build inner loop config
+  // 4. Build inner loop config
   const loopConfig: AgentLoopConfig = {
     maxIterations: definition.maxIterations,
     provider: innerProvider,
     tools: innerTools,
     systemPrompt,
     workingFolder: toolContext.workingFolder,
-    signal: innerAbort.signal,
+    signal: innerAbort.signal
   }
 
   // 6. Run inner agent loop
@@ -72,18 +62,13 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
   const totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
 
   try {
-    const loop = runAgentLoop(
-      [userMessage],
-      loopConfig,
-      toolContext,
-      async (tc) => {
-        // Auto-approve read-only tools
-        if (isReadOnly(tc.name)) return true
-        // Bubble write tool approval up to parent
-        if (onApprovalNeeded) return onApprovalNeeded(tc)
-        return false
-      }
-    )
+    const loop = runAgentLoop([userMessage], loopConfig, toolContext, async (tc) => {
+      // Auto-approve read-only tools
+      if (isReadOnly(tc.name)) return true
+      // Bubble write tool approval up to parent
+      if (onApprovalNeeded) return onApprovalNeeded(tc)
+      return false
+    })
 
     for await (const event of loop) {
       if (toolContext.signal.aborted) {
@@ -94,12 +79,22 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
       switch (event.type) {
         case 'text_delta':
           output += event.text
-          onEvent?.({ type: 'sub_agent_text_delta', subAgentName: definition.name, toolUseId, text: event.text })
+          onEvent?.({
+            type: 'sub_agent_text_delta',
+            subAgentName: definition.name,
+            toolUseId,
+            text: event.text
+          })
           break
 
         case 'iteration_start':
           iterations = event.iteration
-          onEvent?.({ type: 'sub_agent_iteration', subAgentName: definition.name, toolUseId, iteration: event.iteration })
+          onEvent?.({
+            type: 'sub_agent_iteration',
+            subAgentName: definition.name,
+            toolUseId,
+            iteration: event.iteration
+          })
           break
 
         case 'message_end':
@@ -107,13 +102,16 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
             totalUsage.inputTokens += event.usage.inputTokens
             totalUsage.outputTokens += event.usage.outputTokens
             if (event.usage.cacheCreationTokens) {
-              totalUsage.cacheCreationTokens = (totalUsage.cacheCreationTokens ?? 0) + event.usage.cacheCreationTokens
+              totalUsage.cacheCreationTokens =
+                (totalUsage.cacheCreationTokens ?? 0) + event.usage.cacheCreationTokens
             }
             if (event.usage.cacheReadTokens) {
-              totalUsage.cacheReadTokens = (totalUsage.cacheReadTokens ?? 0) + event.usage.cacheReadTokens
+              totalUsage.cacheReadTokens =
+                (totalUsage.cacheReadTokens ?? 0) + event.usage.cacheReadTokens
             }
             if (event.usage.reasoningTokens) {
-              totalUsage.reasoningTokens = (totalUsage.reasoningTokens ?? 0) + event.usage.reasoningTokens
+              totalUsage.reasoningTokens =
+                (totalUsage.reasoningTokens ?? 0) + event.usage.reasoningTokens
             }
           }
           break
@@ -121,7 +119,12 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
         case 'tool_call_start':
         case 'tool_call_result':
           if (event.type === 'tool_call_result') toolCallCount++
-          onEvent?.({ type: 'sub_agent_tool_call', subAgentName: definition.name, toolUseId, toolCall: event.toolCall })
+          onEvent?.({
+            type: 'sub_agent_tool_call',
+            subAgentName: definition.name,
+            toolUseId,
+            toolCall: event.toolCall
+          })
           break
 
         case 'error':
@@ -135,7 +138,7 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
             toolCallCount,
             iterations,
             usage: totalUsage,
-            error: event.error.message,
+            error: event.error.message
           }
           onEvent?.({ type: 'sub_agent_end', subAgentName: definition.name, toolUseId, result })
           return result
@@ -150,7 +153,7 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
       toolCallCount,
       iterations,
       usage: totalUsage,
-      error: errMsg,
+      error: errMsg
     }
     onEvent?.({ type: 'sub_agent_end', subAgentName: definition.name, toolUseId, result })
     return result
@@ -162,7 +165,13 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
 
   // 7. Format output
   const finalOutput = definition.formatOutput
-    ? definition.formatOutput({ success: true, output, toolCallCount, iterations, usage: totalUsage })
+    ? definition.formatOutput({
+        success: true,
+        output,
+        toolCallCount,
+        iterations,
+        usage: totalUsage
+      })
     : output
 
   const result: SubAgentResult = {
@@ -170,7 +179,7 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
     output: finalOutput,
     toolCallCount,
     iterations,
-    usage: totalUsage,
+    usage: totalUsage
   }
 
   onEvent?.({ type: 'sub_agent_end', subAgentName: definition.name, toolUseId, result })
@@ -179,13 +188,16 @@ export async function runSubAgent(config: SubAgentRunConfig): Promise<SubAgentRe
 
 // --- Helpers ---
 
-const READ_ONLY_SET = new Set(['Read', 'LS', 'Glob', 'Grep', 'TodoRead', 'Skill'])
+const READ_ONLY_SET = new Set(['Read', 'LS', 'Glob', 'Grep', 'TaskList', 'TaskGet', 'Skill'])
 
 function isReadOnly(toolName: string): boolean {
   return READ_ONLY_SET.has(toolName)
 }
 
-function formatInputAsMessage(_subAgentName: string, input: Record<string, unknown>): UnifiedMessage {
+function formatInputAsMessage(
+  _subAgentName: string,
+  input: Record<string, unknown>
+): UnifiedMessage {
   // Build a natural language message from the SubAgent input
   const parts: string[] = []
 
@@ -215,6 +227,6 @@ function formatInputAsMessage(_subAgentName: string, input: Record<string, unkno
     id: nanoid(),
     role: 'user',
     content: parts.join('\n'),
-    createdAt: Date.now(),
+    createdAt: Date.now()
   }
 }

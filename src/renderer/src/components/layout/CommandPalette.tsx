@@ -34,6 +34,7 @@ import { useTheme } from 'next-themes'
 import type { ProviderType } from '@renderer/lib/api/types'
 import { sessionToMarkdown } from '@renderer/lib/utils/export-chat'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 
 const MODEL_PRESETS: Record<ProviderType, string[]> = {
   anthropic: ['claude-sonnet-4-5-20250929', 'claude-opus-4-5-20251101', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-20250514', 'claude-opus-4-20250514', '', 'claude-3-5-haiku-20241022'],
@@ -42,6 +43,7 @@ const MODEL_PRESETS: Record<ProviderType, string[]> = {
 }
 
 export function CommandPalette(): React.JSX.Element {
+  const { t } = useTranslation('layout')
   const [open, setOpen] = useState(false)
 
   const sessions = useChatStore((s) => s.sessions)
@@ -104,47 +106,47 @@ export function CommandPalette(): React.JSX.Element {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} showCloseButton={false}>
-      <CommandInput placeholder="Type a command or search sessions..." />
+      <CommandInput placeholder={t('commandPalette.placeholder')} />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        <CommandEmpty>{t('commandPalette.noResults')}</CommandEmpty>
 
         {/* Quick Actions */}
-        <CommandGroup heading="Actions">
+        <CommandGroup heading={t('commandPalette.actions')}>
           <CommandItem onSelect={() => runAndClose(() => { const id = createSession(mode); setActiveSession(id) })}>
             <Plus className="size-4" />
-            <span>New Chat</span>
+            <span>{t('commandPalette.newChat')}</span>
             <CommandShortcut>Ctrl+N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => setSettingsOpen(true))}>
             <Settings className="size-4" />
-            <span>Open Settings</span>
+            <span>{t('commandPalette.openSettings')}</span>
             <CommandShortcut>Ctrl+,</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => setShortcutsOpen(true))}>
             <Keyboard className="size-4" />
-            <span>Keyboard Shortcuts</span>
+            <span>{t('commandPalette.keyboardShortcuts')}</span>
             <CommandShortcut>Ctrl+/</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => setTheme(theme === 'dark' ? 'light' : 'dark'))}>
             {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            <span>Toggle Theme</span>
+            <span>{t('commandPalette.toggleTheme')}</span>
             <CommandShortcut>Ctrl+Shift+D</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(toggleLeftSidebar)}>
             <PanelLeft className="size-4" />
-            <span>Toggle Sidebar</span>
+            <span>{t('commandPalette.toggleSidebar')}</span>
             <CommandShortcut>Ctrl+B</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(toggleRightPanel)}>
             <PanelRight className="size-4" />
-            <span>Toggle Right Panel</span>
+            <span>{t('commandPalette.toggleRightPanel')}</span>
             <CommandShortcut>Ctrl+Shift+B</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => runAndClose(() => {
             window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', ctrlKey: true, shiftKey: true }))
           })}>
             <Upload className="size-4" />
-            <span>Import Sessions from JSON</span>
+            <span>{t('commandPalette.importSessions')}</span>
             <CommandShortcut>Ctrl+Shift+O</CommandShortcut>
           </CommandItem>
         </CommandGroup>
@@ -152,7 +154,7 @@ export function CommandPalette(): React.JSX.Element {
         <CommandSeparator />
 
         {/* Switch Model */}
-        <CommandGroup heading="Switch Model">
+        <CommandGroup heading={t('commandPalette.switchModel')}>
           {MODEL_PRESETS[useSettingsStore.getState().provider]?.filter((m) => m !== useSettingsStore.getState().model).map((m) => (
             <CommandItem key={m} onSelect={() => runAndClose(() => {
               useSettingsStore.getState().updateSettings({ model: m })
@@ -167,15 +169,15 @@ export function CommandPalette(): React.JSX.Element {
         <CommandSeparator />
 
         {/* Mode Switch */}
-        <CommandGroup heading="Switch Mode">
+        <CommandGroup heading={t('commandPalette.switchMode')}>
           {([
-            { value: 'chat' as AppMode, label: 'Chat', icon: <MessageSquare className="size-4" /> },
-            { value: 'cowork' as AppMode, label: 'Cowork', icon: <Briefcase className="size-4" /> },
-            { value: 'code' as AppMode, label: 'Code', icon: <Code2 className="size-4" /> },
+            { value: 'chat' as AppMode, label: t('commandPalette.switchToChat'), icon: <MessageSquare className="size-4" /> },
+            { value: 'cowork' as AppMode, label: t('commandPalette.switchToCowork'), icon: <Briefcase className="size-4" /> },
+            { value: 'code' as AppMode, label: t('commandPalette.switchToCode'), icon: <Code2 className="size-4" /> },
           ] as const).filter((m) => m.value !== mode).map((m) => (
             <CommandItem key={m.value} onSelect={() => runAndClose(() => setMode(m.value))}>
               {m.icon}
-              <span>Switch to {m.label} Mode</span>
+              <span>{m.label}</span>
             </CommandItem>
           ))}
         </CommandGroup>
@@ -185,24 +187,24 @@ export function CommandPalette(): React.JSX.Element {
         {/* Current Session */}
         {activeSession && (
           <>
-            <CommandGroup heading="Current Session">
+            <CommandGroup heading={t('commandPalette.currentSession')}>
               <CommandItem onSelect={() => runAndClose(() => {
                 const md = sessionToMarkdown(activeSession)
                 navigator.clipboard.writeText(md)
-                toast.success('Copied conversation to clipboard')
+                toast.success(t('commandPalette.copiedConversation'))
               })}>
                 <Download className="size-4" />
-                <span>Export Current Chat</span>
+                <span>{t('commandPalette.exportCurrentChat')}</span>
                 <CommandShortcut>Ctrl+Shift+E</CommandShortcut>
               </CommandItem>
               <CommandItem onSelect={() => runAndClose(() => togglePinSession(activeSessionId!))}>
                 <Pin className="size-4" />
-                <span>{activeSession.pinned ? 'Unpin Session' : 'Pin Session'}</span>
+                <span>{activeSession.pinned ? t('commandPalette.unpinSession') : t('commandPalette.pinSession')}</span>
               </CommandItem>
               {sessions.length > 1 && (
                 <CommandItem onSelect={() => runAndClose(() => deleteSession(activeSessionId!))}>
                   <Trash2 className="size-4 text-destructive" />
-                  <span className="text-destructive">Delete Current Session</span>
+                  <span className="text-destructive">{t('commandPalette.deleteCurrentSession')}</span>
                 </CommandItem>
               )}
             </CommandGroup>
@@ -211,14 +213,14 @@ export function CommandPalette(): React.JSX.Element {
         )}
 
         {/* Quick Prompts */}
-        <CommandGroup heading="Quick Prompts">
+        <CommandGroup heading={t('commandPalette.quickPrompts')}>
           {[
-            { label: 'Explain this code', prompt: 'Explain the following code in detail, including what it does and how it works:\n\n' },
-            { label: 'Find bugs', prompt: 'Review the following code for bugs, edge cases, and potential issues:\n\n' },
-            { label: 'Add error handling', prompt: 'Add comprehensive error handling to the following code:\n\n' },
-            { label: 'Write tests', prompt: 'Write thorough unit tests for the following code:\n\n' },
-            { label: 'Refactor', prompt: 'Refactor the following code for better readability and maintainability:\n\n' },
-            { label: 'Add types', prompt: 'Add proper TypeScript types and interfaces to the following code:\n\n' },
+            { label: t('commandPalette.explainCode'), prompt: 'Explain the following code in detail, including what it does and how it works:\n\n' },
+            { label: t('commandPalette.findBugs'), prompt: 'Review the following code for bugs, edge cases, and potential issues:\n\n' },
+            { label: t('commandPalette.addErrorHandling'), prompt: 'Add comprehensive error handling to the following code:\n\n' },
+            { label: t('commandPalette.writeTests'), prompt: 'Write thorough unit tests for the following code:\n\n' },
+            { label: t('commandPalette.refactor'), prompt: 'Refactor the following code for better readability and maintainability:\n\n' },
+            { label: t('commandPalette.addTypes'), prompt: 'Add proper TypeScript types and interfaces to the following code:\n\n' },
           ].map((p) => (
             <CommandItem key={p.label} onSelect={() => runAndClose(() => {
               useUIStore.getState().setPendingInsertText(p.prompt)
@@ -233,7 +235,7 @@ export function CommandPalette(): React.JSX.Element {
 
         {/* All Sessions (searchable by title + message content) */}
         {otherSessions.length > 0 && (
-          <CommandGroup heading="Sessions">
+          <CommandGroup heading={t('commandPalette.sessionsGroup')}>
             {otherSessions.map((s) => (
               <CommandItem
                 key={s.id}

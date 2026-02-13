@@ -2,6 +2,15 @@
 
 // --- Token Usage ---
 
+export interface RequestTiming {
+  /** Total request duration in milliseconds (request start → message_end). */
+  totalMs: number
+  /** Time to first token in milliseconds (request start → first streamed content). */
+  ttftMs?: number
+  /** Output tokens per second, calculated from streamed output. */
+  tps?: number
+}
+
 export interface TokenUsage {
   inputTokens: number
   outputTokens: number
@@ -13,6 +22,10 @@ export interface TokenUsage {
   reasoningTokens?: number
   /** Last API call's input tokens — represents current context window usage (not accumulated) */
   contextTokens?: number
+  /** Total wall time for the full agent run (including tools), in ms. */
+  totalDurationMs?: number
+  /** Per-request timing metrics for each API call in the loop. */
+  requestTimings?: RequestTiming[]
 }
 
 // --- Content Blocks ---
@@ -69,6 +82,8 @@ export interface UnifiedMessage {
   createdAt: number
   usage?: TokenUsage
   debugInfo?: RequestDebugInfo
+  /** When set to 'team', the message is a teammate notification, not real user input. */
+  source?: 'team'
 }
 
 // --- Streaming Events ---
@@ -94,6 +109,7 @@ export interface StreamEvent {
   toolCallInput?: Record<string, unknown>
   stopReason?: string
   usage?: TokenUsage
+  timing?: RequestTiming
   error?: { type: string; message: string }
   debugInfo?: RequestDebugInfo
 }
@@ -112,6 +128,8 @@ export interface ToolDefinition {
 
 // --- Thinking / Reasoning Config ---
 
+export type ReasoningEffortLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+
 export interface ThinkingConfig {
   /** Extra key-value pairs merged into the request body when thinking is enabled */
   bodyParams: Record<string, unknown>
@@ -119,6 +137,14 @@ export interface ThinkingConfig {
   disabledBodyParams?: Record<string, unknown>
   /** Force-override temperature when thinking is active (e.g. Anthropic requires 1) */
   forceTemperature?: number
+  /**
+   * Available reasoning effort levels for this model.
+   * When set, the UI shows a level selector instead of a simple toggle.
+   * The bodyParams should use a placeholder that gets replaced at runtime.
+   */
+  reasoningEffortLevels?: ReasoningEffortLevel[]
+  /** Default reasoning effort level when thinking is first enabled */
+  defaultReasoningEffort?: ReasoningEffortLevel
 }
 
 // --- AI Provider Management ---
@@ -177,6 +203,10 @@ export interface ProviderConfig {
   thinkingEnabled?: boolean
   /** Thinking configuration from the active model */
   thinkingConfig?: ThinkingConfig
+  /** Selected reasoning effort level (when model supports reasoningEffortLevels) */
+  reasoningEffort?: ReasoningEffortLevel
+  /** Current session ID — used for prompt_cache_key on OpenAI endpoints */
+  sessionId?: string
 }
 
 // --- Provider Interface ---

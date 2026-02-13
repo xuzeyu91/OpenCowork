@@ -1,16 +1,25 @@
 import { useState } from 'react'
-import { Database, FolderOpen, FolderPlus, RefreshCw, MessageSquare, Clock, Cpu, Zap, ExternalLink, Copy, Check, Wrench, Brain, ShieldCheck } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Database, FolderOpen, FolderPlus, RefreshCw, MessageSquare, Clock, Cpu, Zap, ExternalLink, Copy, Check, Wrench, Brain, ShieldCheck, Archive } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Separator } from '@renderer/components/ui/separator'
 import { useChatStore } from '@renderer/stores/chat-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useProviderStore } from '@renderer/stores/provider-store'
+import { useTeamStore } from '@renderer/stores/team-store'
 import { formatTokens, calculateCost, formatCost } from '@renderer/lib/format-tokens'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
+import { useChatActions } from '@renderer/hooks/use-chat-actions'
 
 export function ContextPanel(): React.JSX.Element {
+  const { t } = useTranslation('cowork')
+  const { t: tCommon } = useTranslation('common')
   const [copiedPath, setCopiedPath] = useState(false)
+  const [compressing, setCompressing] = useState(false)
+  const [showCompressPanel, setShowCompressPanel] = useState(false)
+  const [focusPrompt, setFocusPrompt] = useState('')
+  const { manualCompressContext } = useChatActions()
   const sessions = useChatStore((s) => s.sessions)
   const activeSessionId = useChatStore((s) => s.activeSessionId)
   const activeSession = sessions.find((s) => s.id === activeSessionId)
@@ -35,14 +44,14 @@ export function ContextPanel(): React.JSX.Element {
       {/* Working Folder */}
       <div className="space-y-2">
         <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Working Folder
+          {t('context.workingFolder')}
         </h4>
         {workingFolder ? (
           <div className="space-y-1.5">
             <button
               className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm text-left hover:bg-muted/50 transition-colors group"
               onClick={() => { navigator.clipboard.writeText(workingFolder!); setCopiedPath(true); setTimeout(() => setCopiedPath(false), 1500) }}
-              title="Click to copy path"
+              title={t('context.clickToCopy')}
             >
               <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 truncate flex-1">{workingFolder}</span>
@@ -56,7 +65,7 @@ export function ContextPanel(): React.JSX.Element {
                 onClick={handleSelectFolder}
               >
                 <RefreshCw className="size-3" />
-                Change Folder
+                {t('context.changeFolder')}
               </Button>
               <Button
                 variant="ghost"
@@ -65,7 +74,7 @@ export function ContextPanel(): React.JSX.Element {
                 onClick={() => window.electron.ipcRenderer.invoke('shell:openPath', workingFolder)}
               >
                 <ExternalLink className="size-3" />
-                Open
+                {t('context.open')}
               </Button>
             </div>
           </div>
@@ -77,7 +86,7 @@ export function ContextPanel(): React.JSX.Element {
             onClick={handleSelectFolder}
           >
             <FolderPlus className="size-3.5" />
-            Select Working Folder
+            {t('context.selectFolder')}
           </Button>
         )}
       </div>
@@ -88,14 +97,14 @@ export function ContextPanel(): React.JSX.Element {
           <Separator />
           <div className="space-y-2">
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Session Info
+              {t('context.sessionInfo')}
             </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <MessageSquare className="size-3 shrink-0" />
                 <span>
-                  {activeSession.messages.filter((m) => m.role !== 'system').length} messages
-                  <span className="text-muted-foreground/50"> ({activeSession.messages.filter((m) => m.role === 'user').length} turns)</span>
+                  {activeSession.messages.filter((m) => m.role !== 'system').length} {tCommon('unit.messages')}
+                  <span className="text-muted-foreground/50"> ({activeSession.messages.filter((m) => m.role === 'user').length} {tCommon('unit.turns')})</span>
                 </span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -140,12 +149,12 @@ export function ContextPanel(): React.JSX.Element {
                   <>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Wrench className="size-3 shrink-0" />
-                      <span>{toolUseCount} tool calls</span>
+                      <span>{t('context.toolCalls', { count: toolUseCount })}</span>
                     </div>
                     {subAgentCount > 0 && (
                       <div className="flex items-center gap-2 text-violet-500/70">
                         <Brain className="size-3 shrink-0" />
-                        <span>{subAgentCount} SubAgent runs</span>
+                        <span>{t('context.subAgentRuns', { count: subAgentCount })}</span>
                       </div>
                     )}
                   </>
@@ -180,6 +189,23 @@ export function ContextPanel(): React.JSX.Element {
                   },
                   { input: 0, output: 0, cacheCreation: 0, cacheRead: 0, reasoning: 0 }
                 )
+                // Include team member token usage (active team + history for this session)
+                const teamStore = useTeamStore.getState()
+                const allTeamMembers = [
+                  ...(teamStore.activeTeam?.sessionId === activeSessionId ? teamStore.activeTeam.members : []),
+                  ...teamStore.teamHistory
+                    .filter((t) => t.sessionId === activeSessionId)
+                    .flatMap((t) => t.members)
+                ]
+                for (const member of allTeamMembers) {
+                  if (member.usage) {
+                    totals.input += member.usage.inputTokens
+                    totals.output += member.usage.outputTokens
+                    if (member.usage.cacheCreationTokens) totals.cacheCreation += member.usage.cacheCreationTokens
+                    if (member.usage.cacheReadTokens) totals.cacheRead += member.usage.cacheReadTokens
+                    if (member.usage.reasoningTokens) totals.reasoning += member.usage.reasoningTokens
+                  }
+                }
                 if (totals.input + totals.output === 0) return null
                 const totalUsage = { inputTokens: totals.input, outputTokens: totals.output, cacheCreationTokens: totals.cacheCreation || undefined, cacheReadTokens: totals.cacheRead || undefined }
                 const cost = calculateCost(totalUsage, activeModelCfg)
@@ -199,18 +225,81 @@ export function ContextPanel(): React.JSX.Element {
                         {formatTokens(totalTokens)} tokens
                         <span className="text-muted-foreground/50"> ({formatTokens(totals.input)}↓ {formatTokens(totals.output)}↑)</span>
                         {cost !== null && <span className="text-emerald-500/70"> · {formatCost(cost)}</span>}
-                        {totals.cacheRead > 0 && <span className="text-green-500/60"> · {formatTokens(totals.cacheRead)} cached</span>}
-                        {totals.reasoning > 0 && <span className="text-blue-500/60"> · {formatTokens(totals.reasoning)} reasoning</span>}
+                        {totals.cacheRead > 0 && <span className="text-green-500/60"> · {formatTokens(totals.cacheRead)} {tCommon('unit.cached')}</span>}
+                        {totals.reasoning > 0 && <span className="text-blue-500/60"> · {formatTokens(totals.reasoning)} {tCommon('unit.reasoning')}</span>}
                       </span>
                     </div>
                     {pct !== null && (
                       <div className="mt-1 space-y-0.5">
                         <div className="flex items-center justify-between text-[9px] text-muted-foreground/40">
-                          <span>Context window</span>
+                          <span>{tCommon('contextWindow')}</span>
                           <span>{formatTokens(ctxUsed)} / {formatTokens(ctxLimit!)} ({pct.toFixed(0)}%)</span>
                         </div>
                         <div className="h-1.5 w-full rounded-full bg-muted/40 overflow-hidden">
                           <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )}
+                    {activeSession.messages.length >= 8 && !showCompressPanel && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-1 h-6 gap-1.5 px-2 text-[10px] text-muted-foreground"
+                        disabled={compressing}
+                        onClick={() => setShowCompressPanel(true)}
+                      >
+                        <Archive className="size-3" />
+                        {compressing ? '压缩中...' : '压缩上下文'}
+                      </Button>
+                    )}
+                    {showCompressPanel && (
+                      <div className="mt-1.5 space-y-1.5 rounded-md border p-2">
+                        <input
+                          type="text"
+                          className="w-full rounded border bg-background px-2 py-1 text-[11px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+                          placeholder="聚焦方向（可选），如：保留 API 相关变更"
+                          value={focusPrompt}
+                          onChange={(e) => setFocusPrompt(e.target.value)}
+                          disabled={compressing}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !compressing) {
+                              e.preventDefault()
+                              setCompressing(true)
+                              manualCompressContext(focusPrompt || undefined).finally(() => {
+                                setCompressing(false)
+                                setShowCompressPanel(false)
+                                setFocusPrompt('')
+                              })
+                            }
+                          }}
+                        />
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-5 px-2 text-[10px]"
+                            disabled={compressing}
+                            onClick={() => {
+                              setCompressing(true)
+                              manualCompressContext(focusPrompt || undefined).finally(() => {
+                                setCompressing(false)
+                                setShowCompressPanel(false)
+                                setFocusPrompt('')
+                              })
+                            }}
+                          >
+                            <Archive className="size-3 mr-1" />
+                            {compressing ? '压缩中...' : '确认压缩'}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 px-2 text-[10px] text-muted-foreground"
+                            disabled={compressing}
+                            onClick={() => { setShowCompressPanel(false); setFocusPrompt('') }}
+                          >
+                            取消
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -225,9 +314,9 @@ export function ContextPanel(): React.JSX.Element {
       {!workingFolder && !activeSession && (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <Database className="mb-3 size-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">No context loaded</p>
+          <p className="text-sm text-muted-foreground">{t('context.noContext')}</p>
           <p className="mt-1 text-xs text-muted-foreground/60">
-            Select a working folder to give the assistant access to your project
+            {t('context.noContextDesc')}
           </p>
         </div>
       )}

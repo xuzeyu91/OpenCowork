@@ -4,6 +4,8 @@ import { nanoid } from 'nanoid'
 import type { UnifiedMessage, ContentBlock, TextBlock, ThinkingBlock, ToolUseBlock } from '../lib/api/types'
 import { ipcClient } from '../lib/ipc/ipc-client'
 import { useAgentStore } from './agent-store'
+import { useTeamStore } from './team-store'
+import { useTaskStore } from './task-store'
 
 export type SessionMode = 'chat' | 'cowork' | 'code'
 
@@ -124,6 +126,7 @@ interface ChatStore {
   removeLastAssistantMessage: (sessionId: string) => string | null
   removeLastUserMessage: (sessionId: string) => void
   truncateMessagesFrom: (sessionId: string, fromIndex: number) => void
+  replaceSessionMessages: (sessionId: string, messages: UnifiedMessage[]) => void
 
   // Message operations
   addMessage: (sessionId: string, msg: UnifiedMessage) => void
@@ -241,6 +244,7 @@ export const useChatStore = create<ChatStore>()(
         state.activeSessionId = id
       })
       dbCreateSession(newSession)
+      useTaskStore.getState().clearTasks()
       return id
     },
 
@@ -256,6 +260,9 @@ export const useChatStore = create<ChatStore>()(
       })
       // Clean up agent-store per-session state
       useAgentStore.getState().setSessionStatus(id, null)
+      useAgentStore.getState().clearSessionData(id)
+      // Clean up team-store per-session state
+      useTeamStore.getState().clearSessionTeam(id)
       dbDeleteSession(id)
     },
 
@@ -331,10 +338,19 @@ export const useChatStore = create<ChatStore>()(
     },
 
     clearAllSessions: () => {
+      const ids = get().sessions.map((s) => s.id)
       set((state) => {
         state.sessions = []
         state.activeSessionId = null
       })
+      // Clean up agent-store and team-store for all sessions
+      const agentState = useAgentStore.getState()
+      const teamState = useTeamStore.getState()
+      for (const id of ids) {
+        agentState.setSessionStatus(id, null)
+        agentState.clearSessionData(id)
+        teamState.clearSessionTeam(id)
+      }
       dbClearAllSessions()
     },
 
@@ -350,6 +366,10 @@ export const useChatStore = create<ChatStore>()(
       })
       dbClearMessages(sessionId)
       dbUpdateSession(sessionId, { title: 'New Conversation', updatedAt: now })
+      useAgentStore.getState().setSessionStatus(sessionId, null)
+      useAgentStore.getState().clearSessionData(sessionId)
+      useTeamStore.getState().clearSessionTeam(sessionId)
+      useTaskStore.getState().clearTasks()
     },
 
     duplicateSession: (sessionId) => {
@@ -420,6 +440,21 @@ export const useChatStore = create<ChatStore>()(
       })
       dbTruncateMessagesFrom(sessionId, fromIndex)
       dbUpdateSession(sessionId, { updatedAt: Date.now() })
+    },
+
+    replaceSessionMessages: (sessionId, messages) => {
+      const now = Date.now()
+      set((state) => {
+        const session = state.sessions.find((s) => s.id === sessionId)
+        if (session) {
+          session.messages = messages
+          session.updatedAt = now
+        }
+      })
+      // Clear old DB messages and write new ones
+      dbClearMessages(sessionId)
+      messages.forEach((msg, i) => dbAddMessage(sessionId, msg, i))
+      dbUpdateSession(sessionId, { updatedAt: now })
     },
 
     addMessage: (sessionId, msg) => {

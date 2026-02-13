@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileText, FilePen, CheckCircle2, XCircle, Copy, Check, Eye, Trash2 } from 'lucide-react'
 import { Badge } from '@renderer/components/ui/badge'
 import { Separator } from '@renderer/components/ui/separator'
@@ -17,6 +18,7 @@ function getFileExtension(filePath: string): string {
 }
 
 export function ArtifactsPanel(): React.JSX.Element {
+  const { t } = useTranslation('cowork')
   const executedToolCalls = useAgentStore((s) => s.executedToolCalls)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
@@ -34,9 +36,9 @@ export function ArtifactsPanel(): React.JSX.Element {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <FileText className="mb-3 size-8 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">No artifacts yet</p>
+        <p className="text-sm text-muted-foreground">{t('artifacts.noArtifacts')}</p>
         <p className="mt-1 text-xs text-muted-foreground/60">
-          Files created or edited by the assistant will appear here
+          {t('artifacts.noArtifactsDesc')}
         </p>
       </div>
     )
@@ -61,19 +63,19 @@ export function ArtifactsPanel(): React.JSX.Element {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Modified Files
+          {t('artifacts.modifiedFiles')}
         </h4>
         <div className="flex items-center gap-1">
           {uniqueFiles.filter((f) => f.ops.has('Write')).length > 0 && (
             <Badge variant="secondary" className="text-[10px] gap-0.5">
               <FileText className="size-2.5" />
-              {uniqueFiles.filter((f) => f.ops.has('Write')).length} new
+              {t('artifacts.new', { count: uniqueFiles.filter((f) => f.ops.has('Write')).length })}
             </Badge>
           )}
           {uniqueFiles.filter((f) => !f.ops.has('Write')).length > 0 && (
             <Badge variant="secondary" className="text-[10px] gap-0.5">
               <FilePen className="size-2.5" />
-              {uniqueFiles.filter((f) => !f.ops.has('Write')).length} edited
+              {t('artifacts.edited', { count: uniqueFiles.filter((f) => !f.ops.has('Write')).length })}
             </Badge>
           )}
         </div>
@@ -93,7 +95,7 @@ export function ArtifactsPanel(): React.JSX.Element {
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/50 transition-colors group"
               onClick={() => handleCopyPath(tc.id, filePath)}
               onDoubleClick={() => useUIStore.getState().openFilePreview(filePath)}
-              title={`${filePath}\nClick to copy path · Double-click to preview`}
+              title={t('artifacts.clickCopyDoublePreview', { path: filePath })}
             >
               {ops.has('Write') ? (
                 <FileText className="size-3.5 shrink-0 text-blue-500" />
@@ -134,7 +136,7 @@ export function ArtifactsPanel(): React.JSX.Element {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Deleted Files
+                {t('artifacts.deletedFiles')}
               </h4>
               <Badge variant="destructive" className="text-[10px] gap-0.5">
                 <Trash2 className="size-2.5" />

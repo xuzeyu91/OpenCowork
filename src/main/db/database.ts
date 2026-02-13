@@ -56,6 +56,16 @@ export function getDb(): Database.Database {
     // Column already exists — ignore
   }
 
+  // Migration: add plugin_id column for plugin-initiated sessions
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN plugin_id TEXT`)
+  } catch {
+    // Column already exists — ignore
+  }
+
+  // Ensure plugin_id index exists
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_plugin ON sessions(plugin_id)`)
+
   return db
 }
 

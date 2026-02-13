@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X, Code2, Eye, RefreshCw, Save, Copy, Check, Bot } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { useUIStore } from '@renderer/stores/ui-store'
@@ -20,6 +21,7 @@ import {
 } from '@renderer/components/ui/alert-dialog'
 
 export function PreviewPanel(): React.JSX.Element {
+  const { t } = useTranslation('layout')
   const state = useUIStore((s) => s.previewPanelState)
   const closePreviewPanel = useUIStore((s) => s.closePreviewPanel)
   const setViewMode = useUIStore((s) => s.setPreviewViewMode)
@@ -91,8 +93,8 @@ export function PreviewPanel(): React.JSX.Element {
   const ViewerComponent = viewerDef?.component
 
   const fileName = isMarkdown
-    ? (state.markdownTitle || 'Markdown Preview')
-    : state.filePath ? state.filePath.split(/[\/]/).pop() || state.filePath : 'Dev Server'
+    ? (state.markdownTitle || t('preview.markdownPreview'))
+    : state.filePath ? state.filePath.split(/[\/]/).pop() || state.filePath : t('preview.devServer')
 
   return (
     <div className="flex min-w-0 flex-1 flex-col border-l bg-background">
@@ -100,7 +102,7 @@ export function PreviewPanel(): React.JSX.Element {
       <div className="flex h-10 items-center gap-2 border-b px-3">
         {isMarkdown && <Bot className="size-3.5 text-violet-500 shrink-0" />}
         <span className="truncate text-xs font-medium">{fileName}</span>
-        {modified && <span className="text-[10px] text-amber-500">modified</span>}
+        {modified && <span className="text-[10px] text-amber-500">{t('preview.modified')}</span>}
         <div className="flex-1" />
 
         {/* View mode toggle (file HTML only) */}
@@ -112,7 +114,7 @@ export function PreviewPanel(): React.JSX.Element {
               className="h-5 gap-1 px-2 text-[10px]"
               onClick={() => setViewMode('preview')}
             >
-              <Eye className="size-3" /> Preview
+              <Eye className="size-3" /> {t('preview.preview')}
             </Button>
             <Button
               variant={state.viewMode === 'code' ? 'secondary' : 'ghost'}
@@ -120,7 +122,7 @@ export function PreviewPanel(): React.JSX.Element {
               className="h-5 gap-1 px-2 text-[10px]"
               onClick={() => setViewMode('code')}
             >
-              <Code2 className="size-3" /> Code
+              <Code2 className="size-3" /> {t('preview.code')}
             </Button>
           </div>
         )}
@@ -129,14 +131,14 @@ export function PreviewPanel(): React.JSX.Element {
         {isMarkdown && (
           <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs" onClick={handleCopyMarkdown}>
             {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3" />}
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? t('preview.copied') : t('action.copy', { ns: 'common' })}
           </Button>
         )}
 
         {/* File-specific buttons */}
         {!isMarkdown && modified && (
           <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs" onClick={handleSave}>
-            <Save className="size-3" /> Save
+            <Save className="size-3" /> {t('action.save', { ns: 'common' })}
           </Button>
         )}
         {!isMarkdown && (
@@ -168,7 +170,7 @@ export function PreviewPanel(): React.JSX.Element {
           />
         ) : (
           <div className="flex size-full items-center justify-center text-sm text-muted-foreground">
-            No viewer available for this file type
+            {t('preview.noViewer')}
           </div>
         )}
       </div>
@@ -177,14 +179,14 @@ export function PreviewPanel(): React.JSX.Element {
       <AlertDialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogTitle>{t('preview.unsavedChanges')}</AlertDialogTitle>
             <AlertDialogDescription>
-              You have unsaved changes to {fileName}. What would you like to do?
+              {t('preview.unsavedChangesDesc', { fileName })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleSaveDialogDiscard}>Discard</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSaveDialogConfirm}>Save</AlertDialogAction>
+            <AlertDialogCancel onClick={handleSaveDialogDiscard}>{t('preview.discard')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSaveDialogConfirm}>{t('action.save', { ns: 'common' })}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

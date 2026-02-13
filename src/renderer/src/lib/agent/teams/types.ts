@@ -1,4 +1,5 @@
 import type { ToolCallState } from '../types'
+import type { TokenUsage } from '../../api/types'
 
 // --- Team Member ---
 
@@ -15,6 +16,8 @@ export interface TeamMember {
   streamingText: string
   startedAt: number
   completedAt: number | null
+  /** Accumulated token usage across all iterations of this teammate's agent loop */
+  usage?: TokenUsage
 }
 
 // --- Team Task ---
@@ -29,6 +32,8 @@ export interface TeamTask {
   owner: string | null
   dependsOn: string[]
   activeForm?: string
+  /** Final report submitted by the teammate when completing the task */
+  report?: string
 }
 
 // --- Team Message ---

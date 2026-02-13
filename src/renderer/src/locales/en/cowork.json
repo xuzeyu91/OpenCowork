@@ -1,0 +1,109 @@
+{
+  "context": {
+    "workingFolder": "Working Folder",
+    "clickToCopy": "Click to copy path",
+    "changeFolder": "Change Folder",
+    "open": "Open",
+    "selectFolder": "Select Working Folder",
+    "sessionInfo": "Session Info",
+    "created": "Created {{time}}",
+    "toolCalls": "{{count}} tool calls",
+    "subAgentRuns": "{{count}} SubAgent runs",
+    "autoApproved": "Auto-approved: {{count}}",
+    "noContext": "No context loaded",
+    "noContextDesc": "Select a working folder to give the assistant access to your project"
+  },
+  "steps": {
+    "noTasks": "No tasks yet",
+    "noTasksDesc": "Tasks will appear here when the assistant creates a plan",
+    "progress": "Progress",
+    "teamProgress": "Team Progress",
+    "agentWorking": "Agent is working...",
+    "teamWorking": "Team is working..."
+  },
+  "team": {
+    "noActiveTeam": "No active team",
+    "noActiveTeamDesc": "Ask the assistant to create a team for parallel collaboration",
+    "membersTab": "Members",
+    "messagesTab": "Messages",
+    "broadcastPlaceholder": "Broadcast to all teammates...",
+    "messagePlaceholder": "Message {{name}}...",
+    "iter": "Iter {{count}}",
+    "toolCalls": "{{count}} tool calls",
+    "thinking": "Thinking",
+    "workingStatus": "Working...",
+    "toolCallsLabel": "Tool Calls",
+    "stopMember": "Stop {{name}}",
+    "lastOutput": "Last Output",
+    "workingCount": "{{count}} working",
+    "stopAllTeam": "Stop all teammates and clear team",
+    "noTeam": "No active team",
+    "noTeamDesc": "Ask the assistant to create a team for parallel collaboration",
+    "working": "Working...",
+    "members": "Members",
+    "messages": "Messages",
+    "stopAll": "Stop all teammates and clear team",
+    "showLess": "Show less",
+    "showMore": "Show more"
+  },
+  "skills": {
+    "noSkills": "No skills loaded",
+    "noSkillsDesc": "Installed plugin skills will appear here",
+    "builtInTools": "Built-in Tools",
+    "fileSystem": "File System",
+    "search": "Search",
+    "shell": "Shell",
+    "taskManagement": "Task Management",
+    "other": "Other",
+    "approval": "approval",
+    "agent": "agent",
+    "teamLabel": "team",
+    "taskSubAgents": "Task (Sub-Agents)",
+    "teamTools": "Team Tools",
+    "maxIter": "max {{count}} iter"
+  },
+  "artifacts": {
+    "noArtifacts": "No artifacts yet",
+    "noArtifactsDesc": "Files created or edited by the assistant will appear here",
+    "modifiedFiles": "Modified Files",
+    "deletedFiles": "Deleted Files",
+    "new": "{{count}} new",
+    "edited": "{{count}} edited",
+    "clickCopyDoublePreview": "{{path}}\nClick to copy path · Double-click to preview"
+  },
+  "fileTree": {
+    "selectFolder": "Select a working folder to view files",
+    "newFile": "New File",
+    "newFolder": "New Folder",
+    "deleteConfirm": "Delete {{type}} \"{{name}}\"?",
+    "folder": "folder",
+    "file": "file",
+    "copyPath": "Copy path",
+    "insertPath": "Insert path into chat",
+    "closePreview": "Close preview",
+    "unableToRead": "(Unable to read file)",
+    "stats": "{{folders}} folders · {{files}} files"
+  },
+  "teammateCard": {
+    "status": {
+      "working": "working",
+      "idle": "idle",
+      "waiting": "waiting",
+      "stopped": "stopped"
+    },
+    "iter": "iter {{count}}",
+    "calls": "{{count}} calls",
+    "tools": "Tools",
+    "working": "Working...",
+    "message": "Message",
+    "stop": "Stop"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "defaultMessage": "An unexpected error occurred in the application.",
+    "tryAgain": "Try Again",
+    "reloadApp": "Reload App",
+    "copyError": "Copy Error",
+    "errorDetails": "Error details"
+  }
+}

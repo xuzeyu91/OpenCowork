@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { nanoid } from 'nanoid'
 import { toast } from 'sonner'
 import { useChatStore } from '@renderer/stores/chat-store'
@@ -12,20 +12,188 @@ import { buildSystemPrompt } from '@renderer/lib/agent/system-prompt'
 import { subAgentEvents } from '@renderer/lib/agent/sub-agents/events'
 import { abortAllTeammates } from '@renderer/lib/agent/teams/teammate-runner'
 import { TEAM_TOOL_NAMES } from '@renderer/lib/agent/teams/register'
+import { teamEvents } from '@renderer/lib/agent/teams/events'
+import { useTeamStore } from '@renderer/stores/team-store'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { createProvider } from '@renderer/lib/api/provider'
 import { generateSessionTitle } from '@renderer/lib/api/generate-title'
-import type { UnifiedMessage, ProviderConfig, TokenUsage, RequestDebugInfo, ContentBlock } from '@renderer/lib/api/types'
+import type {
+  UnifiedMessage,
+  ProviderConfig,
+  TokenUsage,
+  RequestDebugInfo,
+  ContentBlock,
+  RequestTiming
+} from '@renderer/lib/api/types'
 import { setLastDebugInfo } from '@renderer/lib/debug-store'
 import type { ImageAttachment } from '@renderer/components/chat/InputArea'
 import type { AgentLoopConfig } from '@renderer/lib/agent/types'
 import { ApiStreamError } from '@renderer/lib/ipc/api-stream'
+import { compressMessages } from '@renderer/lib/agent/context-compression'
+import type { CompressionConfig } from '@renderer/lib/agent/context-compression'
+import { usePluginStore } from '@renderer/stores/plugin-store'
+import { registerPluginTools, unregisterPluginTools, isPluginToolsRegistered } from '@renderer/lib/plugins/plugin-tools'
 
 /** Per-session abort controllers — module-level so concurrent sessions don't overwrite each other */
 const sessionAbortControllers = new Map<string, AbortController>()
 
+// ── Team lead auto-trigger: teammate messages → new agent turn ──
+
+/** Module-level ref to the latest sendMessage function from the hook */
+let _sendMessageFn: ((text: string, images?: ImageAttachment[], source?: 'team') => Promise<void>) | null = null
+
+/** Queue of teammate messages to lead waiting to be processed */
+const pendingLeadMessages: { from: string; content: string }[] = []
+
+/** Whether the global team-message listener is registered */
+let _teamLeadListenerActive = false
+
+/** Counter for consecutive auto-triggered turns (reset on user-initiated sendMessage) */
+let _autoTriggerCount = 0
+const MAX_AUTO_TRIGGERS = 10
+
+/** Debounce timer for batching teammate reports before draining */
+let _drainTimer: ReturnType<typeof setTimeout> | null = null
+const DRAIN_DEBOUNCE_MS = 800
+
+/** Schedule a debounced drain — collects reports arriving within the window into one batch */
+function scheduleDrain(): void {
+  if (_drainTimer) clearTimeout(_drainTimer)
+  _drainTimer = setTimeout(() => {
+    _drainTimer = null
+    drainLeadMessages()
+  }, DRAIN_DEBOUNCE_MS)
+}
+
+/** Global pause flag — set by stopStreaming to halt all auto-triggering */
+let _autoTriggerPaused = false
+
+/**
+ * Reset the team auto-trigger state. Called from stopStreaming
+ * to break the dead loop: abort → completion message → new turn → re-spawn.
+ */
+export function resetTeamAutoTrigger(): void {
+  pendingLeadMessages.length = 0
+  _autoTriggerCount = 0
+  _autoTriggerPaused = true
+}
+
+/**
+ * Set up a persistent listener on teamEvents that captures messages
+ * addressed to "lead" and auto-triggers a new main agent turn.
+ *
+ * Called once; idempotent.
+ */
+function ensureTeamLeadListener(): void {
+  if (_teamLeadListenerActive) return
+  _teamLeadListenerActive = true
+
+  teamEvents.on((event) => {
+    if (event.type === 'team_message' && event.message.to === 'lead') {
+      pendingLeadMessages.push({ from: event.message.from, content: event.message.content })
+      scheduleDrain()
+    }
+    // Clear queue and reset counter when team is deleted
+    if (event.type === 'team_end') {
+      pendingLeadMessages.length = 0
+      _autoTriggerCount = 0
+      if (_drainTimer) { clearTimeout(_drainTimer); _drainTimer = null }
+    }
+  })
+}
+
+/**
+ * Drain ALL pending lead messages as a single batched message.
+ * Appends team progress info so the lead knows the overall status.
+ * Skips if the active session's agent is already running.
+ */
+function drainLeadMessages(): void {
+  if (pendingLeadMessages.length === 0) return
+  if (!_sendMessageFn) return
+  if (_autoTriggerPaused) return
+
+  // Safety: stop auto-triggering after too many consecutive turns
+  if (_autoTriggerCount >= MAX_AUTO_TRIGGERS) {
+    console.warn(
+      `[Team] Auto-trigger limit reached (${MAX_AUTO_TRIGGERS}). ` +
+        `${pendingLeadMessages.length} messages pending. Waiting for user input.`
+    )
+    return
+  }
+
+  const activeSessionId = useChatStore.getState().activeSessionId
+  if (!activeSessionId) return
+
+  const status = useAgentStore.getState().runningSessions[activeSessionId]
+  if (status === 'running') return // will be retried via scheduleDrain from finally block
+
+  // Batch all pending messages into one combined message
+  const batch = pendingLeadMessages.splice(0, pendingLeadMessages.length)
+  const parts = batch.map((msg) => `[Team message from ${msg.from}]:\n${msg.content}`)
+
+  // Append team progress summary so the lead can decide whether to wait or summarize
+  const team = useTeamStore.getState().activeTeam
+  if (team) {
+    const total = team.tasks.length
+    const completed = team.tasks.filter((t) => t.status === 'completed').length
+    const inProgress = team.tasks.filter((t) => t.status === 'in_progress').length
+    const pending = team.tasks.filter((t) => t.status === 'pending').length
+    parts.push(
+      `\n---\n**Team Progress**: ${completed}/${total} tasks completed` +
+        (inProgress > 0 ? `, ${inProgress} in progress` : '') +
+        (pending > 0 ? `, ${pending} pending` : '') +
+        (completed < total
+          ? '. Other teammates are still working — review the report(s) above, then end your turn and wait for remaining reports unless immediate action is needed.'
+          : '. All tasks completed — compile the final summary from all reports and then call TeamDelete to clean up the team.')
+    )
+  }
+
+  const text = parts.join('\n\n')
+  _autoTriggerCount++
+  _sendMessageFn(text, undefined, 'team')
+}
+
+/**
+ * Abort all running tasks for a specific session (agent loop + teammates).
+ * Safe to call even if the session has nothing running.
+ */
+export function abortSession(sessionId: string): void {
+  // Abort session agent loop
+  const ac = sessionAbortControllers.get(sessionId)
+  if (ac) {
+    ac.abort()
+    sessionAbortControllers.delete(sessionId)
+  }
+  // Clean up streaming / status state
+  useChatStore.getState().setStreamingMessageId(sessionId, null)
+  useAgentStore.getState().setSessionStatus(sessionId, null)
+
+  // If the active team belongs to this session, abort all teammates
+  const team = useTeamStore.getState().activeTeam
+  if (team?.sessionId === sessionId) {
+    resetTeamAutoTrigger()
+    abortAllTeammates()
+    useAgentStore.getState().clearPendingApprovals()
+  }
+
+  // Derive global isRunning from remaining running sessions
+  const hasOtherRunning = Object.values(useAgentStore.getState().runningSessions).some(
+    (s) => s === 'running'
+  )
+  if (!hasOtherRunning) {
+    useAgentStore.getState().setRunning(false)
+    useAgentStore.getState().abort()
+  }
+}
+
 export function useChatActions() {
-  const sendMessage = useCallback(async (text: string, images?: ImageAttachment[]) => {
+  const sendMessage = useCallback(async (text: string, images?: ImageAttachment[], source?: 'team') => {
+    // Reset auto-trigger counter and unpause when user manually sends a message
+    if (source !== 'team') {
+      _autoTriggerCount = 0
+      _autoTriggerPaused = false
+    }
+
     const chatStore = useChatStore.getState()
     const settings = useSettingsStore.getState()
     const agentStore = useAgentStore.getState()
@@ -38,31 +206,33 @@ export function useChatActions() {
     const thinkingEnabled = settings.thinkingEnabled && !!activeModelThinkingConfig
     const baseProviderConfig: ProviderConfig | null = providerConfig
       ? {
-        ...providerConfig,
-        maxTokens: effectiveMaxTokens,
-        temperature: settings.temperature,
-        systemPrompt: settings.systemPrompt || undefined,
-        thinkingEnabled,
-        thinkingConfig: activeModelThinkingConfig,
-      }
-      : settings.apiKey
-        ? {
-          type: settings.provider,
-          apiKey: settings.apiKey,
-          baseUrl: settings.baseUrl || undefined,
-          model: settings.model,
+          ...providerConfig,
           maxTokens: effectiveMaxTokens,
           temperature: settings.temperature,
           systemPrompt: settings.systemPrompt || undefined,
           thinkingEnabled,
           thinkingConfig: activeModelThinkingConfig,
+          reasoningEffort: settings.reasoningEffort
         }
+      : settings.apiKey
+        ? {
+            type: settings.provider,
+            apiKey: settings.apiKey,
+            baseUrl: settings.baseUrl || undefined,
+            model: settings.model,
+            maxTokens: effectiveMaxTokens,
+            temperature: settings.temperature,
+            systemPrompt: settings.systemPrompt || undefined,
+            thinkingEnabled,
+            thinkingConfig: activeModelThinkingConfig,
+            reasoningEffort: settings.reasoningEffort
+          }
         : null
 
     if (!baseProviderConfig || !baseProviderConfig.apiKey) {
       toast.error('API key required', {
         description: 'Please configure an AI provider in Settings',
-        action: { label: 'Open Settings', onClick: () => uiStore.openSettingsPage('provider') },
+        action: { label: 'Open Settings', onClick: () => uiStore.openSettingsPage('provider') }
       })
       return
     }
@@ -72,39 +242,46 @@ export function useChatActions() {
     if (!sessionId) {
       sessionId = chatStore.createSession(uiStore.mode)
     }
+    baseProviderConfig.sessionId = sessionId
 
     // Add user message (multi-modal when images attached)
-    const userContent: string | ContentBlock[] = images && images.length > 0
-      ? [
-          ...images.map((img) => {
-            const base64 = img.dataUrl.replace(/^data:[^;]+;base64,/, '')
-            return {
-              type: 'image' as const,
-              source: { type: 'base64' as const, mediaType: img.mediaType, data: base64 },
-            }
-          }),
-          ...(text ? [{ type: 'text' as const, text }] : []),
-        ]
-      : text
+    const userContent: string | ContentBlock[] =
+      images && images.length > 0
+        ? [
+            ...images.map((img) => {
+              const base64 = img.dataUrl.replace(/^data:[^;]+;base64,/, '')
+              return {
+                type: 'image' as const,
+                source: { type: 'base64' as const, mediaType: img.mediaType, data: base64 }
+              }
+            }),
+            ...(text ? [{ type: 'text' as const, text }] : [])
+          ]
+        : text
     const userMsg: UnifiedMessage = {
       id: nanoid(),
       role: 'user',
       content: userContent,
       createdAt: Date.now(),
+      ...(source && { source })
     }
     chatStore.addMessage(sessionId, userMsg)
 
-    // Auto-title: fire-and-forget AI title + icon generation for the first message
+    // Auto-title: fire-and-forget AI title + icon generation for the first message (skip for team notifications)
     const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)
     if (session && session.title === 'New Conversation') {
       const capturedSessionId = sessionId
-      generateSessionTitle(text).then((result) => {
-        if (result) {
-          const store = useChatStore.getState()
-          store.updateSessionTitle(capturedSessionId, result.title)
-          store.updateSessionIcon(capturedSessionId, result.icon)
-        }
-      }).catch(() => { /* keep default title on failure */ })
+      generateSessionTitle(text)
+        .then((result) => {
+          if (result) {
+            const store = useChatStore.getState()
+            store.updateSessionTitle(capturedSessionId, result.title)
+            store.updateSessionIcon(capturedSessionId, result.icon)
+          }
+        })
+        .catch(() => {
+          /* keep default title on failure */
+        })
     }
 
     // Create assistant placeholder message
@@ -113,7 +290,7 @@ export function useChatActions() {
       id: assistantMsgId,
       role: 'assistant',
       content: '',
-      createdAt: Date.now(),
+      createdAt: Date.now()
     }
     chatStore.addMessage(sessionId, assistantMsg)
     chatStore.setStreamingMessageId(sessionId, assistantMsgId)
@@ -131,11 +308,13 @@ export function useChatActions() {
       // Simple chat mode: single API call, no tools
       const chatSystemPrompt = [
         'You are OpenCowork, a helpful AI assistant. Be concise, accurate, and friendly.',
-        'Before responding, follow this thinking process: (1) Understand — identify what the user truly needs, not just the literal words; consider context and implicit constraints. (2) Expand — think about the best way to solve the problem, consider edge cases, potential pitfalls, and better alternatives the user may not have thought of. (3) Validate — before finalizing, verify your answer is logically consistent: does it actually help the user achieve their stated goal? Check the full causal chain — if the user follows your advice, will they accomplish what they want? Watch for hidden contradictions (e.g. if someone needs to wash their car, they must bring the car — suggesting they walk defeats the purpose). (4) Respond — deliver a well-reasoned, logically sound answer that best fits the user\'s real needs. Think first, answer second — never rush to conclusions.',
+        "Before responding, follow this thinking process: (1) Understand — identify what the user truly needs, not just the literal words; consider context and implicit constraints. (2) Expand — think about the best way to solve the problem, consider edge cases, potential pitfalls, and better alternatives the user may not have thought of. (3) Validate — before finalizing, verify your answer is logically consistent: does it actually help the user achieve their stated goal? Check the full causal chain — if the user follows your advice, will they accomplish what they want? Watch for hidden contradictions (e.g. if someone needs to wash their car, they must bring the car — suggesting they walk defeats the purpose). (4) Respond — deliver a well-reasoned, logically sound answer that best fits the user's real needs. Think first, answer second — never rush to conclusions.",
         'CRITICAL RULE: Before giving your final answer, always ask yourself: "If the user follows my advice step by step, will they actually achieve their stated goal?" If the answer is no, your response has a logical flaw — stop and reconsider. The user\'s goal defines the constraints; never give advice that makes the goal impossible.',
         'Use markdown formatting in your responses. Use code blocks with language identifiers for code.',
-        settings.systemPrompt ? `\n## Additional Instructions\n${settings.systemPrompt}` : '',
-      ].filter(Boolean).join('\n')
+        settings.systemPrompt ? `\n## Additional Instructions\n${settings.systemPrompt}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n')
       // NOTE: thinkingEnabled is handled below when building the final config
       const chatConfig: ProviderConfig = { ...baseProviderConfig, systemPrompt: chatSystemPrompt }
       agentStore.setSessionStatus(sessionId, 'running')
@@ -148,8 +327,6 @@ export function useChatActions() {
     } else {
       // Cowork / Code mode: agent loop with tools
       const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)
-      // Load available skills from ~/.open-cowork/skills/
-      const skills = await ipcClient.invoke('skills:list') as { name: string; description: string }[]
 
       // Filter out team tools when the feature is disabled
       const allToolDefs = toolRegistry.getDefinitions()
@@ -157,24 +334,82 @@ export function useChatActions() {
         ? allToolDefs
         : allToolDefs.filter((t) => !TEAM_TOOL_NAMES.has(t.name))
 
+      // Dynamic plugin tool registration based on active plugins
+      const activePlugins = usePluginStore.getState().getActivePlugins()
+      if (activePlugins.length > 0 && !isPluginToolsRegistered()) {
+        registerPluginTools()
+      } else if (activePlugins.length === 0 && isPluginToolsRegistered()) {
+        unregisterPluginTools()
+      }
+
+      // Re-fetch tool defs after potential plugin tool registration
+      const finalToolDefs = activePlugins.length > 0
+        ? toolRegistry.getDefinitions()
+        : effectiveToolDefs
+      const finalEffectiveToolDefs = settings.teamToolsEnabled
+        ? finalToolDefs
+        : finalToolDefs.filter((t) => !TEAM_TOOL_NAMES.has(t.name))
+
+      // Build plugin info for system prompt — inject plugin metadata + per-plugin system prompts
+      let userPrompt = settings.systemPrompt || ''
+      if (activePlugins.length > 0) {
+        const pluginLines: string[] = ['\n## Active Plugins']
+        for (const p of activePlugins) {
+          pluginLines.push(`- **${p.name}** (plugin_id: \`${p.id}\`, type: ${p.type})`)
+          if (p.userSystemPrompt?.trim()) {
+            pluginLines.push(`  Plugin instructions: ${p.userSystemPrompt.trim()}`)
+          }
+        }
+        pluginLines.push(
+          '',
+          'Use the plugin_id parameter when calling Plugin* tools (PluginSendMessage, PluginReplyMessage, PluginGetGroupMessages, PluginListGroups, PluginSummarizeGroup).',
+          'Always confirm with the user before sending messages on their behalf.'
+        )
+        const pluginSection = pluginLines.join('\n')
+        userPrompt = userPrompt ? `${userPrompt}\n${pluginSection}` : pluginSection
+      }
+
       const agentSystemPrompt = buildSystemPrompt({
         mode: mode as 'cowork' | 'code',
         workingFolder: session?.workingFolder,
-        userSystemPrompt: settings.systemPrompt || undefined,
-        skills: Array.isArray(skills) ? skills : [],
-        toolDefs: effectiveToolDefs,
+        userSystemPrompt: userPrompt || undefined,
+        toolDefs: finalEffectiveToolDefs
       })
       const agentProviderConfig: ProviderConfig = {
         ...baseProviderConfig,
-        systemPrompt: agentSystemPrompt,
+        systemPrompt: agentSystemPrompt
       }
+      // Context compression setup
+      const activeModelCfg = useProviderStore.getState().getActiveModelConfig()
+      const compressionConfig: CompressionConfig | null =
+        settings.contextCompressionEnabled && activeModelCfg?.contextLength
+          ? { enabled: true, contextLength: activeModelCfg.contextLength, threshold: 0.8, preCompressThreshold: 0.65 }
+          : null
+
       const loopConfig: AgentLoopConfig = {
         maxIterations: 20,
         provider: agentProviderConfig,
-        tools: effectiveToolDefs,
+        tools: finalEffectiveToolDefs,
         systemPrompt: agentSystemPrompt,
         workingFolder: session?.workingFolder,
         signal: abortController.signal,
+        ...(compressionConfig && {
+          contextCompression: {
+            config: compressionConfig,
+            compressFn: async (msgs) => {
+              const { messages: compressed } = await compressMessages(
+                msgs,
+                agentProviderConfig, // use main model
+                abortController.signal
+              )
+              // Sync compressed messages to chat store
+              if (sessionId) {
+                useChatStore.getState().replaceSessionMessages(sessionId, compressed)
+              }
+              return compressed
+            }
+          }
+        })
       }
 
       agentStore.setRunning(true)
@@ -183,14 +418,18 @@ export function useChatActions() {
 
       // Accumulate usage across all iterations + SubAgent runs
       const accumulatedUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 }
+      const requestTimings: RequestTiming[] = []
+      const loopStartedAt = Date.now()
 
       // Subscribe to SubAgent events during agent loop
       const unsubSubAgent = subAgentEvents.on((event) => {
-        useAgentStore.getState().handleSubAgentEvent(event)
+        useAgentStore.getState().handleSubAgentEvent(event, sessionId!)
         // Accumulate SubAgent token usage into the parent message
         if (event.type === 'sub_agent_end' && event.result?.usage) {
           mergeUsage(accumulatedUsage, event.result.usage)
-          useChatStore.getState().updateMessage(sessionId!, assistantMsgId, { usage: { ...accumulatedUsage } })
+          useChatStore
+            .getState()
+            .updateMessage(sessionId!, assistantMsgId, { usage: { ...accumulatedUsage } })
         }
       })
 
@@ -199,7 +438,7 @@ export function useChatActions() {
 
       // Request notification permission on first agent run
       if (Notification.permission === 'default') {
-        Notification.requestPermission().catch(() => { })
+        Notification.requestPermission().catch(() => {})
       }
 
       try {
@@ -226,51 +465,67 @@ export function useChatActions() {
 
           switch (event.type) {
             case 'thinking_delta':
-              useChatStore.getState().appendThinkingDelta(sessionId!, assistantMsgId, event.thinking)
+              useChatStore
+                .getState()
+                .appendThinkingDelta(sessionId!, assistantMsgId, event.thinking)
               break
 
             case 'text_delta':
-              if (!thinkingDone) { thinkingDone = true; useChatStore.getState().completeThinking(sessionId!, assistantMsgId) }
+              if (!thinkingDone) {
+                thinkingDone = true
+                useChatStore.getState().completeThinking(sessionId!, assistantMsgId)
+              }
               useChatStore.getState().appendTextDelta(sessionId!, assistantMsgId, event.text)
               break
 
             case 'tool_use_streaming_start':
-              if (!thinkingDone) { thinkingDone = true; useChatStore.getState().completeThinking(sessionId!, assistantMsgId) }
+              if (!thinkingDone) {
+                thinkingDone = true
+                useChatStore.getState().completeThinking(sessionId!, assistantMsgId)
+              }
               // Immediately show tool card with name while args are still streaming
               useChatStore.getState().appendToolUse(sessionId!, assistantMsgId, {
                 type: 'tool_use',
                 id: event.toolCallId,
                 name: event.toolName,
-                input: {},
+                input: {}
               })
               useAgentStore.getState().addToolCall({
                 id: event.toolCallId,
                 name: event.toolName,
                 input: {},
                 status: 'streaming',
-                requiresApproval: false,
+                requiresApproval: false
               })
               break
 
             case 'tool_use_args_delta':
               // Real-time partial args update via partial-json parsing
-              useChatStore.getState().updateToolUseInput(
-                sessionId!, assistantMsgId,
-                event.toolCallId, event.partialInput,
-              )
+              useChatStore
+                .getState()
+                .updateToolUseInput(
+                  sessionId!,
+                  assistantMsgId,
+                  event.toolCallId,
+                  event.partialInput
+                )
               useAgentStore.getState().updateToolCall(event.toolCallId, {
-                input: event.partialInput,
+                input: event.partialInput
               })
               break
 
             case 'tool_use_generated':
               // Args fully streamed — update the existing block's input (final)
-              useChatStore.getState().updateToolUseInput(
-                sessionId!, assistantMsgId,
-                event.toolUseBlock.id, event.toolUseBlock.input,
-              )
+              useChatStore
+                .getState()
+                .updateToolUseInput(
+                  sessionId!,
+                  assistantMsgId,
+                  event.toolUseBlock.id,
+                  event.toolUseBlock.input
+                )
               useAgentStore.getState().updateToolCall(event.toolUseBlock.id, {
-                input: event.toolUseBlock.input,
+                input: event.toolUseBlock.input
               })
               break
 
@@ -281,7 +536,8 @@ export function useChatActions() {
             case 'tool_call_approval_needed': {
               // Skip adding to pendingToolCalls when auto-approve is active —
               // the callback will return true immediately, so no dialog needed.
-              const willAutoApprove = useSettingsStore.getState().autoApprove ||
+              const willAutoApprove =
+                useSettingsStore.getState().autoApprove ||
                 useAgentStore.getState().approvedToolNames.includes(event.toolCall.name)
               if (!willAutoApprove) {
                 useAgentStore.getState().addToolCall(event.toolCall)
@@ -294,7 +550,7 @@ export function useChatActions() {
                 status: event.toolCall.status,
                 output: event.toolCall.output,
                 error: event.toolCall.error,
-                completedAt: event.toolCall.completedAt,
+                completedAt: event.toolCall.completedAt
               })
               break
 
@@ -311,28 +567,60 @@ export function useChatActions() {
                     type: 'tool_result' as const,
                     toolUseId: tr.toolUseId,
                     content: tr.content,
-                    isError: tr.isError,
+                    isError: tr.isError
                   })),
-                  createdAt: Date.now(),
+                  createdAt: Date.now()
                 }
                 useChatStore.getState().addMessage(sessionId!, toolResultMsg)
               }
               break
 
             case 'message_end':
-              if (!thinkingDone) { thinkingDone = true; useChatStore.getState().completeThinking(sessionId!, assistantMsgId) }
+              if (!thinkingDone) {
+                thinkingDone = true
+                useChatStore.getState().completeThinking(sessionId!, assistantMsgId)
+              }
               if (event.usage) {
                 mergeUsage(accumulatedUsage, event.usage)
                 // contextTokens = last API call's input tokens (overwrite, not accumulate)
                 accumulatedUsage.contextTokens = event.usage.inputTokens
-                useChatStore.getState().updateMessage(sessionId!, assistantMsgId, { usage: { ...accumulatedUsage } })
+              }
+              if (event.timing) {
+                requestTimings.push(event.timing)
+                accumulatedUsage.requestTimings = [...requestTimings]
+              }
+              if (event.usage || event.timing) {
+                useChatStore
+                  .getState()
+                  .updateMessage(sessionId!, assistantMsgId, { usage: { ...accumulatedUsage } })
               }
               break
+
+            case 'loop_end': {
+              accumulatedUsage.totalDurationMs = Date.now() - loopStartedAt
+              if (requestTimings.length > 0) {
+                accumulatedUsage.requestTimings = [...requestTimings]
+              }
+              useChatStore
+                .getState()
+                .updateMessage(sessionId!, assistantMsgId, { usage: { ...accumulatedUsage } })
+              break
+            }
 
             case 'request_debug':
               if (useSettingsStore.getState().devMode && event.debugInfo) {
                 setLastDebugInfo(assistantMsgId, event.debugInfo)
               }
+              break
+
+            case 'context_compression_start':
+              toast.info('正在压缩上下文...', { description: '历史消息将被压缩为记忆摘要' })
+              break
+
+            case 'context_compressed':
+              toast.success('上下文已压缩', {
+                description: `${event.originalCount} 条消息 → ${event.newCount} 条（核心信息已保留）`
+              })
               break
 
             case 'error':
@@ -347,7 +635,9 @@ export function useChatActions() {
           const errMsg = err instanceof Error ? err.message : String(err)
           console.error('[Agent Loop Exception]', err)
           toast.error('Agent failed', { description: errMsg })
-          useChatStore.getState().appendTextDelta(sessionId!, assistantMsgId, `\n\n> **Error:** ${errMsg}`)
+          useChatStore
+            .getState()
+            .appendTextDelta(sessionId!, assistantMsgId, `\n\n> **Error:** ${errMsg}`)
           if (err instanceof ApiStreamError && useSettingsStore.getState().devMode) {
             setLastDebugInfo(assistantMsgId, err.debugInfo as RequestDebugInfo)
           }
@@ -358,15 +648,35 @@ export function useChatActions() {
         chatStore.setStreamingMessageId(sessionId, null)
         sessionAbortControllers.delete(sessionId)
         // Derive global isRunning from remaining running sessions
-        const hasOtherRunning = Object.values(useAgentStore.getState().runningSessions).some((s) => s === 'running')
+        const hasOtherRunning = Object.values(useAgentStore.getState().runningSessions).some(
+          (s) => s === 'running'
+        )
         agentStore.setRunning(hasOtherRunning)
         // Notify when agent finishes and window is not focused
         if (!document.hasFocus() && Notification.permission === 'granted') {
           new Notification('OpenCowork', { body: 'Agent finished working', silent: true })
         }
+
+        // If there's an active team, set up the lead message listener
+        // and drain any messages that arrived while the loop was running.
+        if (useTeamStore.getState().activeTeam) {
+          ensureTeamLeadListener()
+          // Schedule a debounced drain to batch reports that arrive close together
+          scheduleDrain()
+        }
       }
     }
   }, [])
+
+  useEffect(() => {
+    ensureTeamLeadListener()
+    if (useTeamStore.getState().activeTeam) {
+      scheduleDrain()
+    }
+  }, [])
+
+  // Keep module-level ref updated for team lead auto-trigger
+  _sendMessageFn = sendMessage
 
   const stopStreaming = useCallback(() => {
     // Stop the active session's agent
@@ -382,13 +692,17 @@ export function useChatActions() {
     }
     // Only do global abort (which denies ALL pending approvals) when
     // no other sessions are still running — prevents cross-session interference.
-    const otherRunning = Object.entries(useAgentStore.getState().runningSessions)
-      .some(([id, s]) => id !== activeId && s === 'running')
+    const otherRunning = Object.entries(useAgentStore.getState().runningSessions).some(
+      ([id, s]) => id !== activeId && s === 'running'
+    )
     if (!otherRunning) {
       useAgentStore.getState().setRunning(false)
       useAgentStore.getState().abort()
     }
-    // Also stop all running teammate agent loops
+    // Reset team auto-trigger BEFORE aborting teammates.
+    // abortAllTeammates() causes each teammate's finally block to run,
+    // and we must ensure the queue is paused so no new turns are triggered.
+    resetTeamAutoTrigger()
     abortAllTeammates()
   }, [])
 
@@ -404,28 +718,121 @@ export function useChatActions() {
     }
   }, [sendMessage])
 
-  const editAndResend = useCallback(async (newContent: string) => {
-    const chatStore = useChatStore.getState()
-    const sessionId = chatStore.activeSessionId
-    if (!sessionId) return
-    const messages = chatStore.getSessionMessages(sessionId)
-    // Find the last real user message (has text content, not just tool_result blocks)
-    let editIdx = -1
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i]
-      if (m.role === 'user') {
-        if (typeof m.content === 'string') { editIdx = i; break }
-        if (m.content.some((b) => b.type === 'text')) { editIdx = i; break }
+  const editAndResend = useCallback(
+    async (newContent: string) => {
+      stopStreaming()
+      const chatStore = useChatStore.getState()
+      const sessionId = chatStore.activeSessionId
+      if (!sessionId) return
+      const messages = chatStore.getSessionMessages(sessionId)
+      // Find the last real user message (has text content, not just tool_result blocks)
+      let editIdx = -1
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i]
+        if (m.role === 'user') {
+          if (typeof m.content === 'string') {
+            editIdx = i
+            break
+          }
+          if (m.content.some((b) => b.type === 'text')) {
+            editIdx = i
+            break
+          }
+        }
       }
-    }
-    if (editIdx < 0) return
-    // Truncate from the edited message onward (removes it + all subsequent messages)
-    chatStore.truncateMessagesFrom(sessionId, editIdx)
-    // Re-send with edited content
-    await sendMessage(newContent)
-  }, [sendMessage])
+      if (editIdx < 0) return
+      // Truncate from the edited message onward (removes it + all subsequent messages)
+      chatStore.truncateMessagesFrom(sessionId, editIdx)
+      // Re-send with edited content
+      await sendMessage(newContent)
+    },
+    [sendMessage]
+  )
 
-  return { sendMessage, stopStreaming, retryLastMessage, editAndResend }
+  const manualCompressContext = useCallback(async (focusPrompt?: string) => {
+    const chatStore = useChatStore.getState()
+    const agentStore = useAgentStore.getState()
+    const sessionId = chatStore.activeSessionId
+    if (!sessionId) {
+      toast.error('无法压缩', { description: '没有活跃的会话' })
+      return
+    }
+
+    // Limitation 1: agent must not be running
+    const sessionStatus = agentStore.runningSessions[sessionId]
+    if (sessionStatus === 'running') {
+      toast.error('无法压缩', { description: 'Agent 正在运行中，请等待完成后再手动压缩' })
+      return
+    }
+
+    const messages = chatStore.getSessionMessages(sessionId)
+    const MIN_MESSAGES = 8
+
+    // Limitation 2: minimum message count
+    if (messages.length < MIN_MESSAGES) {
+      toast.error('无法压缩', { description: `至少需要 ${MIN_MESSAGES} 条消息才能进行压缩（当前 ${messages.length} 条）` })
+      return
+    }
+
+    // Limitation 3: check if there's already a compressed summary as the 2nd message — avoid double-compressing too soon
+    const hasRecentSummary = messages.length > 1 &&
+      typeof messages[1]?.content === 'string' &&
+      messages[1].content.startsWith('[Context Memory')
+    if (hasRecentSummary && messages.length < MIN_MESSAGES + 4) {
+      toast.error('无法压缩', { description: '上次压缩后消息过少，请继续对话后再尝试' })
+      return
+    }
+
+    // Build provider config (same as sendMessage)
+    const settings = useSettingsStore.getState()
+    const providerConfig = useProviderStore.getState().getActiveProviderConfig()
+    const effectiveMaxTokens = useProviderStore.getState().getEffectiveMaxTokens(settings.maxTokens)
+    const activeModelThinkingConfig = useProviderStore.getState().getActiveModelThinkingConfig()
+    const thinkingEnabled = settings.thinkingEnabled && !!activeModelThinkingConfig
+
+    const config: ProviderConfig | null = providerConfig
+      ? {
+          ...providerConfig,
+          maxTokens: effectiveMaxTokens,
+          temperature: settings.temperature,
+          systemPrompt: settings.systemPrompt || undefined,
+          thinkingEnabled,
+          thinkingConfig: activeModelThinkingConfig,
+          reasoningEffort: settings.reasoningEffort
+        }
+      : null
+
+    if (!config) {
+      toast.error('无法压缩', { description: '未配置 AI 服务商' })
+      return
+    }
+
+    toast.info('正在压缩上下文...', { description: '使用主模型生成详细记忆摘要' })
+
+    try {
+      const { messages: compressed, result } = await compressMessages(
+        messages,
+        config,
+        undefined, // no abort signal for manual
+        undefined, // adaptive preserve count
+        focusPrompt || undefined
+      )
+      if (!result.compressed) {
+        toast.warning('无需压缩', { description: '当前消息数量不足以进行有效压缩' })
+        return
+      }
+      chatStore.replaceSessionMessages(sessionId, compressed)
+      toast.success('上下文已压缩', {
+        description: `${result.originalCount} 条消息 → ${result.newCount} 条（核心信息已保留）`
+      })
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      console.error('[Manual Compress Error]', err)
+      toast.error('压缩失败', { description: errMsg })
+    }
+  }, [])
+
+  return { sendMessage, stopStreaming, retryLastMessage, editAndResend, manualCompressContext }
 }
 
 /**
@@ -458,13 +865,21 @@ async function runSimpleChat(
           useChatStore.getState().appendThinkingDelta(sessionId, assistantMsgId, event.thinking!)
           break
         case 'text_delta':
-          if (!thinkingDone) { thinkingDone = true; useChatStore.getState().completeThinking(sessionId, assistantMsgId) }
+          if (!thinkingDone) {
+            thinkingDone = true
+            useChatStore.getState().completeThinking(sessionId, assistantMsgId)
+          }
           useChatStore.getState().appendTextDelta(sessionId, assistantMsgId, event.text!)
           break
         case 'message_end':
-          if (!thinkingDone) { thinkingDone = true; useChatStore.getState().completeThinking(sessionId, assistantMsgId) }
+          if (!thinkingDone) {
+            thinkingDone = true
+            useChatStore.getState().completeThinking(sessionId, assistantMsgId)
+          }
           if (event.usage) {
-            useChatStore.getState().updateMessage(sessionId, assistantMsgId, { usage: { ...event.usage, contextTokens: event.usage.inputTokens } })
+            useChatStore.getState().updateMessage(sessionId, assistantMsgId, {
+              usage: { ...event.usage, contextTokens: event.usage.inputTokens }
+            })
           }
           break
         case 'request_debug':
@@ -483,7 +898,9 @@ async function runSimpleChat(
       const errMsg = err instanceof Error ? err.message : String(err)
       console.error('[Chat Exception]', err)
       toast.error('Chat failed', { description: errMsg })
-      useChatStore.getState().appendTextDelta(sessionId, assistantMsgId, `\n\n> **Error:** ${errMsg}`)
+      useChatStore
+        .getState()
+        .appendTextDelta(sessionId, assistantMsgId, `\n\n> **Error:** ${errMsg}`)
       if (err instanceof ApiStreamError && useSettingsStore.getState().devMode) {
         setLastDebugInfo(assistantMsgId, err.debugInfo as RequestDebugInfo)
       }

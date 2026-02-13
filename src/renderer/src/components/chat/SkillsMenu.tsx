@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { Plus, Sparkles, Loader2, Command } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Plus, Sparkles, Loader2, Command, Puzzle, Settings2, Check } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import {
   DropdownMenu,
@@ -16,6 +17,8 @@ import {
 } from '@renderer/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { useSkillsStore } from '@renderer/stores/skills-store'
+import { usePluginStore } from '@renderer/stores/plugin-store'
+import { useUIStore } from '@renderer/stores/ui-store'
 
 interface SkillsMenuProps {
   onSelectSkill: (skillName: string) => void
@@ -23,44 +26,58 @@ interface SkillsMenuProps {
 }
 
 export function SkillsMenu({ onSelectSkill, disabled = false }: SkillsMenuProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [open, setOpen] = React.useState(false)
   const skills = useSkillsStore((s) => s.skills)
   const loading = useSkillsStore((s) => s.loading)
   const loadSkills = useSkillsStore((s) => s.loadSkills)
 
-  // Load skills when menu opens
+  // Plugin state
+  const plugins = usePluginStore((s) => s.plugins)
+  const activePluginIds = usePluginStore((s) => s.activePluginIds)
+  const toggleActivePlugin = usePluginStore((s) => s.toggleActivePlugin)
+  const loadPlugins = usePluginStore((s) => s.loadPlugins)
+  const loadProviders = usePluginStore((s) => s.loadProviders)
+  const configuredPlugins = React.useMemo(() => plugins.filter((p) => p.enabled), [plugins])
+  const openSettingsPage = useUIStore((s) => s.openSettingsPage)
+
+  // Load skills and plugins when menu opens
   React.useEffect(() => {
     if (open) {
       loadSkills()
+      loadProviders()
+      loadPlugins()
     }
-  }, [open, loadSkills])
+  }, [open, loadSkills, loadPlugins, loadProviders])
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 shrink-0 rounded-lg"
-              disabled={disabled}
-            >
-              <Plus className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
+          <span className="inline-flex">
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 shrink-0 rounded-lg"
+                disabled={disabled}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+          </span>
         </TooltipTrigger>
-        <TooltipContent>Add actions</TooltipContent>
+        <TooltipContent>{t('skills.addActions')}</TooltipContent>
       </Tooltip>
 
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel>Add to Chat</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('skills.addToChat')}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         
         <DropdownMenuGroup>
           <DropdownMenuItem disabled>
             <Command className="mr-2 size-4" />
-            <span>Commands</span>
+            <span>{t('skills.commandsLabel')}</span>
             <DropdownMenuSeparator className="ml-auto" />
           </DropdownMenuItem>
           {/* Placeholder for future commands */}
@@ -72,20 +89,20 @@ export function SkillsMenu({ onSelectSkill, disabled = false }: SkillsMenuProps)
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Sparkles className="mr-2 size-4" />
-              <span>Skills</span>
+              <span>{t('skills.skillsLabel')}</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
               <DropdownMenuSubContent className="w-64 max-h-80 overflow-y-auto">
-                <DropdownMenuLabel>Available Skills</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('skills.availableSkills')}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {loading ? (
                   <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
                     <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                    Loading skills...
+                    {t('skills.loadingSkills')}
                   </div>
                 ) : skills.length === 0 ? (
                   <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-                    <p>No skills installed</p>
+                    <p>{t('skills.noSkills')}</p>
                     <p className="mt-1 text-[10px] opacity-70">
                       ~/.open-cowork/skills/
                     </p>
@@ -104,6 +121,73 @@ export function SkillsMenu({ onSelectSkill, disabled = false }: SkillsMenuProps)
                     </DropdownMenuItem>
                   ))
                 )}
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+        </DropdownMenuGroup>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuGroup>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Puzzle className="mr-2 size-4" />
+              <span>{t('skills.pluginsLabel', 'Plugins')}</span>
+              {activePluginIds.length > 0 && (
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  {activePluginIds.length}
+                </span>
+              )}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent className="w-56 max-h-80 overflow-y-auto">
+                <DropdownMenuLabel>{t('skills.availablePlugins', 'Available Plugins')}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {configuredPlugins.length === 0 ? (
+                  <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                    <p>{t('skills.noPlugins', 'No plugins configured')}</p>
+                    <p className="mt-1 text-[10px] opacity-70">
+                      {t('skills.configureInSettings', 'Add plugins in Settings → Plugins')}
+                    </p>
+                  </div>
+                ) : (
+                  configuredPlugins.map((plugin) => {
+                    const isActive = activePluginIds.includes(plugin.id)
+                    return (
+                      <DropdownMenuItem
+                        key={plugin.id}
+                        onSelect={(e) => {
+                          e.preventDefault()
+                          toggleActivePlugin(plugin.id)
+                        }}
+                        className="flex items-center gap-2 py-1.5 cursor-pointer"
+                      >
+                        <span
+                          className={`flex items-center justify-center size-4 rounded border ${
+                            isActive
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-muted-foreground/30'
+                          }`}
+                        >
+                          {isActive && <Check className="size-3" />}
+                        </span>
+                        <span className="flex-1 truncate text-xs">{plugin.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{plugin.type}</span>
+                      </DropdownMenuItem>
+                    )
+                  })
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setOpen(false)
+                    openSettingsPage('plugin')
+                  }}
+                  className="text-xs"
+                >
+                  <Settings2 className="mr-2 size-3.5" />
+                  {t('skills.configurePlugins', 'Configure...')}
+                </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>

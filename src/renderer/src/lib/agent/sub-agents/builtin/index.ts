@@ -35,11 +35,11 @@ function toDefinition(info: AgentInfo): SubAgentDefinition {
       properties: {
         prompt: {
           type: 'string',
-          description: 'The detailed task for the sub-agent to perform',
-        },
+          description: 'The detailed task for the sub-agent to perform'
+        }
       },
-      required: ['prompt'],
-    },
+      required: ['prompt']
+    }
   }
 }
 
@@ -51,7 +51,7 @@ function getProviderConfig(): ProviderConfig {
     return {
       ...fastConfig,
       maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fastConfig.model),
-      temperature: s.temperature,
+      temperature: s.temperature
     }
   }
   const fallbackModel = s.fastModel || s.model
@@ -61,7 +61,7 @@ function getProviderConfig(): ProviderConfig {
     baseUrl: s.baseUrl || undefined,
     model: fallbackModel,
     maxTokens: store.getEffectiveMaxTokens(s.maxTokens, fallbackModel),
-    temperature: s.temperature,
+    temperature: s.temperature
   }
 }
 
@@ -84,7 +84,7 @@ export async function registerBuiltinSubAgents(): Promise<void> {
     console.error('[SubAgents] Failed to load agents from IPC:', err)
   }
 
-  // Register one unified Task tool that dispatches by subType
+  // Register one unified Task tool that dispatches by subagent_type
   // (works even if no agents were loaded — will produce an empty enum)
   toolRegistry.register(createTaskTool(getProviderConfig))
 }

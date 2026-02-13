@@ -1,17 +1,22 @@
 import * as React from 'react'
 import { useState as useLocalState } from 'react'
-import { Send, Square, FolderOpen, AlertTriangle, FileUp, Sparkles, X, Trash2, ImagePlus, Brain } from 'lucide-react'
+import { Send, Square, FolderOpen, AlertTriangle, FileUp, Sparkles, X, Trash2, ImagePlus, Brain, ChevronDown } from 'lucide-react'
 import { nanoid } from 'nanoid'
 import { Button } from '@renderer/components/ui/button'
 import { Textarea } from '@renderer/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { useProviderStore } from '@renderer/stores/provider-store'
+import type { AIModelConfig, ReasoningEffortLevel } from '@renderer/lib/api/types'
+import { Popover, PopoverContent, PopoverTrigger } from '@renderer/components/ui/popover'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
 import { formatTokens } from '@renderer/lib/format-tokens'
 import { useDebouncedTokens } from '@renderer/hooks/use-estimated-tokens'
 import { useChatStore } from '@renderer/stores/chat-store'
+import { useTranslation } from 'react-i18next'
 import { SkillsMenu } from './SkillsMenu'
+import { ModelSwitcher } from './ModelSwitcher'
+import { usePluginStore } from '@renderer/stores/plugin-store'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,10 +29,112 @@ import {
   AlertDialogTrigger,
 } from '@renderer/components/ui/alert-dialog'
 
-const placeholders: Record<AppMode, string> = {
-  chat: 'Type a message...',
-  cowork: 'Ask the assistant to help with your project...',
-  code: 'Describe what you want to build...',
+function ContextRing(): React.JSX.Element | null {
+  const activeModelCfg = useProviderStore((s) => {
+    const { providers, activeProviderId, activeModelId } = s
+    if (!activeProviderId) return null
+    const provider = providers.find((p) => p.id === activeProviderId)
+    return provider?.models.find((m) => m.id === activeModelId) ?? null
+  }) as AIModelConfig | null
+
+  const ctxLimit = activeModelCfg?.contextLength ?? null
+
+  const lastUsage = useChatStore((s) => {
+    const session = s.sessions.find((sess) => sess.id === s.activeSessionId)
+    if (!session) return null
+    const msgs = [...session.messages].reverse()
+    return msgs.find((m) => m.usage)?.usage ?? null
+  })
+
+  const ctxUsed = lastUsage?.contextTokens ?? lastUsage?.inputTokens ?? 0
+
+  if (!ctxLimit || ctxUsed <= 0) return null
+
+  const pct = Math.min((ctxUsed / ctxLimit) * 100, 100)
+  const remaining = Math.max(ctxLimit - ctxUsed, 0)
+  const strokeColor = pct > 80 ? 'stroke-red-500' : pct > 50 ? 'stroke-amber-500' : 'stroke-emerald-500'
+
+  // SVG circular progress
+  const size = 26
+  const strokeWidth = 2.5
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const dashOffset = circumference * (1 - pct / 100)
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex items-center justify-center cursor-default">
+          <svg width={size} height={size} className="-rotate-90">
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              className="stroke-muted/30"
+              strokeWidth={strokeWidth}
+            />
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              className={`${strokeColor} transition-all duration-500`}
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="absolute text-[7px] font-medium text-muted-foreground tabular-nums select-none">
+            {pct < 10 ? `${pct.toFixed(0)}` : `${pct.toFixed(0)}`}%
+          </span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        <div className="text-xs space-y-0.5">
+          <p className="font-medium">Context Window</p>
+          <p className="text-muted-foreground">
+            {formatTokens(ctxUsed)} / {formatTokens(ctxLimit)} ({pct.toFixed(1)}%)
+          </p>
+          <p className="text-muted-foreground">
+            {formatTokens(remaining)} remaining
+          </p>
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function ActivePluginsBadge(): React.JSX.Element | null {
+  const activePluginIds = usePluginStore((s) => s.activePluginIds)
+  const plugins = usePluginStore((s) => s.plugins)
+  if (activePluginIds.length === 0) return null
+  const activeNames = plugins
+    .filter((p) => activePluginIds.includes(p.id))
+    .map((p) => p.name)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary cursor-default">
+          <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+          <span>{activePluginIds.length} plugin{activePluginIds.length > 1 ? 's' : ''}</span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        <p className="text-xs font-medium">Active plugins:</p>
+        {activeNames.map((n) => (
+          <p key={n} className="text-xs text-muted-foreground">{n}</p>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+const placeholderKeys: Record<AppMode, string> = {
+  chat: 'input.placeholder',
+  cowork: 'input.placeholderCowork',
+  code: 'input.placeholderCode',
 }
 
 export interface ImageAttachment {
@@ -69,6 +176,7 @@ export function InputArea({
   workingFolder,
   disabled = false,
 }: InputAreaProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const [text, setText] = React.useState('')
   const debouncedTokens = useDebouncedTokens(text)
   const [selectedSkill, setSelectedSkill] = React.useState<string | null>(null)
@@ -86,14 +194,26 @@ export function InputArea({
     const model = activeProvider.models.find((m) => m.id === activeModelId)
     return model?.supportsVision ?? false
   }, [activeProvider, activeModelId])
-  const supportsThinking = React.useMemo(() => {
-    if (!activeProvider) return false
-    const model = activeProvider.models.find((m) => m.id === activeModelId)
-    return model?.supportsThinking ?? false
+  const activeModelConfig = React.useMemo(() => {
+    if (!activeProvider) return null
+    return activeProvider.models.find((m) => m.id === activeModelId) ?? null
   }, [activeProvider, activeModelId])
+  const supportsThinking = activeModelConfig?.supportsThinking ?? false
+  const reasoningEffortLevels = activeModelConfig?.thinkingConfig?.reasoningEffortLevels
+  const defaultReasoningEffort = activeModelConfig?.thinkingConfig?.defaultReasoningEffort ?? 'medium'
   const thinkingEnabled = useSettingsStore((s) => s.thinkingEnabled)
+  const reasoningEffort = useSettingsStore((s) => s.reasoningEffort)
   const toggleThinking = React.useCallback(() => {
-    useSettingsStore.getState().updateSettings({ thinkingEnabled: !useSettingsStore.getState().thinkingEnabled })
+    const store = useSettingsStore.getState()
+    if (!store.thinkingEnabled && reasoningEffortLevels) {
+      // When enabling thinking on a model with levels, set to default level
+      useSettingsStore.getState().updateSettings({ thinkingEnabled: true, reasoningEffort: defaultReasoningEffort })
+    } else {
+      useSettingsStore.getState().updateSettings({ thinkingEnabled: !store.thinkingEnabled })
+    }
+  }, [reasoningEffortLevels, defaultReasoningEffort])
+  const setReasoningEffort = React.useCallback((level: ReasoningEffortLevel) => {
+    useSettingsStore.getState().updateSettings({ reasoningEffort: level, thinkingEnabled: true })
   }, [])
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
   const mode = useUIStore((s) => s.mode)
@@ -104,6 +224,7 @@ export function InputArea({
   })
   const clearSessionMessages = useChatStore((s) => s.clearSessionMessages)
   const hasApiKey = !!(activeProvider?.apiKey)
+  const needsWorkingFolder = mode !== 'chat' && !workingFolder
 
   // Auto-focus textarea when not streaming or when switching sessions
   React.useEffect(() => {
@@ -139,7 +260,7 @@ export function InputArea({
   const handleSend = (): void => {
     const trimmed = text.trim()
     if (!trimmed && attachedImages.length === 0) return
-    if (disabled) return
+    if (disabled || needsWorkingFolder) return
     const message = selectedSkill
       ? `[Skill: ${selectedSkill}]\n${trimmed}`
       : trimmed
@@ -238,7 +359,19 @@ export function InputArea({
           onClick={() => setSettingsOpen(true)}
         >
           <AlertTriangle className="size-3.5 shrink-0" />
-          <span>No API key configured. Click here to open Settings.</span>
+          <span>{t('input.noApiKey')}</span>
+        </button>
+      )}
+
+      {/* Working folder required warning */}
+      {needsWorkingFolder && onSelectFolder && (
+        <button
+          type="button"
+          className="mb-2 flex w-full items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-left text-xs text-amber-600 dark:text-amber-400 transition-colors hover:bg-amber-500/10"
+          onClick={onSelectFolder}
+        >
+          <FolderOpen className="size-3.5 shrink-0" />
+          <span>{t('input.noWorkingFolder', { mode })}</span>
         </button>
       )}
 
@@ -302,7 +435,7 @@ export function InputArea({
               <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-primary/5 pointer-events-none">
                 <span className="flex items-center gap-1.5 text-xs text-primary/70 font-medium">
                   <FileUp className="size-3.5" />
-                  {supportsVision ? 'Drop images or files' : 'Drop files to insert paths'}
+                  {supportsVision ? t('input.dropImages') : t('input.dropFiles')}
                 </span>
               </div>
             )}
@@ -312,7 +445,7 @@ export function InputArea({
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              placeholder={placeholders[mode] ?? 'Type a message...'}
+              placeholder={t(placeholderKeys[mode] ?? 'input.placeholder')}
               className="min-h-[60px] max-h-[300px] w-full resize-none border-0 bg-background dark:bg-background p-1 shadow-none focus-visible:ring-0 text-base md:text-sm"
               rows={1}
               disabled={disabled}
@@ -336,15 +469,20 @@ export function InputArea({
           <div className="flex items-center justify-between px-2 pb-2 mt-1">
             {/* Left tools */}
             <div className="flex items-center gap-1">
+              <ModelSwitcher />
+
               {/* Skills menu (+ button) */}
               {mode !== 'chat' && (
-                <SkillsMenu
-                  onSelectSkill={(name) => {
-                    setSelectedSkill(name)
-                    textareaRef.current?.focus()
-                  }}
-                  disabled={disabled || isStreaming}
-                />
+                <>
+                  <SkillsMenu
+                    onSelectSkill={(name) => {
+                      setSelectedSkill(name)
+                      textareaRef.current?.focus()
+                    }}
+                    disabled={disabled || isStreaming}
+                  />
+                  <ActivePluginsBadge />
+                </>
               )}
 
               {/* Image upload button */}
@@ -361,30 +499,87 @@ export function InputArea({
                       <ImagePlus className="size-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Attach images (paste or drag & drop also supported)</TooltipContent>
+                  <TooltipContent>{t('input.attachImages')}</TooltipContent>
                 </Tooltip>
               )}
 
-              {/* Think toggle button */}
+              {/* Think toggle button — with reasoning effort level selector */}
               {supportsThinking && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`size-8 rounded-lg transition-colors ${
-                        thinkingEnabled
-                          ? 'text-violet-600 dark:text-violet-400 bg-violet-500/10 hover:bg-violet-500/20'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                      onClick={toggleThinking}
-                      disabled={disabled || isStreaming}
-                    >
-                      <Brain className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{thinkingEnabled ? '关闭深度思考' : '启用深度思考'}</TooltipContent>
-                </Tooltip>
+                reasoningEffortLevels && reasoningEffortLevels.length > 0 ? (
+                  <Popover>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className={`h-8 rounded-lg px-2 gap-1 transition-colors ${
+                              thinkingEnabled
+                                ? 'text-violet-600 dark:text-violet-400 bg-violet-500/10 hover:bg-violet-500/20'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                            disabled={disabled || isStreaming}
+                          >
+                            <Brain className="size-4" />
+                            {thinkingEnabled && (
+                              <span className="text-[10px] font-medium uppercase">{reasoningEffort}</span>
+                            )}
+                            <ChevronDown className="size-3 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>{thinkingEnabled ? t('input.thinkingLevel', { level: reasoningEffort }) : t('input.enableThinking')}</TooltipContent>
+                    </Tooltip>
+                    <PopoverContent className="w-auto p-1.5" align="start" side="top">
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors text-left ${
+                            !thinkingEnabled
+                              ? 'bg-accent text-accent-foreground'
+                              : 'hover:bg-muted/60 text-foreground/80'
+                          }`}
+                          onClick={() => useSettingsStore.getState().updateSettings({ thinkingEnabled: false })}
+                        >
+                          <span className="font-medium">{t('input.thinkingOff')}</span>
+                        </button>
+                        {reasoningEffortLevels.map((level) => (
+                          <button
+                            key={level}
+                            type="button"
+                            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors text-left ${
+                              thinkingEnabled && reasoningEffort === level
+                                ? 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
+                                : 'hover:bg-muted/60 text-foreground/80'
+                            }`}
+                            onClick={() => setReasoningEffort(level)}
+                          >
+                            <span className="font-medium uppercase">{level}</span>
+                            <span className="text-[10px] text-muted-foreground">{t(`input.effortDesc.${level}`)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`size-8 rounded-lg transition-colors ${
+                          thinkingEnabled
+                            ? 'text-violet-600 dark:text-violet-400 bg-violet-500/10 hover:bg-violet-500/20'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        onClick={toggleThinking}
+                        disabled={disabled || isStreaming}
+                      >
+                        <Brain className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{thinkingEnabled ? t('input.disableThinking') : t('input.enableThinking')}</TooltipContent>
+                  </Tooltip>
+                )
               )}
 
               {/* Attachment / Folder button */}
@@ -400,13 +595,15 @@ export function InputArea({
                       <FolderOpen className="size-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Select working folder</TooltipContent>
+                  <TooltipContent>{t('input.selectFolder')}</TooltipContent>
                 </Tooltip>
               )}
             </div>
 
             {/* Right actions */}
             <div className="flex items-center gap-2">
+              <ContextRing />
+
               {debouncedTokens > 0 && (
                 <span className="text-[10px] text-muted-foreground/60 select-none tabular-nums">
                   {formatTokens(debouncedTokens)} tokens
@@ -417,34 +614,36 @@ export function InputArea({
               {hasMessages && !isStreaming && (
                 <AlertDialog>
                   <Tooltip>
-                    <AlertDialogTrigger asChild>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 rounded-lg text-muted-foreground/40 hover:text-destructive"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                    </AlertDialogTrigger>
-                    <TooltipContent>Clear conversation</TooltipContent>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 rounded-lg text-muted-foreground/40 hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('input.clearConversation')}</TooltipContent>
                   </Tooltip>
                   <AlertDialogContent size="sm">
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Clear all messages?</AlertDialogTitle>
+                      <AlertDialogTitle>{t('input.clearConfirmTitle')}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will remove all messages in this conversation. This action cannot be undone.
+                        {t('input.clearConfirmDesc')}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel size="sm">Cancel</AlertDialogCancel>
+                      <AlertDialogCancel size="sm">{t('action.cancel', { ns: 'common' })}</AlertDialogCancel>
                       <AlertDialogAction
                         variant="destructive"
                         size="sm"
                         onClick={() => activeSessionId && clearSessionMessages(activeSessionId)}
                       >
-                        Clear
+                        {t('action.clear', { ns: 'common' })}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -462,10 +661,10 @@ export function InputArea({
                       onClick={onStop}
                     >
                       <Square className="size-3.5 mr-1.5" />
-                      Stop
+                      {t('action.stop', { ns: 'common' })}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Stop (Esc)</TooltipContent>
+                  <TooltipContent>{t('input.stopTooltip')}</TooltipContent>
                 </Tooltip>
               ) : (
                 <Tooltip>
@@ -474,13 +673,13 @@ export function InputArea({
                       size="sm"
                       className="h-8 rounded-lg px-3 bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
                       onClick={handleSend}
-                      disabled={(!text.trim() && attachedImages.length === 0) || disabled}
+                      disabled={(!text.trim() && attachedImages.length === 0) || disabled || needsWorkingFolder}
                     >
-                      <span>Start</span>
+                      <span>{t('action.start', { ns: 'common' })}</span>
                       <Send className="size-3.5 ml-1.5" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Send (Enter)</TooltipContent>
+                  <TooltipContent>{t('input.sendTooltip')}</TooltipContent>
                 </Tooltip>
               )}
             </div>

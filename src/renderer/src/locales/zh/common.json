@@ -1,0 +1,87 @@
+{
+  "action": {
+    "cancel": "取消",
+    "delete": "删除",
+    "save": "保存",
+    "confirm": "确认",
+    "close": "关闭",
+    "copy": "复制",
+    "copyPath": "复制路径",
+    "rename": "重命名",
+    "refresh": "刷新",
+    "retry": "重试",
+    "send": "发送",
+    "stop": "停止",
+    "start": "开始",
+    "clear": "清除",
+    "allow": "允许",
+    "deny": "拒绝",
+    "undo": "撤销",
+    "open": "打开",
+    "export": "导出",
+    "import": "导入",
+    "duplicate": "复制会话",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "showMore": "显示更多",
+    "showLess": "收起"
+  },
+  "status": {
+    "running": "运行中",
+    "done": "完成",
+    "pending": "待处理",
+    "active": "进行中",
+    "completed": "已完成",
+    "working": "工作中",
+    "idle": "空闲",
+    "waiting": "等待中",
+    "stopped": "已停止",
+    "failed": "失败",
+    "error": "错误"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "mAgo": "{{count}}分钟前",
+    "hAgo": "{{count}}小时前",
+    "dAgo": "{{count}}天前",
+    "sAgo": "{{count}}秒前",
+    "sSession": "{{count}}秒会话",
+    "mSession": "{{count}}分钟会话",
+    "hmSession": "{{h}}小时{{m}}分钟会话"
+  },
+  "unit": {
+    "tokens": "tokens",
+    "cached": "缓存",
+    "reasoning": "推理",
+    "messages": "消息",
+    "turns": "轮次",
+    "members": "成员",
+    "tasks": "任务",
+    "items": "项",
+    "lines": "行",
+    "files": "文件",
+    "folders": "文件夹",
+    "calls": "调用",
+    "deps": "依赖",
+    "chars": "字符",
+    "matches": "匹配",
+    "sessions": "会话",
+    "msgs": "消息"
+  },
+  "priority": {
+    "high": "高",
+    "medium": "中",
+    "low": "低"
+  },
+  "theme": {
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
+  "mode": {
+    "chat": "对话",
+    "cowork": "协作",
+    "code": "编程"
+  },
+  "contextWindow": "上下文窗口"
+}

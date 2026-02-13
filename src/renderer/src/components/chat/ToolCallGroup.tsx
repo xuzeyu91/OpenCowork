@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
 import type { ToolCallStatus } from '@renderer/lib/agent/types'
 import type { ToolResultContent } from '@renderer/lib/api/types'
@@ -32,7 +33,7 @@ function groupStatus(items: ToolCallGroupItem[]): ToolCallStatus | 'completed' {
 }
 
 /** Generate a summary label for the collapsed group header */
-function groupSummaryLabel(toolName: string, items: ToolCallGroupItem[]): string {
+function groupSummaryLabel(toolName: string, items: ToolCallGroupItem[], t: (key: string, opts?: Record<string, unknown>) => string): string {
   const count = items.length
   // Collect unique short summaries for display
   const summaries = items
@@ -42,24 +43,25 @@ function groupSummaryLabel(toolName: string, items: ToolCallGroupItem[]): string
 
   if (toolName === 'Read') {
     const fileCount = uniqueSummaries.length
-    return `Read ${fileCount} file${fileCount !== 1 ? 's' : ''}`
+    return t('toolGroup.readFiles', { count: fileCount })
   }
   if (toolName === 'Grep') {
-    return `Searched ${count} pattern${count !== 1 ? 's' : ''}`
+    return t('toolGroup.searchedPatterns', { count })
   }
   if (toolName === 'Glob') {
-    return `Globbed ${count} pattern${count !== 1 ? 's' : ''}`
+    return t('toolGroup.globbedPatterns', { count })
   }
   if (toolName === 'LS') {
-    return `Listed ${count} director${count !== 1 ? 'ies' : 'y'}`
+    return t('toolGroup.listedDirs', { count })
   }
   if (toolName === 'Bash') {
-    return `Ran ${count} command${count !== 1 ? 's' : ''}`
+    return t('toolGroup.ranCommands', { count })
   }
   return `${toolName} × ${count}`
 }
 
 export function ToolCallGroup({ toolName, items, children }: ToolCallGroupProps): React.JSX.Element {
+  const { t } = useTranslation('chat')
   const status = groupStatus(items)
   const isActive = status === 'running' || status === 'streaming' || status === 'pending_approval'
 
@@ -77,7 +79,7 @@ export function ToolCallGroup({ toolName, items, children }: ToolCallGroupProps)
     wasActiveRef.current = isActive
   }, [isActive])
 
-  const summaryLabel = groupSummaryLabel(toolName, items)
+  const summaryLabel = groupSummaryLabel(toolName, items, t)
 
   return (
     <div className="my-1">

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Plus,
   Search,
@@ -67,7 +68,7 @@ async function fetchModelsFromProvider(
 
   // For OpenAI-compatible providers: GET /v1/models
   if (type === 'openai-chat' || type === 'openai-responses') {
-    const url = `${(baseUrl || 'https://api.openai.com').replace(/\/+$/, '')}/v1/models`
+    const url = `${(baseUrl || 'https://api.openai.com').replace(/\/+$/, '')}/models`
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -104,6 +105,7 @@ function AddProviderDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
 }): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const addProvider = useProviderStore((s) => s.addProvider)
   const [name, setName] = useState('')
   const [type, setType] = useState<ProviderType>('openai-chat')
@@ -121,7 +123,7 @@ function AddProviderDialog({
       models: [],
       createdAt: Date.now(),
     })
-    toast.success(`已添加服务商: ${name.trim()}`)
+    toast.success(t('provider.addedProvider', { name: name.trim() }))
     setName(''); setBaseUrl(''); setType('openai-chat')
     onOpenChange(false)
   }
@@ -130,44 +132,44 @@ function AddProviderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>添加自定义服务商</DialogTitle>
-          <DialogDescription>添加一个 OpenAI 兼容或 Anthropic 协议的自定义 AI 服务商</DialogDescription>
+          <DialogTitle>{t('provider.addCustomProvider')}</DialogTitle>
+          <DialogDescription>{t('provider.addCustomProviderDesc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
-            <label className="text-sm font-medium">服务商名称</label>
+            <label className="text-sm font-medium">{t('provider.providerName')}</label>
             <Input
-              placeholder="如：我的代理服务"
+              placeholder={t('provider.providerNamePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">协议类型</label>
+            <label className="text-sm font-medium">{t('provider.protocolType')}</label>
             <Select value={type} onValueChange={(v) => setType(v as ProviderType)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="openai-chat">OpenAI Chat Completions 兼容</SelectItem>
-                <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
-                <SelectItem value="anthropic">Anthropic Messages</SelectItem>
+                <SelectItem value="openai-chat">{t('provider.openaiChatCompat')}</SelectItem>
+                <SelectItem value="openai-responses">{t('provider.openaiResponses')}</SelectItem>
+                <SelectItem value="anthropic">{t('provider.anthropicMessages')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Base URL</label>
+            <label className="text-sm font-medium">{t('provider.baseUrl')}</label>
             <Input
               placeholder="https://api.example.com"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">API 接口的基础地址</p>
+            <p className="text-xs text-muted-foreground">{t('provider.baseUrlHint')}</p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>取消</Button>
-            <Button disabled={!name.trim()} onClick={handleAdd}>添加</Button>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>{t('action.cancel', { ns: 'common' })}</Button>
+            <Button disabled={!name.trim()} onClick={handleAdd}>{t('provider.add')}</Button>
           </div>
         </div>
       </DialogContent>
@@ -178,6 +180,7 @@ function AddProviderDialog({
 // --- Right panel: provider config ---
 
 function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const updateProvider = useProviderStore((s) => s.updateProvider)
   const removeProvider = useProviderStore((s) => s.removeProvider)
   const toggleProviderEnabled = useProviderStore((s) => s.toggleProviderEnabled)
@@ -204,7 +207,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
   }, [provider.models, modelSearch])
 
   const handleTestConnection = async (): Promise<void> => {
-    if (!provider.apiKey) { toast.error('未设置 API Key'); return }
+    if (!provider.apiKey) { toast.error(t('provider.noApiKey')); return }
     setTesting(true)
     try {
       const isAnthropic = provider.type === 'anthropic'
@@ -221,15 +224,15 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
       const body = JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'Hi' }] })
       const result = await window.electron.ipcRenderer.invoke('api:request', { url, method: 'POST', headers, body })
       if (result?.error) {
-        toast.error('连接失败', { description: result.error })
+        toast.error(t('provider.connectionFailed'), { description: result.error })
       } else {
         const status = result?.statusCode ?? 0
-        if (status >= 200 && status < 300) toast.success('连接成功！')
-        else if (status === 401 || status === 403) toast.error('API Key 无效', { description: `HTTP ${status}` })
-        else toast.warning(`异常状态码: ${status}`, { description: result?.body?.slice(0, 200) })
+        if (status >= 200 && status < 300) toast.success(t('provider.connectionSuccess'))
+        else if (status === 401 || status === 403) toast.error(t('provider.invalidApiKey'), { description: `HTTP ${status}` })
+        else toast.warning(t('provider.abnormalStatus', { status }), { description: result?.body?.slice(0, 200) })
       }
     } catch (err) {
-      toast.error('连接失败', { description: err instanceof Error ? err.message : String(err) })
+      toast.error(t('provider.connectionFailed'), { description: err instanceof Error ? err.message : String(err) })
     } finally {
       setTesting(false)
     }
@@ -239,16 +242,16 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
     setFetchingModels(true)
     try {
       const models = await fetchModelsFromProvider(provider.type, provider.baseUrl, provider.apiKey, provider.builtinId)
-      if (models.length === 0) { toast.info('未获取到模型列表'); return }
+      if (models.length === 0) { toast.info(t('provider.noModelsFound')); return }
       const existingMap = new Map(provider.models.map((m) => [m.id, m]))
       const merged = models.map((m) => {
         const existing = existingMap.get(m.id)
         return existing ? { ...m, enabled: existing.enabled } : m
       })
       setProviderModels(provider.id, merged)
-      toast.success(`已获取 ${models.length} 个模型`)
+      toast.success(t('provider.fetchedModels', { count: models.length }))
     } catch (err) {
-      toast.error('获取模型列表失败', { description: err instanceof Error ? err.message : String(err) })
+      toast.error(t('provider.fetchModelsFailed'), { description: err instanceof Error ? err.message : String(err) })
     } finally {
       setFetchingModels(false)
     }
@@ -265,7 +268,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
             <p className="text-[11px] text-muted-foreground">
               {provider.type === 'anthropic' ? 'Anthropic Messages API'
                 : provider.type === 'openai-responses' ? 'OpenAI Responses API'
-                : 'OpenAI Chat Completions 兼容'}
+                : t('provider.openaiChatCompat')}
             </p>
           </div>
         </div>
@@ -276,7 +279,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
               size="sm"
               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
               onClick={() => {
-                if (!window.confirm(`确定删除服务商 "${provider.name}"？`)) return
+                if (!window.confirm(t('provider.deleteConfirm', { name: provider.name }))) return
                 removeProvider(provider.id)
               }}
             >
@@ -294,12 +297,12 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
         {/* API Key */}
         <section className="space-y-2">
-          <label className="text-sm font-medium">API Key</label>
+          <label className="text-sm font-medium">{t('provider.apiKey')}</label>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Input
                 type={showKey ? 'text' : 'password'}
-                placeholder="输入 API Key..."
+                placeholder={t('provider.apiKeyPlaceholder')}
                 value={provider.apiKey}
                 onChange={(e) => updateProvider(provider.id, { apiKey: e.target.value })}
                 className="pr-9 text-xs"
@@ -318,7 +321,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
 
         {/* Base URL */}
         <section className="space-y-2">
-          <label className="text-sm font-medium">API 代理地址</label>
+          <label className="text-sm font-medium">{t('provider.proxyUrl')}</label>
           <Input
             placeholder={
               builtinProviderPresets.find((p) => p.builtinId === provider.builtinId)?.defaultBaseUrl || 'https://api.example.com'
@@ -327,19 +330,19 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
             onChange={(e) => updateProvider(provider.id, { baseUrl: e.target.value })}
             className="text-xs"
           />
-          <p className="text-[11px] text-muted-foreground">自定义端点，用于代理或第三方兼容服务</p>
+          <p className="text-[11px] text-muted-foreground">{t('provider.proxyUrlHint')}</p>
         </section>
 
         {/* Connection check */}
         <section className="space-y-2">
-          <label className="text-sm font-medium">连通性检查</label>
+          <label className="text-sm font-medium">{t('provider.connectionCheck')}</label>
           <div className="flex items-center gap-2">
             <Select
               value={testModelId}
               onValueChange={(v) => setTestModelId(v)}
             >
               <SelectTrigger className="flex-1 text-xs">
-                <SelectValue placeholder={provider.models[0]?.id || '无可用模型'} />
+                <SelectValue placeholder={provider.models[0]?.id || t('provider.noAvailableModels')} />
               </SelectTrigger>
               <SelectContent>
                 {(provider.models.some((m) => m.enabled) ? provider.models.filter((m) => m.enabled) : provider.models).map((m) => (
@@ -355,7 +358,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
               onClick={handleTestConnection}
             >
               {testing && <Loader2 className="size-3 animate-spin" />}
-              {testing ? '检查中...' : '检 查'}
+              {testing ? t('provider.checking') : t('provider.check')}
             </Button>
           </div>
         </section>
@@ -363,7 +366,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
         {/* Protocol type (for custom providers) */}
         {!provider.builtinId && (
           <section className="space-y-2">
-            <label className="text-sm font-medium">协议类型</label>
+            <label className="text-sm font-medium">{t('provider.protocolType')}</label>
             <Select
               value={provider.type}
               onValueChange={(v) => updateProvider(provider.id, { type: v as ProviderType })}
@@ -372,8 +375,8 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="openai-chat" className="text-xs">OpenAI Chat 兼容</SelectItem>
-                <SelectItem value="openai-responses" className="text-xs">OpenAI Responses</SelectItem>
+                <SelectItem value="openai-chat" className="text-xs">{t('provider.openaiChatCompat')}</SelectItem>
+                <SelectItem value="openai-responses" className="text-xs">{t('provider.openaiResponses')}</SelectItem>
                 <SelectItem value="anthropic" className="text-xs">Anthropic</SelectItem>
               </SelectContent>
             </Select>
@@ -386,9 +389,9 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <label className="text-sm font-medium">模型列表</label>
+              <label className="text-sm font-medium">{t('provider.modelList')}</label>
               <p className="text-[11px] text-muted-foreground">
-                共 {provider.models.length} 个模型{provider.models.length > 0 && `，已启用 ${provider.models.filter((m) => m.enabled).length}`}
+                {t('provider.modelCount', { total: provider.models.length, enabled: provider.models.filter((m) => m.enabled).length })}
               </p>
             </div>
             <div className="flex items-center gap-1.5">
@@ -396,7 +399,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
                 <div className="relative">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
                   <Input
-                    placeholder="搜索模型..."
+                    placeholder={t('provider.searchModels')}
                     value={modelSearch}
                     onChange={(e) => setModelSearch(e.target.value)}
                     className="h-7 w-32 pl-7 text-[11px]"
@@ -411,7 +414,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
                 onClick={handleFetchModels}
               >
                 {fetchingModels ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
-                获取模型列表
+                {t('provider.fetchModels')}
               </Button>
               <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => setAddingModel(true)}>
                 <Plus className="size-3.5" />
@@ -422,14 +425,14 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
           {addingModel && (
             <div className="flex items-center gap-2">
               <Input
-                placeholder="模型 ID (如 gpt-4o)"
+                placeholder={t('provider.modelIdPlaceholder')}
                 value={newModelId}
                 onChange={(e) => setNewModelId(e.target.value)}
                 className="flex-1 h-8 text-xs"
                 autoFocus
               />
               <Input
-                placeholder="显示名称 (可选)"
+                placeholder={t('provider.modelNamePlaceholder')}
                 value={newModelName}
                 onChange={(e) => setNewModelName(e.target.value)}
                 className="flex-1 h-8 text-xs"
@@ -453,7 +456,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
           <div className="rounded-lg border divide-y overflow-hidden" style={{ maxHeight: 320 }}>
             {filteredModels.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
-                {provider.models.length === 0 ? '暂无模型，点击「获取模型列表」或手动添加' : '无匹配结果'}
+                {provider.models.length === 0 ? t('provider.noModels') : t('provider.noMatchResults')}
               </div>
             ) : (
               <div className="overflow-y-auto divide-y" style={{ maxHeight: 320 }}>
@@ -499,7 +502,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="text-[11px]">
-                        {model.supportsThinking ? '编辑 Think 配置' : '配置 Think 支持'}
+                        {model.supportsThinking ? t('provider.editThinkConfig') : t('provider.configThinkSupport')}
                       </TooltipContent>
                     </Tooltip>
                     <Button
@@ -554,6 +557,7 @@ function ThinkingConfigDialog({
   onOpenChange: (v: boolean) => void
   onSave: (supportsThinking: boolean, thinkingConfig?: ThinkingConfig) => void
 }): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const [enabled, setEnabled] = useState(model.supportsThinking ?? false)
   const [bodyParamsJson, setBodyParamsJson] = useState(
     model.thinkingConfig?.bodyParams ? JSON.stringify(model.thinkingConfig.bodyParams, null, 2) : '{\n  \n}'
@@ -574,7 +578,7 @@ function ThinkingConfigDialog({
     try {
       const parsed = JSON.parse(bodyParamsJson)
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        setJsonError('启用参数必须是 JSON 对象')
+        setJsonError(t('provider.thinkJsonObjError'))
         return
       }
       const config: ThinkingConfig = { bodyParams: parsed }
@@ -584,21 +588,21 @@ function ThinkingConfigDialog({
           if (typeof disabledParsed === 'object' && disabledParsed !== null && !Array.isArray(disabledParsed)) {
             config.disabledBodyParams = disabledParsed
           } else {
-            setJsonError('关闭参数必须是 JSON 对象')
+            setJsonError(t('provider.thinkJsonObjError'))
             return
           }
         } catch {
-          setJsonError('关闭参数 JSON 格式无效')
+          setJsonError(t('provider.thinkJsonInvalid'))
           return
         }
       }
       if (forceTemp.trim()) {
-        const t = parseFloat(forceTemp)
-        if (!isNaN(t)) config.forceTemperature = t
+        const temp = parseFloat(forceTemp)
+        if (!isNaN(temp)) config.forceTemperature = temp
       }
       onSave(true, config)
     } catch {
-      setJsonError('启用参数 JSON 格式无效')
+      setJsonError(t('provider.thinkJsonInvalid'))
     }
   }
 
@@ -606,22 +610,22 @@ function ThinkingConfigDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>配置 Think 支持</DialogTitle>
+          <DialogTitle>{t('provider.configThinkSupport')}</DialogTitle>
           <DialogDescription>
-            为模型 <span className="font-medium text-foreground">{model.name}</span> 配置深度思考参数
+            {t('provider.thinkConfigDesc', { model: model.name })}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">启用 Think 支持</label>
+            <label className="text-sm font-medium">{t('provider.enableThink')}</label>
             <Switch checked={enabled} onCheckedChange={setEnabled} />
           </div>
 
           {enabled && (
             <>
               <div className="space-y-2">
-                <label className="text-sm font-medium">启用时 Body 参数 (JSON)</label>
-                <p className="text-[11px] text-muted-foreground">启用 Think 时合并到请求 body 的额外参数</p>
+                <label className="text-sm font-medium">{t('provider.thinkBodyParams')}</label>
+                <p className="text-[11px] text-muted-foreground">{t('provider.thinkBodyParamsHint')}</p>
                 <textarea
                   value={bodyParamsJson}
                   onChange={(e) => { setBodyParamsJson(e.target.value); setJsonError('') }}
@@ -630,26 +634,26 @@ function ThinkingConfigDialog({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">关闭时 Body 参数 (JSON，可选)</label>
-                <p className="text-[11px] text-muted-foreground">关闭 Think 时合并到请求 body 的参数，留空则不发送</p>
+                <label className="text-sm font-medium">{t('provider.thinkDisabledBodyParams')}</label>
+                <p className="text-[11px] text-muted-foreground">{t('provider.thinkDisabledBodyParamsHint')}</p>
                 <textarea
                   value={disabledBodyParamsJson}
                   onChange={(e) => { setDisabledBodyParamsJson(e.target.value); setJsonError('') }}
                   className="w-full h-24 rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                   spellCheck={false}
-                  placeholder="留空则不发送"
+                  placeholder={t('provider.leaveEmpty')}
                 />
                 {jsonError && <p className="text-[11px] text-destructive">{jsonError}</p>}
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">强制 Temperature (可选)</label>
-                <p className="text-[11px] text-muted-foreground">Anthropic 要求 temperature=1，留空则不覆盖</p>
+                <label className="text-sm font-medium">{t('provider.forceTemperature')}</label>
+                <p className="text-[11px] text-muted-foreground">{t('provider.forceTemperatureHint')}</p>
                 <Input
                   type="number"
                   step="0.1"
                   min="0"
                   max="2"
-                  placeholder="留空不覆盖"
+                  placeholder={t('provider.leaveEmpty')}
                   value={forceTemp}
                   onChange={(e) => setForceTemp(e.target.value)}
                   className="w-32 text-xs"
@@ -659,8 +663,8 @@ function ThinkingConfigDialog({
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
-            <Button size="sm" onClick={handleSave}>保存</Button>
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>{t('action.cancel', { ns: 'common' })}</Button>
+            <Button size="sm" onClick={handleSave}>{t('action.save', { ns: 'common' })}</Button>
           </div>
         </div>
       </DialogContent>
@@ -671,6 +675,7 @@ function ThinkingConfigDialog({
 // --- Main ProviderPanel ---
 
 export function ProviderPanel(): React.JSX.Element {
+  const { t } = useTranslation('settings')
   const providers = useProviderStore((s) => s.providers)
 
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -693,8 +698,8 @@ export function ProviderPanel(): React.JSX.Element {
   return (
     <div className="flex flex-col h-full">
       <div className="mb-3 shrink-0">
-        <h2 className="text-lg font-semibold">AI 服务商</h2>
-        <p className="text-sm text-muted-foreground">管理你的 AI 模型服务商和 API 配置</p>
+        <h2 className="text-lg font-semibold">{t('provider.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('provider.subtitle')}</p>
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -705,7 +710,7 @@ export function ProviderPanel(): React.JSX.Element {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
               <Input
-                placeholder="搜索服务商..."
+                placeholder={t('provider.searchProviders')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-7 pl-7 text-[11px] bg-transparent border-0 shadow-none focus-visible:ring-0"
@@ -716,7 +721,7 @@ export function ProviderPanel(): React.JSX.Element {
               size="sm"
               className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-foreground"
               onClick={() => setDialogOpen(true)}
-              title="添加自定义服务商"
+              title={t('provider.addCustomProvider')}
             >
               <Plus className="size-4" />
             </Button>
@@ -726,7 +731,7 @@ export function ProviderPanel(): React.JSX.Element {
           <div className="flex-1 overflow-y-auto py-1">
             {enabledProviders.length > 0 && (
               <div className="px-2 pt-1.5 pb-1">
-                <p className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider px-1">已启用</p>
+                <p className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider px-1">{t('provider.enabled')}</p>
                 {enabledProviders.map((p) => (
                   <button
                     key={p.id}
@@ -747,7 +752,7 @@ export function ProviderPanel(): React.JSX.Element {
 
             {disabledProviders.length > 0 && (
               <div className="px-2 pt-2 pb-1">
-                <p className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider px-1">未启用</p>
+                <p className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-wider px-1">{t('provider.disabled')}</p>
                 {disabledProviders.map((p) => (
                   <button
                     key={p.id}
@@ -773,7 +778,7 @@ export function ProviderPanel(): React.JSX.Element {
             <ProviderConfigPanel provider={selectedProvider} />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              选择一个服务商开始配置
+              {t('provider.selectToConfig')}
             </div>
           )}
         </div>

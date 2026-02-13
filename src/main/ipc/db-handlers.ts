@@ -32,6 +32,7 @@ export function registerDbHandlers(): void {
         updatedAt: number
         workingFolder?: string
         pinned?: boolean
+        pluginId?: string
       }
     ) => {
       sessionsDao.createSession(session)
