@@ -134,15 +134,16 @@ jobs:
         run: npx electron-vite build
 
       - name: Package (${{ matrix.platform }})
-        run: npx electron-builder --${{ matrix.platform }}
+        run: npx electron-builder --${{ matrix.platform }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS 代码签名 (可选，配置 secrets 后自动生效)
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          # macOS: 如果没有配置签名证书，禁用自动发现以避免报错
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' && 'true' || 'false' }}
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD || '' }}
           # Windows 代码签名 (可选)
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD || '' }}
 
       # ── 上传构建产物 ──
 
@@ -177,7 +178,6 @@ jobs:
           path: |
             dist/*.AppImage
             dist/*.deb
-            dist/*.snap
           if-no-files-found: error
           retention-days: 30
 
