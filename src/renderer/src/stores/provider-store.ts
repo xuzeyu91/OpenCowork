@@ -14,14 +14,15 @@ export type { BuiltinProviderPreset }
 function createProviderFromPreset(preset: BuiltinProviderPreset): AIProvider {
   return {
     id: nanoid(),
-    name: preset.name,
+    name: preset.name.trim(),
     type: preset.type,
     apiKey: '',
-    baseUrl: preset.defaultBaseUrl,
+    baseUrl: preset.defaultBaseUrl.trim(),
     enabled: preset.defaultEnabled ?? false,
     models: [...preset.defaultModels],
     builtinId: preset.builtinId,
     createdAt: Date.now(),
+    requiresApiKey: preset.requiresApiKey ?? true,
   }
 }
 
@@ -193,6 +194,7 @@ export const useProviderStore = create<ProviderStore>()(
           apiKey: provider.apiKey,
           baseUrl: provider.baseUrl || undefined,
           model: activeModelId,
+          requiresApiKey: provider.requiresApiKey,
         }
       },
 
@@ -206,6 +208,7 @@ export const useProviderStore = create<ProviderStore>()(
           apiKey: provider.apiKey,
           baseUrl: provider.baseUrl || undefined,
           model: activeFastModelId || provider.models[0]?.id || '',
+          requiresApiKey: provider.requiresApiKey,
         }
       },
 
@@ -259,6 +262,10 @@ function ensureBuiltinPresets(): void {
       const provider = createProviderFromPreset(preset)
       useProviderStore.getState().addProvider(provider)
     } else {
+      // Sync provider-level fields from preset (e.g. requiresApiKey)
+      if (existing.requiresApiKey !== (preset.requiresApiKey ?? true)) {
+        useProviderStore.getState().updateProvider(existing.id, { requiresApiKey: preset.requiresApiKey ?? true })
+      }
       // Sync pricing & contextLength from preset to persisted models (fill missing fields only)
       let dirty = false
       const updatedModels = existing.models.map((m) => {

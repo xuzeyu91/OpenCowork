@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { confirm } from '@renderer/components/ui/confirm-dialog'
 import {
   Plus,
   Search,
@@ -207,7 +208,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
   }, [provider.models, modelSearch])
 
   const handleTestConnection = async (): Promise<void> => {
-    if (!provider.apiKey) { toast.error(t('provider.noApiKey')); return }
+    if (!provider.apiKey && provider.requiresApiKey !== false) { toast.error(t('provider.noApiKey')); return }
     setTesting(true)
     try {
       const isAnthropic = provider.type === 'anthropic'
@@ -244,9 +245,23 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
       const models = await fetchModelsFromProvider(provider.type, provider.baseUrl, provider.apiKey, provider.builtinId)
       if (models.length === 0) { toast.info(t('provider.noModelsFound')); return }
       const existingMap = new Map(provider.models.map((m) => [m.id, m]))
+      // Build a map of built-in preset models for this provider (highest priority)
+      const preset = provider.builtinId
+        ? builtinProviderPresets.find((p) => p.builtinId === provider.builtinId)
+        : undefined
+      const presetMap = new Map(preset?.defaultModels.map((m) => [m.id, m]) ?? [])
       const merged = models.map((m) => {
+        const presetModel = presetMap.get(m.id)
         const existing = existingMap.get(m.id)
-        return existing ? { ...m, enabled: existing.enabled } : m
+        if (presetModel) {
+          // Built-in model: preset config takes priority, preserve user's enabled state
+          return { ...m, ...presetModel, enabled: existing?.enabled ?? presetModel.enabled }
+        }
+        if (existing) {
+          // User-customized model: preserve existing config, only fill missing fields from fetched
+          return { ...m, ...existing }
+        }
+        return m
       })
       setProviderModels(provider.id, merged)
       toast.success(t('provider.fetchedModels', { count: models.length }))
@@ -258,7 +273,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
         <div className="flex items-center gap-3">
@@ -278,8 +293,12 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
               variant="ghost"
               size="sm"
               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-              onClick={() => {
-                if (!window.confirm(t('provider.deleteConfirm', { name: provider.name }))) return
+              onClick={async () => {
+                const ok = await confirm({
+                  title: t('provider.deleteConfirm', { name: provider.name }),
+                  variant: 'destructive',
+                })
+                if (!ok) return
                 removeProvider(provider.id)
               }}
             >
@@ -294,7 +313,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
       </div>
 
       {/* Config body */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5">
         {/* API Key */}
         <section className="space-y-2">
           <label className="text-sm font-medium">{t('provider.apiKey')}</label>
@@ -354,7 +373,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
               variant="outline"
               size="sm"
               className="h-9 shrink-0 gap-1.5 text-xs"
-              disabled={!provider.apiKey || testing}
+              disabled={(provider.requiresApiKey !== false && !provider.apiKey) || testing}
               onClick={handleTestConnection}
             >
               {testing && <Loader2 className="size-3 animate-spin" />}

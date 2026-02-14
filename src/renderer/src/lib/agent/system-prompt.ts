@@ -10,8 +10,9 @@ export function buildSystemPrompt(options: {
   workingFolder?: string
   userSystemPrompt?: string
   toolDefs?: import('../api/types').ToolDefinition[]
+  language?: string
 }): string {
-  const { mode, workingFolder, userSystemPrompt } = options
+  const { mode, workingFolder, userSystemPrompt, language } = options
 
   const toolDefs = options.toolDefs ?? toolRegistry.getDefinitions()
   const toolList = toolDefs.map((t) => `- **${t.name}**: ${t.description}`).join('\n')
@@ -53,7 +54,9 @@ export function buildSystemPrompt(options: {
     `\n## Environment`,
     `- Operating System: ${osName}`,
     `- Shell: ${shell}`,
-    `- Today's Date: ${isoDate} (${readableDate})`
+    `- Today's Date: ${isoDate} (${readableDate})`,
+    `- User Language: ${language === 'zh' ? 'Chinese (中文)' : 'English'}`,
+    `\n**IMPORTANT: You MUST respond in ${language === 'zh' ? 'Chinese (中文)' : 'English'} unless the user explicitly requests otherwise.**`
   )
 
   // ── Communication Style ──

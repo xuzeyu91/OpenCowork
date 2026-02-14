@@ -161,7 +161,15 @@
     "availablePlugins": "Available Plugins",
     "noPlugins": "No plugins configured",
     "configureInSettings": "Add plugins in Settings → Plugins",
-    "configurePlugins": "Configure..."
+    "configurePlugins": "Configure...",
+    "mcpLabel": "MCP Servers",
+    "availableMcps": "Connected MCP Servers",
+    "noMcps": "No MCP servers connected",
+    "configureMcps": "Add servers in Settings → MCP",
+    "configureMcpServers": "Configure...",
+    "activeMcpServers": "Active MCP servers:",
+    "mcpToolCount": "{{count}} tools",
+    "mcpCount": "{{count}} MCP"
   },
   "userMessage": {
     "you": "You",

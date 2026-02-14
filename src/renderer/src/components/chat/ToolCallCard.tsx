@@ -914,24 +914,11 @@ function StructuredInput({
     return (
       <div className="flex items-center gap-1.5 text-xs">
         <Folder className="size-3 text-amber-400" />
-        <span className="font-mono text-[11px] break-all" style={{ fontFamily: MONO_FONT }}>
-          {path}
-        </span>
-      </div>
-    )
-  }
-
-  // Delete: file path
-  if (name === 'Delete') {
-    const filePath = String(input.file_path ?? input.path ?? '')
-    return (
-      <div className="flex items-center gap-1.5 text-xs">
-        <File className="size-3 text-red-400" />
         <span
-          className="font-mono text-[11px] break-all text-red-400/70"
+          className="font-mono text-[11px]"
           style={{ fontFamily: MONO_FONT }}
         >
-          {filePath}
+          {path}
         </span>
       </div>
     )
@@ -1098,6 +1085,37 @@ export function ToolStatusDot({
   }
 }
 
+function MultiEditList({ edits, filePath }: { edits: any[]; filePath: string }): React.JSX.Element | null {
+  if (!edits || edits.length === 0) return null
+  return (
+    <div className="space-y-2">
+      {edits.map((edit: any, i: number) => (
+        <div key={i}>
+          {edits.length > 1 && (
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[9px] text-muted-foreground/40 font-mono">
+                edit {i + 1}/{edits.length}
+              </span>
+              {typeof edit?.explanation === 'string' && (
+                <span className="text-[9px] text-muted-foreground/30 truncate">
+                  {edit.explanation}
+                </span>
+              )}
+            </div>
+          )}
+          {typeof edit?.old_string === 'string' && typeof edit?.new_string === 'string' ? (
+            <DiffBlock
+              oldStr={edit.old_string}
+              newStr={edit.new_string}
+              filePath={filePath}
+            />
+          ) : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function ToolCallCard({
   name,
   input,
@@ -1119,6 +1137,13 @@ export function ToolCallCard({
   const summary = inputSummary(name, input)
   const elapsed =
     startedAt && completedAt ? ((completedAt - startedAt) / 1000).toFixed(1) + 's' : null
+
+  const multiEdits: any[] = React.useMemo(() => {
+    if (name === 'MultiEdit' && Array.isArray(input.edits)) {
+      return input.edits as any[]
+    }
+    return []
+  }, [name, input.edits])
 
   return (
     <div className="my-5 min-w-0 overflow-hidden">
@@ -1160,32 +1185,11 @@ export function ToolCallCard({
               />
             )}
           {/* MultiEdit: show all edits as diffs */}
-          {name === 'MultiEdit' && Array.isArray(input.edits) && (
-            <div className="space-y-2">
-              {(input.edits as Array<Record<string, unknown>>).map((edit, i) => (
-                <div key={i}>
-                  {(input.edits as unknown[]).length > 1 && (
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-[9px] text-muted-foreground/40 font-mono">
-                        edit {i + 1}/{(input.edits as unknown[]).length}
-                      </span>
-                      {typeof edit.explanation === 'string' && (
-                        <span className="text-[9px] text-muted-foreground/30 truncate">
-                          {edit.explanation}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {edit.old_string && edit.new_string ? (
-                    <DiffBlock
-                      oldStr={String(edit.old_string)}
-                      newStr={String(edit.new_string)}
-                      filePath={String(input.file_path ?? input.path ?? '')}
-                    />
-                  ) : null}
-                </div>
-              ))}
-            </div>
+          {name === 'MultiEdit' && multiEdits.length > 0 && (
+             <MultiEditList
+               edits={multiEdits}
+               filePath={String(input.file_path ?? input.path ?? '')}
+             />
           )}
           {/* Write: show content with syntax highlighting */}
           {name === 'Write' && !!input.content && (
@@ -1218,7 +1222,7 @@ export function ToolCallCard({
             </div>
           )}
           {/* TaskCreate: checklist-style input */}
-          {name === 'TaskCreate' && input.subject && <TaskCreateInputBlock input={input} />}
+          {name === 'TaskCreate' && !!input.subject && <TaskCreateInputBlock input={input} />}
           {/* Structured Input — tool-specific rendering */}
           {!(
             (name === 'Edit' && !!input.old_string) ||

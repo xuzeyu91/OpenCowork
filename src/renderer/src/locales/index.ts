@@ -7,12 +7,14 @@ import enLayout from './en/layout.json'
 import enChat from './en/chat.json'
 import enSettings from './en/settings.json'
 import enCowork from './en/cowork.json'
+import enAgent from './en/agent.json'
 
 import zhCommon from './zh/common.json'
 import zhLayout from './zh/layout.json'
 import zhChat from './zh/chat.json'
 import zhSettings from './zh/settings.json'
 import zhCowork from './zh/cowork.json'
+import zhAgent from './zh/agent.json'
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -22,6 +24,7 @@ i18n.use(initReactI18next).init({
       chat: enChat,
       settings: enSettings,
       cowork: enCowork,
+      agent: enAgent,
     },
     zh: {
       common: zhCommon,
@@ -29,6 +32,7 @@ i18n.use(initReactI18next).init({
       chat: zhChat,
       settings: zhSettings,
       cowork: zhCowork,
+      agent: zhAgent,
     },
   },
   lng: useSettingsStore.getState().language,

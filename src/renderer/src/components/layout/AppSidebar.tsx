@@ -48,6 +48,7 @@ import { useAgentStore } from '@renderer/stores/agent-store'
 import { useTeamStore } from '@renderer/stores/team-store'
 import { abortSession } from '@renderer/hooks/use-chat-actions'
 import { sessionToMarkdown } from '@renderer/lib/utils/export-chat'
+import packageJson from '../../../../../package.json'
 
 const modeIcons: Record<SessionMode, React.ReactNode> = {
   chat: <MessageSquare className="size-4" />,
@@ -76,6 +77,7 @@ export function AppSidebar(): React.JSX.Element {
   const [editTitle, setEditTitle] = useState('')
   const editRef = useRef<HTMLInputElement>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; msgCount: number } | null>(null)
+  const appVersion = packageJson.version ?? '0.0.0'
 
   // Detect if the delete target has running tasks
   const deleteTargetRunningInfo = useMemo(() => {
@@ -493,12 +495,16 @@ export function AppSidebar(): React.JSX.Element {
           <Button
             variant="ghost"
             size="sm"
-            className="size-8 shrink-0 p-0 group-data-[collapsible=icon]:size-10"
+            className="h-8 w-full justify-start gap-2 rounded-lg px-2 text-xs text-muted-foreground transition-all duration-200 hover:bg-muted/50 hover:text-foreground group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:justify-center"
             title={t('sidebar.systemSettings')}
             onClick={() => useUIStore.getState().openSettingsPage()}
           >
             <Settings className="size-3.5" />
+            <span className="font-medium group-data-[collapsible=icon]:hidden">{t('sidebar.systemSettings')}</span>
           </Button>
+          <p className="text-center text-[10px] text-muted-foreground/40 group-data-[collapsible=icon]:hidden">
+            v{appVersion}
+          </p>
         </div>
         <p className="text-center text-[10px] text-muted-foreground/25 group-data-[collapsible=icon]:hidden">
           {sessions.length} {t('sidebar.sessions')} · {sessions.reduce((a, s) => a + s.messages.length, 0)} {t('sidebar.msgs')}

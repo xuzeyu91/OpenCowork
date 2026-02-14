@@ -19,6 +19,7 @@ import go from 'react-syntax-highlighter/dist/esm/languages/prism/go'
 import { Avatar, AvatarFallback } from '@renderer/components/ui/avatar'
 import { useTypewriter } from '@renderer/hooks/use-typewriter'
 import { Copy, Check, ChevronsDownUp, ChevronsUpDown, Bug } from 'lucide-react'
+import { FadeIn, ScaleIn } from '@renderer/components/animate-ui'
 import type {
   ContentBlock,
   TokenUsage,
@@ -338,12 +339,12 @@ export function AssistantMessage({
   // Memoize the plain text extraction for token estimation (used only when no API usage)
   const plainTextForTokens = useMemo(() => {
     if (usage || isStreaming) return '' // skip expensive computation when API provides usage
-    return typeof content === 'string'
-      ? stripThinkTags(content)
-      : content
-          .filter((b) => b.type === 'text')
-          .map((b) => stripThinkTags(b.text))
-          .join('\n')
+    if (typeof content === 'string') return stripThinkTags(content)
+    if (!Array.isArray(content)) return ''
+    return content
+      .filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text')
+      .map((b) => stripThinkTags(b.text))
+      .join('\n')
   }, [content, usage, isStreaming])
   const fallbackTokens = useMemoizedTokens(plainTextForTokens)
 
@@ -391,7 +392,7 @@ export function AssistantMessage({
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <StreamingMarkdownContent text={content} isStreaming={!!isStreaming} />
             {isStreaming && (
-              <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />
+              <span className="inline-block w-1.5 h-4 bg-primary/70 animate-pulse ml-0.5 rounded-sm" />
             )}
           </div>
         )
@@ -401,6 +402,9 @@ export function AssistantMessage({
         (acc: number, s, idx) => (s.type === 'text' ? idx : acc),
         -1
       )
+      const lastSegment = segments[segments.length - 1]
+      const showOuterCursor = isStreaming && !(lastSegment?.type === 'think' && !lastSegment.closed)
+
       return (
         <div className="space-y-2">
           {segments.map((seg, idx) => {
@@ -422,8 +426,8 @@ export function AssistantMessage({
               </div>
             )
           })}
-          {isStreaming && (
-            <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse ml-0.5" />
+          {showOuterCursor && (
+            <span className="inline-block w-1.5 h-4 bg-primary/70 animate-pulse ml-0.5 rounded-sm" />
           )}
         </div>
       )
@@ -469,47 +473,76 @@ export function AssistantMessage({
     ): React.JSX.Element | null => {
       if (toolsCollapsed) return null
       if (block.name === 'TaskCreate') {
-        return <TaskCard key={key} name={block.name} input={block.input} isLive={!!isStreaming} />
+        return (
+          <ScaleIn key={key} className="w-full origin-left">
+            <TaskCard name={block.name} input={block.input} isLive={!!isStreaming} />
+          </ScaleIn>
+        )
       }
       if (block.name === 'TaskUpdate') {
-        return <TaskCard key={key} name={block.name} input={block.input} isLive={!!isStreaming} />
+        return (
+          <ScaleIn key={key} className="w-full origin-left">
+            <TaskCard name={block.name} input={block.input} isLive={!!isStreaming} />
+          </ScaleIn>
+        )
       }
       if (TEAM_TOOL_NAMES.has(block.name)) {
         const result = toolResults?.get(block.id)
         return (
-          <TeamEventCard key={key} name={block.name} input={block.input} output={result?.content} />
+          <FadeIn key={key} className="w-full">
+            <TeamEventCard name={block.name} input={block.input} output={result?.content} />
+          </FadeIn>
         )
       }
       if (block.name === TASK_TOOL_NAME) {
         if (block.input.run_in_background) {
           const result = toolResults?.get(block.id)
           return (
-            <TeamEventCard
-              key={key}
-              name={block.name}
-              input={block.input}
-              output={result?.content}
-            />
+            <FadeIn key={key} className="w-full">
+              <TeamEventCard
+                name={block.name}
+                input={block.input}
+                output={result?.content}
+              />
+            </FadeIn>
           )
         }
         const result = toolResults?.get(block.id)
         return (
-          <SubAgentCard
-            key={key}
-            name={block.name}
-            toolUseId={block.id}
-            input={block.input}
-            output={result?.content}
-            isLive={!!isStreaming}
-          />
+          <ScaleIn key={key} className="w-full origin-left">
+            <SubAgentCard
+              name={block.name}
+              toolUseId={block.id}
+              input={block.input}
+              output={result?.content}
+              isLive={!!isStreaming}
+            />
+          </ScaleIn>
         )
       }
       if (['Write', 'Edit', 'MultiEdit', 'Delete'].includes(block.name)) {
         const result = toolResults?.get(block.id)
         const liveTc = liveToolCallMap?.get(block.id)
         return (
-          <FileChangeCard
-            key={key}
+          <ScaleIn key={key} className="w-full origin-left">
+            <FileChangeCard
+              name={block.name}
+              input={block.input}
+              output={liveTc?.output ?? result?.content}
+              status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
+              error={liveTc?.error}
+              startedAt={liveTc?.startedAt}
+              completedAt={liveTc?.completedAt}
+            />
+          </ScaleIn>
+        )
+      }
+      // Generic ToolCallCard
+      const result = toolResults?.get(block.id)
+      const liveTc = liveToolCallMap?.get(block.id)
+      return (
+        <ScaleIn key={key} className="w-full origin-left">
+          <ToolCallCard
             name={block.name}
             input={block.input}
             output={liveTc?.output ?? result?.content}
@@ -518,22 +551,7 @@ export function AssistantMessage({
             startedAt={liveTc?.startedAt}
             completedAt={liveTc?.completedAt}
           />
-        )
-      }
-      // Generic ToolCallCard
-      const result = toolResults?.get(block.id)
-      const liveTc = liveToolCallMap?.get(block.id)
-      return (
-        <ToolCallCard
-          key={key}
-          name={block.name}
-          input={block.input}
-          output={liveTc?.output ?? result?.content}
-          status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
-          error={liveTc?.error}
-          startedAt={liveTc?.startedAt}
-          completedAt={liveTc?.completedAt}
-        />
+        </ScaleIn>
       )
     }
 
@@ -628,16 +646,17 @@ export function AssistantMessage({
             const result = toolResults?.get(block.id)
             const liveTc = liveToolCallMap?.get(block.id)
             return (
-              <ToolCallCard
-                key={block.id}
-                name={block.name}
-                input={block.input}
-                output={liveTc?.output ?? result?.content}
-                status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
-                error={liveTc?.error}
-                startedAt={liveTc?.startedAt}
-                completedAt={liveTc?.completedAt}
-              />
+              <ScaleIn key={block.id} className="w-full origin-left">
+                <ToolCallCard
+                  name={block.name}
+                  input={block.input}
+                  output={liveTc?.output ?? result?.content}
+                  status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
+                  error={liveTc?.error}
+                  startedAt={liveTc?.startedAt}
+                  completedAt={liveTc?.completedAt}
+                />
+              </ScaleIn>
             )
           }
 
@@ -660,27 +679,29 @@ export function AssistantMessage({
           })
 
           return (
-            <ToolCallGroup key={groupKey} toolName={item.toolName} items={groupItems}>
-              {groupBlocks.map((block) => {
-                const result = toolResults?.get(block.id)
-                const liveTc = liveToolCallMap?.get(block.id)
-                return (
-                  <ToolCallCard
-                    key={block.id}
-                    name={block.name}
-                    input={block.input}
-                    output={liveTc?.output ?? result?.content}
-                    status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
-                    error={liveTc?.error}
-                    startedAt={liveTc?.startedAt}
-                    completedAt={liveTc?.completedAt}
-                  />
-                )
-              })}
-            </ToolCallGroup>
+            <ScaleIn key={groupKey} className="w-full origin-left">
+              <ToolCallGroup toolName={item.toolName} items={groupItems}>
+                {groupBlocks.map((block) => {
+                  const result = toolResults?.get(block.id)
+                  const liveTc = liveToolCallMap?.get(block.id)
+                  return (
+                    <ToolCallCard
+                      key={block.id}
+                      name={block.name}
+                      input={block.input}
+                      output={liveTc?.output ?? result?.content}
+                      status={liveTc?.status ?? (result?.isError ? 'error' : 'completed')}
+                      error={liveTc?.error}
+                      startedAt={liveTc?.startedAt}
+                      completedAt={liveTc?.completedAt}
+                    />
+                  )
+                })}
+              </ToolCallGroup>
+            </ScaleIn>
           )
         })}
-        {isStreaming && <span className="inline-block w-1.5 h-4 bg-foreground/70 animate-pulse" />}
+        {isStreaming && <span className="inline-block w-1.5 h-4 bg-primary/70 animate-pulse ml-0.5 rounded-sm" />}
       </div>
     )
   }
@@ -688,10 +709,12 @@ export function AssistantMessage({
   const plainText =
     typeof content === 'string'
       ? stripThinkTags(content)
-      : content
-          .filter((b) => b.type === 'text')
-          .map((b) => stripThinkTags(b.text))
-          .join('\n')
+      : Array.isArray(content)
+        ? content
+            .filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text')
+            .map((b) => stripThinkTags(b.text))
+            .join('\n')
+        : ''
 
   const timingSummary = useMemo(() => {
     if (!usage) return null
@@ -756,17 +779,18 @@ export function AssistantMessage({
           <p className="mt-1 text-[10px] text-muted-foreground/40 tabular-nums">
             {usage
               ? (() => {
-                  const total = usage.inputTokens + usage.outputTokens
+                  const u = usage!
+                  const total = u.inputTokens + u.outputTokens
                   const modelCfg = useProviderStore.getState().getActiveModelConfig()
-                  const cost = calculateCost(usage, modelCfg)
+                  const cost = calculateCost(u, modelCfg)
                   return (
                     <>
-                      {`${formatTokens(total)} ${t('unit.tokens', { ns: 'common' })} (${formatTokens(usage.inputTokens)}↓ ${formatTokens(usage.outputTokens)}↑`}
-                      {usage.cacheReadTokens
-                        ? ` · ${formatTokens(usage.cacheReadTokens)} ${t('unit.cached', { ns: 'common' })}`
+                      {`${formatTokens(total)} ${t('unit.tokens', { ns: 'common' })} (${formatTokens(u.inputTokens)}↓ ${formatTokens(u.outputTokens)}↑`}
+                      {u.cacheReadTokens
+                        ? ` · ${formatTokens(u.cacheReadTokens)} ${t('unit.cached', { ns: 'common' })}`
                         : ''}
-                      {usage.reasoningTokens
-                        ? ` · ${formatTokens(usage.reasoningTokens)} ${t('unit.reasoning', { ns: 'common' })}`
+                      {u.reasoningTokens
+                        ? ` · ${formatTokens(u.reasoningTokens)} ${t('unit.reasoning', { ns: 'common' })}`
                         : ''}
                       {')'}
                       {cost !== null && (

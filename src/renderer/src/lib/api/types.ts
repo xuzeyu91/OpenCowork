@@ -187,6 +187,8 @@ export interface AIProvider {
   models: AIModelConfig[]
   builtinId?: string
   createdAt: number
+  /** Whether this provider requires an API key. Defaults to true when omitted. */
+  requiresApiKey?: boolean
 }
 
 // --- Provider Config ---
@@ -199,6 +201,8 @@ export interface ProviderConfig {
   maxTokens?: number
   temperature?: number
   systemPrompt?: string
+  /** Whether this provider actually needs an API key */
+  requiresApiKey?: boolean
   /** Whether thinking mode is enabled for this request */
   thinkingEnabled?: boolean
   /** Thinking configuration from the active model */

@@ -8,4 +8,5 @@ export const ollamaPreset: BuiltinProviderPreset = {
   defaultModels: [
     
   ],
+  requiresApiKey: false,
 }

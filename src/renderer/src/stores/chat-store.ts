@@ -1,7 +1,14 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { nanoid } from 'nanoid'
-import type { UnifiedMessage, ContentBlock, TextBlock, ThinkingBlock, ToolUseBlock } from '../lib/api/types'
+import type {
+  UnifiedMessage,
+  ContentBlock,
+  TextBlock,
+  ThinkingBlock,
+  ToolUseBlock,
+  ToolResultContent
+} from '../lib/api/types'
 import { ipcClient } from '../lib/ipc/ipc-client'
 import { useAgentStore } from './agent-store'
 import { useTeamStore } from './team-store'
@@ -127,6 +134,7 @@ interface ChatStore {
   removeLastUserMessage: (sessionId: string) => void
   truncateMessagesFrom: (sessionId: string, fromIndex: number) => void
   replaceSessionMessages: (sessionId: string, messages: UnifiedMessage[]) => void
+  sanitizeToolErrorsForResend: (sessionId: string) => void
 
   // Message operations
   addMessage: (sessionId: string, msg: UnifiedMessage) => void
@@ -197,6 +205,77 @@ function rowToMessage(row: MessageRow): UnifiedMessage {
     createdAt: row.created_at,
     usage: row.usage ? JSON.parse(row.usage) : undefined,
   }
+}
+
+function isLikelyToolErrorContent(content: ToolResultContent): boolean {
+  if (typeof content !== 'string') return false
+  try {
+    const parsed = JSON.parse(content) as { error?: unknown } | null
+    if (!parsed || typeof parsed !== 'object') return false
+    const keys = Object.keys(parsed)
+    return keys.length === 1 && keys[0] === 'error' && typeof parsed.error === 'string'
+  } catch {
+    return false
+  }
+}
+
+function sanitizeToolBlocksForResend(messages: UnifiedMessage[]): {
+  messages: UnifiedMessage[]
+  changed: boolean
+} {
+  const toolUseIds = new Set<string>()
+  const toolResultIds = new Set<string>()
+  const erroredToolIds = new Set<string>()
+
+  for (const msg of messages) {
+    if (typeof msg.content === 'string') continue
+    for (const block of msg.content as ContentBlock[]) {
+      if (block.type === 'tool_use') {
+        toolUseIds.add(block.id)
+        continue
+      }
+      if (block.type === 'tool_result') {
+        toolResultIds.add(block.toolUseId)
+        if (block.isError || isLikelyToolErrorContent(block.content)) {
+          erroredToolIds.add(block.toolUseId)
+        }
+      }
+    }
+  }
+
+  const stripIds = new Set<string>(erroredToolIds)
+  for (const id of toolUseIds) {
+    if (!toolResultIds.has(id)) stripIds.add(id)
+  }
+  for (const id of toolResultIds) {
+    if (!toolUseIds.has(id)) stripIds.add(id)
+  }
+
+  if (stripIds.size === 0) {
+    return { messages, changed: false }
+  }
+
+  let changed = false
+  const sanitized = messages.flatMap((msg) => {
+    if (typeof msg.content === 'string') return [msg]
+
+    const blocks = msg.content as ContentBlock[]
+    const filtered = blocks.filter((block) => {
+      if (block.type === 'tool_use') return !stripIds.has(block.id)
+      if (block.type === 'tool_result') return !stripIds.has(block.toolUseId)
+      return true
+    })
+
+    if (filtered.length === blocks.length) {
+      return [msg]
+    }
+
+    changed = true
+    if (filtered.length === 0) return []
+    return [{ ...msg, content: filtered }]
+  })
+
+  return { messages: sanitized, changed }
 }
 
 export const useChatStore = create<ChatStore>()(
@@ -400,19 +479,30 @@ export const useChatStore = create<ChatStore>()(
     removeLastAssistantMessage: (sessionId) => {
       const session = get().sessions.find((s) => s.id === sessionId)
       if (!session || session.messages.length === 0) return null
-      const lastMsg = session.messages[session.messages.length - 1]
-      if (lastMsg.role !== 'assistant') return null
+      // Find the last assistant message, skipping trailing tool_result-only user messages
+      let assistantIdx = -1
+      for (let i = session.messages.length - 1; i >= 0; i--) {
+        const m = session.messages[i]
+        if (m.role === 'assistant') { assistantIdx = i; break }
+        // Skip tool_result-only user messages (they are API-level, not real user input)
+        if (m.role === 'user' && Array.isArray(m.content) && m.content.every((b) => b.type === 'tool_result')) continue
+        break // hit a real user message or something else — stop
+      }
+      if (assistantIdx < 0) return null
+      // Truncate from the assistant message onward (removes it + trailing tool_result messages)
       set((state) => {
         const s = state.sessions.find((s) => s.id === sessionId)
-        if (s) s.messages.pop()
+        if (s) s.messages.splice(assistantIdx)
       })
-      // Remove from DB: truncate from the last index
       const newLen = get().sessions.find((s) => s.id === sessionId)?.messages.length ?? 0
       dbTruncateMessagesFrom(sessionId, newLen)
       // Return the last user message text for retry
       const updated = get().sessions.find((s) => s.id === sessionId)
       const lastUser = updated?.messages.findLast((m) => m.role === 'user')
-      return lastUser ? (typeof lastUser.content === 'string' ? lastUser.content : null) : null
+      if (!lastUser) return null
+      if (typeof lastUser.content === 'string') return lastUser.content
+      const textBlocks = lastUser.content.filter((b) => b.type === 'text')
+      return textBlocks.length > 0 ? textBlocks.map((b) => b.type === 'text' ? b.text : '').join('\n') : null
     },
 
     removeLastUserMessage: (sessionId) => {
@@ -455,6 +545,14 @@ export const useChatStore = create<ChatStore>()(
       dbClearMessages(sessionId)
       messages.forEach((msg, i) => dbAddMessage(sessionId, msg, i))
       dbUpdateSession(sessionId, { updatedAt: now })
+    },
+
+    sanitizeToolErrorsForResend: (sessionId) => {
+      const session = get().sessions.find((s) => s.id === sessionId)
+      if (!session || session.messages.length === 0) return
+      const sanitized = sanitizeToolBlocksForResend(session.messages)
+      if (!sanitized.changed) return
+      get().replaceSessionMessages(sessionId, sanitized.messages)
     },
 
     addMessage: (sessionId, msg) => {

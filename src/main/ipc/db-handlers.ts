@@ -90,6 +90,17 @@ export function registerDbHandlers(): void {
         sortOrder: number
       }
     ) => {
+      // Ensure session exists to avoid FK constraint failure (race with fire-and-forget IPC)
+      const existing = sessionsDao.getSession(msg.sessionId)
+      if (!existing) {
+        sessionsDao.createSession({
+          id: msg.sessionId,
+          title: 'New Conversation',
+          mode: 'chat',
+          createdAt: msg.createdAt,
+          updatedAt: msg.createdAt,
+        })
+      }
       messagesDao.addMessage(msg)
       return { success: true }
     }

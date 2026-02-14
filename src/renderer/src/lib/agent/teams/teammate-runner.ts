@@ -275,7 +275,8 @@ async function runSingleTaskLoop(opts: {
     task: taskInfo
       ? { id: taskInfo.id, subject: taskInfo.subject, description: taskInfo.description }
       : null,
-    workingFolder
+    workingFolder,
+    language: settings.language
   })
   providerConfig.systemPrompt = systemPrompt
 
@@ -572,15 +573,17 @@ function buildTeammateSystemPrompt(options: {
   prompt: string
   task: { id: string; subject: string; description: string } | null
   workingFolder?: string
+  language?: string
 }): string {
-  const { memberName, teamName, prompt, task, workingFolder } = options
+  const { memberName, teamName, prompt, task, workingFolder, language } = options
 
   const parts: string[] = []
 
   parts.push(
     `You are "${memberName}", a teammate agent in the "${teamName}" team.`,
     `You are part of a multi-agent team working in parallel on a shared codebase.`,
-    `You should focus exclusively on your assigned work and avoid modifying files outside your scope.`
+    `You should focus exclusively on your assigned work and avoid modifying files outside your scope.`,
+    `**You MUST respond in ${language === 'zh' ? 'Chinese (中文)' : 'English'} unless explicitly instructed otherwise.**`
   )
 
   if (task) {

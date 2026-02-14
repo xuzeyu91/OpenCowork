@@ -33,6 +33,8 @@ import { compressMessages } from '@renderer/lib/agent/context-compression'
 import type { CompressionConfig } from '@renderer/lib/agent/context-compression'
 import { usePluginStore } from '@renderer/stores/plugin-store'
 import { registerPluginTools, unregisterPluginTools, isPluginToolsRegistered } from '@renderer/lib/plugins/plugin-tools'
+import { useMcpStore } from '@renderer/stores/mcp-store'
+import { registerMcpTools, unregisterMcpTools, isMcpToolsRegistered } from '@renderer/lib/mcp/mcp-tools'
 
 /** Per-session abort controllers — module-level so concurrent sessions don't overwrite each other */
 const sessionAbortControllers = new Map<string, AbortController>()
@@ -229,7 +231,7 @@ export function useChatActions() {
           }
         : null
 
-    if (!baseProviderConfig || !baseProviderConfig.apiKey) {
+    if (!baseProviderConfig || (!baseProviderConfig.apiKey && baseProviderConfig.requiresApiKey !== false)) {
       toast.error('API key required', {
         description: 'Please configure an AI provider in Settings',
         action: { label: 'Open Settings', onClick: () => uiStore.openSettingsPage('provider') }
@@ -241,6 +243,11 @@ export function useChatActions() {
     let sessionId = chatStore.activeSessionId
     if (!sessionId) {
       sessionId = chatStore.createSession(uiStore.mode)
+    }
+    // After a manual abort, stale errored/orphaned tool blocks can remain at tail
+    // and break the next request. Clean them before appending new user input.
+    if (useAgentStore.getState().runningSessions[sessionId] !== 'running') {
+      chatStore.sanitizeToolErrorsForResend(sessionId)
     }
     baseProviderConfig.sessionId = sessionId
 
@@ -328,12 +335,6 @@ export function useChatActions() {
       // Cowork / Code mode: agent loop with tools
       const session = useChatStore.getState().sessions.find((s) => s.id === sessionId)
 
-      // Filter out team tools when the feature is disabled
-      const allToolDefs = toolRegistry.getDefinitions()
-      const effectiveToolDefs = settings.teamToolsEnabled
-        ? allToolDefs
-        : allToolDefs.filter((t) => !TEAM_TOOL_NAMES.has(t.name))
-
       // Dynamic plugin tool registration based on active plugins
       const activePlugins = usePluginStore.getState().getActivePlugins()
       if (activePlugins.length > 0 && !isPluginToolsRegistered()) {
@@ -342,10 +343,18 @@ export function useChatActions() {
         unregisterPluginTools()
       }
 
-      // Re-fetch tool defs after potential plugin tool registration
-      const finalToolDefs = activePlugins.length > 0
-        ? toolRegistry.getDefinitions()
-        : effectiveToolDefs
+      // Dynamic MCP tool registration based on active MCPs
+      const activeMcps = useMcpStore.getState().getActiveMcps()
+      const activeMcpTools = useMcpStore.getState().getActiveMcpTools()
+      if (activeMcps.length > 0 && Object.keys(activeMcpTools).length > 0) {
+        registerMcpTools(activeMcps, activeMcpTools)
+      } else if (activeMcps.length === 0 && isMcpToolsRegistered()) {
+        unregisterMcpTools()
+      }
+
+      // Filter out team tools when the feature is disabled. Capture after registration changes.
+      const allToolDefs = toolRegistry.getDefinitions()
+      const finalToolDefs = allToolDefs
       const finalEffectiveToolDefs = settings.teamToolsEnabled
         ? finalToolDefs
         : finalToolDefs.filter((t) => !TEAM_TOOL_NAMES.has(t.name))
@@ -369,11 +378,34 @@ export function useChatActions() {
         userPrompt = userPrompt ? `${userPrompt}\n${pluginSection}` : pluginSection
       }
 
+      // Build MCP info for system prompt — inject active MCP server metadata and tool mappings
+      if (activeMcps.length > 0) {
+        const mcpLines: string[] = ['\n## Active MCP Servers']
+        for (const srv of activeMcps) {
+          const tools = activeMcpTools[srv.id] ?? []
+          mcpLines.push(`- **${srv.name}** (${tools.length} tools, transport: ${srv.transport})`)
+          if (srv.description?.trim()) {
+            mcpLines.push(`  ${srv.description.trim()}`)
+          }
+          if (tools.length > 0) {
+            mcpLines.push(`  Available tools: ${tools.map((t) => `\`mcp__${srv.id}__${t.name}\``).join(', ')}`)
+          }
+        }
+        mcpLines.push(
+          '',
+          'MCP tools are prefixed with `mcp__{serverId}__{toolName}`. Call them like any other tool — they are routed to the corresponding MCP server automatically.',
+          'MCP tools require user approval before execution.'
+        )
+        const mcpSection = mcpLines.join('\n')
+        userPrompt = userPrompt ? `${userPrompt}\n${mcpSection}` : mcpSection
+      }
+
       const agentSystemPrompt = buildSystemPrompt({
         mode: mode as 'cowork' | 'code',
         workingFolder: session?.workingFolder,
         userSystemPrompt: userPrompt || undefined,
-        toolDefs: finalEffectiveToolDefs
+        toolDefs: finalEffectiveToolDefs,
+        language: useSettingsStore.getState().language
       })
       const agentProviderConfig: ProviderConfig = {
         ...baseProviderConfig,

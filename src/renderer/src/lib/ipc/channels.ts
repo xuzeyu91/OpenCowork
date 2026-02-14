@@ -52,6 +52,24 @@ export const IPC = {
   PLUGIN_SESSIONS_MESSAGES: 'plugin:sessions:messages',
   PLUGIN_SESSIONS_CREATE: 'plugin:sessions:create',
   PLUGIN_INCOMING_MESSAGE: 'plugin:incoming-message',
+
+  // MCP
+  MCP_LIST: 'mcp:list',
+  MCP_ADD: 'mcp:add',
+  MCP_UPDATE: 'mcp:update',
+  MCP_REMOVE: 'mcp:remove',
+  MCP_CONNECT: 'mcp:connect',
+  MCP_DISCONNECT: 'mcp:disconnect',
+  MCP_STATUS: 'mcp:status',
+  MCP_SERVER_INFO: 'mcp:server-info',
+  MCP_ALL_SERVERS_INFO: 'mcp:all-servers-info',
+  MCP_LIST_TOOLS: 'mcp:list-tools',
+  MCP_CALL_TOOL: 'mcp:call-tool',
+  MCP_LIST_RESOURCES: 'mcp:list-resources',
+  MCP_READ_RESOURCE: 'mcp:read-resource',
+  MCP_LIST_PROMPTS: 'mcp:list-prompts',
+  MCP_GET_PROMPT: 'mcp:get-prompt',
+  MCP_REFRESH_CAPABILITIES: 'mcp:refresh-capabilities',
 } as const
 
 export type IPCChannel = (typeof IPC)[keyof typeof IPC]

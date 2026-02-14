@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import type { ToolCallStatus } from '@renderer/lib/agent/types'
 import type { ToolResultContent } from '@renderer/lib/api/types'
 import { inputSummary, ToolStatusDot } from './ToolCallCard'
@@ -98,11 +99,19 @@ export function ToolCallGroup({ toolName, items, children }: ToolCallGroupProps)
         }
       </button>
 
-      {expanded && (
-        <div className="mt-0.5 pl-5 border-l border-border/30">
-          {children}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mt-0.5 pl-5 border-l border-border/30 overflow-hidden"
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

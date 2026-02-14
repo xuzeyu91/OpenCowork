@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { SkillsMenu } from './SkillsMenu'
 import { ModelSwitcher } from './ModelSwitcher'
 import { usePluginStore } from '@renderer/stores/plugin-store'
+import { useMcpStore } from '@renderer/stores/mcp-store'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -131,6 +132,33 @@ function ActivePluginsBadge(): React.JSX.Element | null {
   )
 }
 
+function ActiveMcpsBadge(): React.JSX.Element | null {
+  const { t } = useTranslation('chat')
+  const activeMcpIds = useMcpStore((s) => s.activeMcpIds)
+  const servers = useMcpStore((s) => s.servers)
+  const serverTools = useMcpStore((s) => s.serverTools)
+  if (activeMcpIds.length === 0) return null
+  const activeServers = servers.filter((s) => activeMcpIds.includes(s.id))
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-600 dark:text-blue-400 cursor-default">
+          <span className="size-1.5 rounded-full bg-blue-500 animate-pulse" />
+          <span>{t('skills.mcpCount', { count: activeMcpIds.length })}</span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        <p className="text-xs font-medium">{t('skills.activeMcpServers')}</p>
+        {activeServers.map((s) => (
+          <p key={s.id} className="text-xs text-muted-foreground">
+            {s.name} ({t('skills.mcpToolCount', { count: serverTools[s.id]?.length ?? 0 })})
+          </p>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 const placeholderKeys: Record<AppMode, string> = {
   chat: 'input.placeholder',
   cowork: 'input.placeholderCowork',
@@ -223,7 +251,7 @@ export function InputArea({
     return (session?.messages.length ?? 0) > 0
   })
   const clearSessionMessages = useChatStore((s) => s.clearSessionMessages)
-  const hasApiKey = !!(activeProvider?.apiKey)
+  const hasApiKey = !!(activeProvider?.apiKey) || activeProvider?.requiresApiKey === false
   const needsWorkingFolder = mode !== 'chat' && !workingFolder
 
   // Auto-focus textarea when not streaming or when switching sessions
@@ -482,6 +510,7 @@ export function InputArea({
                     disabled={disabled || isStreaming}
                   />
                   <ActivePluginsBadge />
+                  <ActiveMcpsBadge />
                 </>
               )}
 

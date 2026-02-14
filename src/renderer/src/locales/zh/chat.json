@@ -161,7 +161,15 @@
     "availablePlugins": "可用插件",
     "noPlugins": "未配置插件",
     "configureInSettings": "在设置 → 插件中添加",
-    "configurePlugins": "配置..."
+    "configurePlugins": "配置...",
+    "mcpLabel": "MCP 服务器",
+    "availableMcps": "已连接的 MCP 服务器",
+    "noMcps": "没有已连接的 MCP 服务器",
+    "configureMcps": "在设置 → MCP 中添加服务器",
+    "configureMcpServers": "配置...",
+    "activeMcpServers": "活跃的 MCP 服务器：",
+    "mcpToolCount": "{{count}} 个工具",
+    "mcpCount": "{{count}} 个 MCP"
   },
   "userMessage": {
     "you": "你",

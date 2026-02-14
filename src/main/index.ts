@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Menu, Tray } from 'electron'
 
 import { join } from 'path'
 
@@ -21,6 +21,8 @@ import { registerDbHandlers } from './ipc/db-handlers'
 import { registerConfigHandlers } from './ipc/secure-key-store'
 import { registerPluginHandlers } from './ipc/plugin-handlers'
 import { PluginManager } from './plugins/plugin-manager'
+import { registerMcpHandlers } from './ipc/mcp-handlers'
+import { McpManager } from './mcp/mcp-manager'
 import { closeDb } from './db/database'
 
 import { createFeishuService } from './plugins/providers/feishu/feishu-service'
@@ -30,13 +32,81 @@ const pluginManager = new PluginManager()
 pluginManager.registerFactory('feishu-bot', createFeishuService)
 pluginManager.registerFactory('dingtalk-bot', createDingTalkService)
 
+const mcpManager = new McpManager()
 
+let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuiting = false
+
+function showMainWindow(): void {
+
+  if (!mainWindow) {
+
+    createWindow()
+
+    return
+
+  }
+
+  if (mainWindow.isMinimized()) {
+
+    mainWindow.restore()
+
+  }
+
+  mainWindow.show()
+
+  mainWindow.focus()
+
+}
+
+function createTray(): void {
+
+  if (tray) return
+
+  tray = new Tray(icon)
+
+  tray.setToolTip('OpenCowork')
+
+  const contextMenu = Menu.buildFromTemplate([
+
+    {
+
+      label: 'Show App',
+
+      click: () => showMainWindow()
+
+    },
+
+    { type: 'separator' },
+
+    {
+
+      label: 'Exit',
+
+      click: () => {
+
+        isQuiting = true
+
+        app.quit()
+
+      }
+
+    }
+
+  ])
+
+  tray.setContextMenu(contextMenu)
+
+  tray.on('click', showMainWindow)
+
+}
 
 function createWindow(): void {
 
   // Create the browser window.
 
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
 
     width: 1280,
 
@@ -66,41 +136,69 @@ function createWindow(): void {
 
 
 
+  const window = mainWindow
+
+  if (!window) {
+
+    return
+
+  }
+
   // Window control IPC handlers
 
-  ipcMain.handle('window:minimize', () => mainWindow.minimize())
+  ipcMain.handle('window:minimize', () => window.minimize())
 
   ipcMain.handle('window:maximize', () => {
 
-    if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    if (window.isMaximized()) window.unmaximize()
 
-    else mainWindow.maximize()
+    else window.maximize()
 
   })
 
-  ipcMain.handle('window:close', () => mainWindow.close())
+  ipcMain.handle('window:close', () => window.close())
 
-  ipcMain.handle('window:isMaximized', () => mainWindow.isMaximized())
+  ipcMain.handle('window:isMaximized', () => window.isMaximized())
 
 
 
   // Forward maximize state changes to renderer
 
-  mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized', true))
+  window.on('maximize', () => window.webContents.send('window:maximized', true))
 
-  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false))
+  window.on('unmaximize', () => window.webContents.send('window:maximized', false))
 
 
 
-  mainWindow.on('ready-to-show', () => {
+  window.on('ready-to-show', () => {
 
-    mainWindow.show()
+    window.show()
 
   })
 
 
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  window.on('close', (event) => {
+
+    if (!isQuiting) {
+
+      event.preventDefault()
+
+      window.hide()
+
+    }
+
+  })
+
+  window.on('closed', () => {
+
+    mainWindow = null
+
+  })
+
+
+
+  window.webContents.setWindowOpenHandler((details) => {
 
     shell.openExternal(details.url)
 
@@ -116,16 +214,14 @@ function createWindow(): void {
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
 
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    window.loadURL(process.env['ELECTRON_RENDERER_URL'])
 
   } else {
 
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    window.loadFile(join(__dirname, '../renderer/index.html'))
 
   }
-
 }
-
 
 
 // This method will be called when Electron has finished
@@ -194,10 +290,13 @@ app.whenReady().then(() => {
   registerDbHandlers()
   registerConfigHandlers()
   registerPluginHandlers(pluginManager)
+  registerMcpHandlers(mcpManager)
 
 
 
   createWindow()
+
+  createTray()
 
 
 
@@ -207,7 +306,9 @@ app.whenReady().then(() => {
 
     // dock icon is clicked and there are no other windows open.
 
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (!mainWindow) createWindow()
+
+    else showMainWindow()
 
   })
 
@@ -223,6 +324,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   pluginManager.stopAll()
+  mcpManager.disconnectAll()
   killAllManagedProcesses()
   closeDb()
   if (process.platform !== 'darwin') {

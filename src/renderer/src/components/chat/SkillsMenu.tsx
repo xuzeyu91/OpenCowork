@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Sparkles, Loader2, Command, Puzzle, Settings2, Check } from 'lucide-react'
+import { Plus, Sparkles, Loader2, Command, Puzzle, Settings2, Check, Cable } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { useSkillsStore } from '@renderer/stores/skills-store'
 import { usePluginStore } from '@renderer/stores/plugin-store'
+import { useMcpStore } from '@renderer/stores/mcp-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 
 interface SkillsMenuProps {
@@ -41,14 +42,27 @@ export function SkillsMenu({ onSelectSkill, disabled = false }: SkillsMenuProps)
   const configuredPlugins = React.useMemo(() => plugins.filter((p) => p.enabled), [plugins])
   const openSettingsPage = useUIStore((s) => s.openSettingsPage)
 
-  // Load skills and plugins when menu opens
+  // MCP state
+  const mcpServers = useMcpStore((s) => s.servers)
+  const activeMcpIds = useMcpStore((s) => s.activeMcpIds)
+  const toggleActiveMcp = useMcpStore((s) => s.toggleActiveMcp)
+  const loadMcpServers = useMcpStore((s) => s.loadServers)
+  const mcpStatuses = useMcpStore((s) => s.serverStatuses)
+  const mcpTools = useMcpStore((s) => s.serverTools)
+  const connectedMcpServers = React.useMemo(
+    () => mcpServers.filter((s) => s.enabled && mcpStatuses[s.id] === 'connected'),
+    [mcpServers, mcpStatuses]
+  )
+
+  // Load skills, plugins, and MCP servers when menu opens
   React.useEffect(() => {
     if (open) {
       loadSkills()
       loadProviders()
       loadPlugins()
+      loadMcpServers()
     }
-  }, [open, loadSkills, loadPlugins, loadProviders])
+  }, [open, loadSkills, loadPlugins, loadProviders, loadMcpServers])
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -187,6 +201,75 @@ export function SkillsMenu({ onSelectSkill, disabled = false }: SkillsMenuProps)
                 >
                   <Settings2 className="mr-2 size-3.5" />
                   {t('skills.configurePlugins', 'Configure...')}
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+
+        <DropdownMenuGroup>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Cable className="mr-2 size-4" />
+              <span>{t('skills.mcpLabel', 'MCP Servers')}</span>
+              {activeMcpIds.length > 0 && (
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  {activeMcpIds.length}
+                </span>
+              )}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent className="w-56 max-h-80 overflow-y-auto">
+                <DropdownMenuLabel>{t('skills.availableMcps', 'Connected MCP Servers')}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {connectedMcpServers.length === 0 ? (
+                  <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                    <p>{t('skills.noMcps', 'No MCP servers connected')}</p>
+                    <p className="mt-1 text-[10px] opacity-70">
+                      {t('skills.configureMcps', 'Add servers in Settings → MCP')}
+                    </p>
+                  </div>
+                ) : (
+                  connectedMcpServers.map((srv) => {
+                    const isActive = activeMcpIds.includes(srv.id)
+                    const toolCount = mcpTools[srv.id]?.length ?? 0
+                    return (
+                      <DropdownMenuItem
+                        key={srv.id}
+                        onSelect={(e) => {
+                          e.preventDefault()
+                          toggleActiveMcp(srv.id)
+                        }}
+                        className="flex items-center gap-2 py-1.5 cursor-pointer"
+                      >
+                        <span
+                          className={`flex items-center justify-center size-4 rounded border ${
+                            isActive
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-muted-foreground/30'
+                          }`}
+                        >
+                          {isActive && <Check className="size-3" />}
+                        </span>
+                        <span className="flex-1 truncate text-xs">{srv.name}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {toolCount} tool{toolCount !== 1 ? 's' : ''}
+                        </span>
+                      </DropdownMenuItem>
+                    )
+                  })
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setOpen(false)
+                    openSettingsPage('mcp')
+                  }}
+                  className="text-xs"
+                >
+                  <Settings2 className="mr-2 size-3.5" />
+                  {t('skills.configureMcpServers', 'Configure...')}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuPortal>

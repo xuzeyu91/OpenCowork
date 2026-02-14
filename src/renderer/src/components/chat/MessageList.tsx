@@ -341,7 +341,7 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
               />
             )
           })}
-          {!streamingMessageId && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && onRetry && (
+          {!streamingMessageId && messages.length > 0 && messages.some((m) => m.role === 'assistant') && onRetry && (
             <div className="flex justify-center">
               <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground" onClick={onRetry}>
                 <RefreshCw className="size-3" />

@@ -21,6 +21,8 @@ import { Badge } from '@renderer/components/ui/badge'
 import { cn } from '@renderer/lib/utils'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { AnimatePresence, motion } from 'motion/react'
+import { FadeIn } from '@renderer/components/animate-ui'
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -59,62 +61,70 @@ function TeamHistoryItem({ team, isExpanded, onToggle }: {
         <span className="text-[9px] text-muted-foreground/40">{formatDate(team.createdAt)}</span>
         {isExpanded ? <ChevronDown className="size-3 text-muted-foreground/40" /> : <ChevronRight className="size-3 text-muted-foreground/40" />}
       </button>
-      {isExpanded && (
-        <div className="border-t border-muted px-3 py-2 space-y-2">
-          <p className="text-[10px] text-muted-foreground/60">{team.description}</p>
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="border-t border-muted px-3 py-2 space-y-2 overflow-hidden"
+          >
+            <p className="text-[10px] text-muted-foreground/60">{team.description}</p>
 
-          {/* Members summary */}
-          {team.members.length > 0 && (
-            <div>
-              <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.membersLabel')}</span>
-              <div className="mt-1 space-y-1">
-                {team.members.map((m) => (
-                  <div key={m.id} className="flex items-center gap-2 text-[10px]">
-                    <span className={cn(
-                      'size-1.5 rounded-full shrink-0',
-                      m.status === 'working' ? 'bg-green-500 animate-pulse' : m.status === 'stopped' ? 'bg-muted-foreground/30' : 'bg-cyan-400',
-                    )} />
-                    <span className="font-medium text-cyan-600 dark:text-cyan-400">{m.name}</span>
-                    <span className="text-muted-foreground/40">{m.toolCalls.length} calls</span>
-                    <span className="text-muted-foreground/40">{m.iteration} iters</span>
-                    {m.completedAt && m.startedAt && (
-                      <span className="text-muted-foreground/30">{formatElapsed(m.completedAt - m.startedAt)}</span>
-                    )}
-                  </div>
-                ))}
+            {/* Members summary */}
+            {team.members.length > 0 && (
+              <div>
+                <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.membersLabel')}</span>
+                <div className="mt-1 space-y-1">
+                  {team.members.map((m) => (
+                    <div key={m.id} className="flex items-center gap-2 text-[10px]">
+                      <span className={cn(
+                        'size-1.5 rounded-full shrink-0',
+                        m.status === 'working' ? 'bg-green-500 animate-pulse' : m.status === 'stopped' ? 'bg-muted-foreground/30' : 'bg-cyan-400',
+                      )} />
+                      <span className="font-medium text-cyan-600 dark:text-cyan-400">{m.name}</span>
+                      <span className="text-muted-foreground/40">{m.toolCalls.length} calls</span>
+                      <span className="text-muted-foreground/40">{m.iteration} iters</span>
+                      {m.completedAt && m.startedAt && (
+                        <span className="text-muted-foreground/30">{formatElapsed(m.completedAt - m.startedAt)}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Tasks summary */}
-          {team.tasks.length > 0 && (
-            <div>
-              <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.tasksLabel')}</span>
-              <div className="mt-1 space-y-0.5">
-                {team.tasks.map((task) => (
-                  <div key={task.id} className="flex items-center gap-1.5 text-[10px]">
-                    <Badge variant="secondary" className={cn(
-                      'text-[7px] h-3 px-1',
-                      task.status === 'completed' ? 'bg-green-500/15 text-green-500' :
-                      task.status === 'in_progress' ? 'bg-blue-500/15 text-blue-500' :
-                      'bg-muted text-muted-foreground/60',
-                    )}>
-                      {task.status === 'completed' ? t('status.done', { ns: 'common' }) : task.status === 'in_progress' ? t('status.active', { ns: 'common' }) : t('status.pending', { ns: 'common' })}
-                    </Badge>
-                    <span className="truncate text-muted-foreground/70">{task.subject}</span>
-                    {task.owner && <span className="text-cyan-500/50 shrink-0">{task.owner}</span>}
-                  </div>
-                ))}
+            {/* Tasks summary */}
+            {team.tasks.length > 0 && (
+              <div>
+                <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.tasksLabel')}</span>
+                <div className="mt-1 space-y-0.5">
+                  {team.tasks.map((task) => (
+                    <div key={task.id} className="flex items-center gap-1.5 text-[10px]">
+                      <Badge variant="secondary" className={cn(
+                        'text-[7px] h-3 px-1',
+                        task.status === 'completed' ? 'bg-green-500/15 text-green-500' :
+                        task.status === 'in_progress' ? 'bg-blue-500/15 text-blue-500' :
+                        'bg-muted text-muted-foreground/60',
+                      )}>
+                        {task.status === 'completed' ? t('status.done', { ns: 'common' }) : task.status === 'in_progress' ? t('status.active', { ns: 'common' }) : t('status.pending', { ns: 'common' })}
+                      </Badge>
+                      <span className="truncate text-muted-foreground/70">{task.subject}</span>
+                      {task.owner && <span className="text-cyan-500/50 shrink-0">{task.owner}</span>}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Messages count */}
-          {team.messages.length > 0 && (
-            <span className="text-[9px] text-muted-foreground/40">{t('detailPanel.messagesExchanged', { count: team.messages.length })}</span>
-          )}
-        </div>
-      )}
+            {/* Messages count */}
+            {team.messages.length > 0 && (
+              <span className="text-[9px] text-muted-foreground/40">{t('detailPanel.messagesExchanged', { count: team.messages.length })}</span>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -185,51 +195,59 @@ function SubAgentDetailItem({ sa, defaultOpen }: { sa: SubAgentState; defaultOpe
         )}
         {open ? <ChevronDown className="size-3 text-muted-foreground/40" /> : <ChevronRight className="size-3 text-muted-foreground/40" />}
       </button>
-      {open && (
-        <div className="border-t border-muted px-3 py-2 space-y-2">
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
-            <span>{t('detailPanel.iterations', { count: sa.iteration })}</span>
-            <span>·</span>
-            <span>{t('detailPanel.toolCalls', { count: sa.toolCalls.length })}</span>
-            {elapsed != null && <><span>·</span><span>{formatElapsed(elapsed)}</span></>}
-          </div>
-
-          {/* Streaming text / final output */}
-          {sa.streamingText && (
-            <div className="rounded-md bg-violet-500/[0.03] border border-violet-500/10 px-2.5 py-2 max-h-48 overflow-y-auto">
-              <p className="text-[11px] text-muted-foreground/70 leading-relaxed whitespace-pre-wrap break-words">
-                {sa.streamingText.length > 1000
-                  ? sa.streamingText.slice(-1000) + '…'
-                  : sa.streamingText}
-              </p>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="border-t border-muted px-3 py-2 space-y-2 overflow-hidden"
+          >
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground/50">
+              <span>{t('detailPanel.iterations', { count: sa.iteration })}</span>
+              <span>·</span>
+              <span>{t('detailPanel.toolCalls', { count: sa.toolCalls.length })}</span>
+              {elapsed != null && <><span>·</span><span>{formatElapsed(elapsed)}</span></>}
             </div>
-          )}
 
-          {/* Tool Calls */}
-          {sa.toolCalls.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <Wrench className="size-2.5 text-muted-foreground/50" />
-                <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.toolCallsLabel')}</span>
+            {/* Streaming text / final output */}
+            {sa.streamingText && (
+              <div className="rounded-md bg-violet-500/[0.03] border border-violet-500/10 px-2.5 py-2 max-h-48 overflow-y-auto">
+                <p className="text-[11px] text-muted-foreground/70 leading-relaxed whitespace-pre-wrap break-words">
+                  {sa.streamingText.length > 1000
+                    ? sa.streamingText.slice(-1000) + '…'
+                    : sa.streamingText}
+                </p>
               </div>
-              <div className="space-y-1 max-h-[400px] overflow-y-auto">
-                {sa.toolCalls.map((tc) => (
-                  <ToolCallCard
-                    key={tc.id}
-                    name={tc.name}
-                    input={tc.input}
-                    output={tc.output}
-                    status={tc.status}
-                    error={tc.error}
-                    startedAt={tc.startedAt}
-                    completedAt={tc.completedAt}
-                  />
-                ))}
+            )}
+
+            {/* Tool Calls */}
+            {sa.toolCalls.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Wrench className="size-2.5 text-muted-foreground/50" />
+                  <span className="text-[9px] font-medium text-muted-foreground/50 uppercase tracking-wider">{t('detailPanel.toolCallsLabel')}</span>
+                </div>
+                <div className="space-y-1 max-h-[400px] overflow-y-auto">
+                  {sa.toolCalls.map((tc) => (
+                    <ToolCallCard
+                      key={tc.id}
+                      name={tc.name}
+                      input={tc.input}
+                      output={tc.output}
+                      status={tc.status}
+                      error={tc.error}
+                      startedAt={tc.startedAt}
+                      completedAt={tc.completedAt}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -348,32 +366,46 @@ export function DetailPanel(): React.JSX.Element {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-3">
-        {content?.type === 'team' && <TeamDetailView />}
+        <AnimatePresence mode="wait">
+          {content?.type === 'team' && (
+            <FadeIn key="team" className="h-full">
+              <TeamDetailView />
+            </FadeIn>
+          )}
 
-        {content?.type === 'subagent' && <SubAgentDetailView toolUseId={content.toolUseId} />}
+          {content?.type === 'subagent' && (
+            <FadeIn key="subagent" className="h-full">
+              <SubAgentDetailView toolUseId={content.toolUseId} />
+            </FadeIn>
+          )}
 
-        {content?.type === 'document' && (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <Markdown remarkPlugins={[remarkGfm]}>
-              {content.content}
-            </Markdown>
-          </div>
-        )}
+          {content?.type === 'document' && (
+            <FadeIn key="document" className="h-full">
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <Markdown remarkPlugins={[remarkGfm]}>
+                  {content.content}
+                </Markdown>
+              </div>
+            </FadeIn>
+          )}
 
-        {content?.type === 'report' && (
-          <div className="space-y-3">
-            <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words">
-              {JSON.stringify(content.data, null, 2)}
-            </pre>
-          </div>
-        )}
+          {content?.type === 'report' && (
+            <FadeIn key="report" className="h-full">
+              <div className="space-y-3">
+                <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-words">
+                  {JSON.stringify(content.data, null, 2)}
+                </pre>
+              </div>
+            </FadeIn>
+          )}
 
-        {!content && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <FileText className="mb-3 size-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">{t('detailPanel.noContent')}</p>
-          </div>
-        )}
+          {!content && (
+            <FadeIn key="empty" className="h-full flex flex-col items-center justify-center py-12 text-center">
+              <FileText className="mb-3 size-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">{t('detailPanel.noContent')}</p>
+            </FadeIn>
+          )}
+        </AnimatePresence>
       </div>
     </aside>
   )

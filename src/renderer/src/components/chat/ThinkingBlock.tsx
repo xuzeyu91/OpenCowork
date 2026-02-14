@@ -4,6 +4,8 @@ import { ChevronRight, ChevronDown } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { MONO_FONT } from '@renderer/lib/constants'
+import { motion, AnimatePresence } from 'motion/react'
+import { useTypewriter } from '@renderer/hooks/use-typewriter'
 
 interface ThinkingBlockProps {
   thinking: string
@@ -16,6 +18,8 @@ export function ThinkingBlock({ thinking, isStreaming = false, startedAt, comple
   const { t } = useTranslation('chat')
   // isThinking: thinking is actively streaming (has content, no completedAt yet, message still streaming)
   const isThinking = isStreaming && thinking.length > 0 && !completedAt
+
+  const displayedThinking = useTypewriter(thinking, isThinking)
 
   const [expanded, setExpanded] = useState(false)
   const wasThinkingRef = useRef(isThinking)
@@ -47,7 +51,7 @@ export function ThinkingBlock({ thinking, isStreaming = false, startedAt, comple
     if (isThinking && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [isThinking, thinking])
+  }, [isThinking, displayedThinking])
 
   // Compute duration label from persisted timestamps
   const persistedDuration = startedAt && completedAt
@@ -66,49 +70,59 @@ export function ThinkingBlock({ thinking, isStreaming = false, startedAt, comple
     <div className="my-5">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1 text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+        className="flex items-center gap-1 text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors group"
       >
-        <span>{durationLabel}</span>
+        <span className="group-hover:text-primary/80 transition-colors">{durationLabel}</span>
         {expanded
-          ? <ChevronDown className="size-3.5" />
-          : <ChevronRight className="size-3.5" />
+          ? <ChevronDown className="size-3.5 transition-transform duration-200" />
+          : <ChevronRight className="size-3.5 transition-transform duration-200" />
         }
       </button>
 
-      {expanded && (
-        <div
-          ref={scrollRef}
-          className="mt-1.5 pl-0.5 text-sm text-muted-foreground/80 leading-relaxed max-h-80 overflow-y-auto"
-        >
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              code: ({ children, className, ...props }) => {
-                const isInline = !className
-                if (isInline) {
-                  return (
-                    <code
-                      className="rounded bg-muted px-1 py-0.5 text-xs font-mono"
-                      style={{ fontFamily: MONO_FONT }}
-                      {...props}
-                    >
-                      {children}
-                    </code>
-                  )
-                }
-                return (
-                  <code className={className} style={{ fontFamily: MONO_FONT }} {...props}>
-                    {children}
-                  </code>
-                )
-              },
-            }}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="overflow-hidden"
           >
-            {thinking}
-          </Markdown>
-          {isThinking && <span className="inline-block w-1 h-3.5 bg-muted-foreground/40 animate-pulse ml-0.5" />}
-        </div>
-      )}
+            <div
+              ref={scrollRef}
+              className="mt-1.5 pl-2 border-l-2 border-muted text-sm text-muted-foreground/80 leading-relaxed max-h-80 overflow-y-auto"
+            >
+              <Markdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code: ({ children, className, ...props }) => {
+                    const isInline = !className
+                    if (isInline) {
+                      return (
+                        <code
+                          className="rounded bg-muted px-1 py-0.5 text-xs font-mono"
+                          style={{ fontFamily: MONO_FONT }}
+                          {...props}
+                        >
+                          {children}
+                        </code>
+                      )
+                    }
+                    return (
+                      <code className={className} style={{ fontFamily: MONO_FONT }} {...props}>
+                        {children}
+                      </code>
+                    )
+                  },
+                }}
+              >
+                {displayedThinking}
+              </Markdown>
+              {isThinking && <span className="inline-block w-1.5 h-3.5 bg-primary/40 animate-pulse ml-0.5 rounded-sm" />}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

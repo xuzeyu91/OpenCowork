@@ -7,6 +7,7 @@ import { cn } from '@renderer/lib/utils'
 import type { ToolCallStatus } from '@renderer/lib/agent/types'
 import type { ToolResultContent } from '@renderer/lib/api/types'
 import { MONO_FONT } from '@renderer/lib/constants'
+import { AnimatePresence, motion } from 'motion/react'
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -372,44 +373,52 @@ export function FileChangeCard({
       </button>
 
       {/* Body — diff or content */}
-      {!collapsed && (
-        <div className="border-t border-inherit bg-zinc-950">
-          {/* Edit: single diff */}
-          {name === 'Edit' && !!input.old_string && !!input.new_string && (
-            <InlineDiff oldStr={String(input.old_string)} newStr={String(input.new_string)} />
-          )}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="border-t border-inherit bg-zinc-950 overflow-hidden"
+          >
+            {/* Edit: single diff */}
+            {name === 'Edit' && !!input.old_string && !!input.new_string && (
+              <InlineDiff oldStr={String(input.old_string)} newStr={String(input.new_string)} />
+            )}
 
-          {/* MultiEdit: multiple diffs */}
-          {name === 'MultiEdit' && Array.isArray(input.edits) && (
-            <div className="divide-y divide-zinc-800/40">
-              {(input.edits as Array<Record<string, unknown>>).map((edit, i) => (
-                <div key={i}>
-                  {(input.edits as unknown[]).length > 1 && typeof edit.explanation === 'string' && (
-                    <div className="px-3 py-1 text-[9px] text-zinc-500/60 bg-zinc-900/50">
-                      edit {i + 1}/{(input.edits as unknown[]).length}: {edit.explanation}
-                    </div>
-                  )}
-                  {edit.old_string && edit.new_string ? (
-                    <InlineDiff oldStr={String(edit.old_string)} newStr={String(edit.new_string)} />
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
+            {/* MultiEdit: multiple diffs */}
+            {name === 'MultiEdit' && Array.isArray(input.edits) && (
+              <div className="divide-y divide-zinc-800/40">
+                {(input.edits as Array<Record<string, unknown>>).map((edit, i) => (
+                  <div key={i}>
+                    {(input.edits as unknown[]).length > 1 && typeof edit.explanation === 'string' && (
+                      <div className="px-3 py-1 text-[9px] text-zinc-500/60 bg-zinc-900/50">
+                        edit {i + 1}/{(input.edits as unknown[]).length}: {edit.explanation}
+                      </div>
+                    )}
+                    {edit.old_string && edit.new_string ? (
+                      <InlineDiff oldStr={String(edit.old_string)} newStr={String(edit.new_string)} />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
 
-          {/* Write: new file content */}
-          {name === 'Write' && !!input.content && (
-            <NewFileContent content={String(input.content)} filePath={filePath} isStreaming={status === 'streaming'} />
-          )}
+            {/* Write: new file content */}
+            {name === 'Write' && !!input.content && (
+              <NewFileContent content={String(input.content)} filePath={filePath} isStreaming={status === 'streaming'} />
+            )}
 
-          {/* Delete: minimal indicator */}
-          {name === 'Delete' && (
-            <div className="px-3 py-2 text-[11px] text-red-400/60 italic">
-              {t('fileChange.fileWillBeDeleted')}
-            </div>
-          )}
-        </div>
-      )}
+            {/* Delete: minimal indicator */}
+            {name === 'Delete' && (
+              <div className="px-3 py-2 text-[11px] text-red-400/60 italic">
+                {t('fileChange.fileWillBeDeleted')}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Error / output feedback */}
       {error && (

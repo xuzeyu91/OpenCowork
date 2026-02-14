@@ -66,12 +66,12 @@ export function KeyboardShortcutsDialog(): React.JSX.Element {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm sm:max-w-md max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{t('shortcuts.title')}</DialogTitle>
           <DialogDescription>{t('shortcuts.subtitle')}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 py-2">
+        <div className="flex-1 space-y-3 overflow-y-auto py-2 pr-2">
           {shortcutGroups.map((group, gi) => (
             <div key={group.labelKey}>
               {gi > 0 && <Separator className="mb-3" />}

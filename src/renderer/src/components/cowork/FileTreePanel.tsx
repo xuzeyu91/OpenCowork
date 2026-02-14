@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { confirm } from '@renderer/components/ui/confirm-dialog'
 import {
   FolderOpen,
   Folder,
@@ -35,6 +36,7 @@ import { cn } from '@renderer/lib/utils'
 import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { MONO_FONT } from '@renderer/lib/constants'
+import { AnimatePresence, motion } from 'motion/react'
 
 // --- Types ---
 
@@ -332,18 +334,30 @@ function TreeItem({
       )}
 
       {/* Children */}
-      {isDir && node.expanded && node.children?.map((child) => (
-        <TreeItem
-          key={child.path}
-          node={child}
-          depth={depth + 1}
-          onToggle={onToggle}
-          onCopyPath={onCopyPath}
-          onPreview={onPreview}
-          editState={editState}
-          actions={actions}
-        />
-      ))}
+      <AnimatePresence>
+        {isDir && node.expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            {node.children?.map((child) => (
+              <TreeItem
+                key={child.path}
+                node={child}
+                depth={depth + 1}
+                onToggle={onToggle}
+                onCopyPath={onCopyPath}
+                onPreview={onPreview}
+                editState={editState}
+                actions={actions}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
@@ -457,7 +471,10 @@ export function FileTreePanel(): React.JSX.Element {
   const sep = workingFolder?.includes('/') ? '/' : '\\'
 
   const handleDelete = useCallback(async (nodePath: string, nodeName: string, isDir: boolean) => {
-    const confirmed = window.confirm(t('fileTree.deleteConfirm', { type: isDir ? t('fileTree.folder') : t('fileTree.file'), name: nodeName }))
+    const confirmed = await confirm({
+      title: t('fileTree.deleteConfirm', { type: isDir ? t('fileTree.folder') : t('fileTree.file'), name: nodeName }),
+      variant: 'destructive',
+    })
     if (!confirmed) return
     try {
       await ipcClient.invoke('fs:delete', { path: nodePath })

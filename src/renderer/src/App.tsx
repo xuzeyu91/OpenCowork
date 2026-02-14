@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Layout } from './components/layout/Layout'
 import { Toaster } from './components/ui/sonner'
+import { ConfirmDialogProvider } from './components/ui/confirm-dialog'
 import { ThemeProvider } from './components/theme-provider'
 import { ErrorBoundary } from './components/error-boundary'
 import { useSettingsStore } from './stores/settings-store'
@@ -67,6 +68,7 @@ function App(): React.JSX.Element {
       <ThemeProvider defaultTheme={theme}>
         <Layout />
         <Toaster position="bottom-right" theme="system" richColors />
+        <ConfirmDialogProvider />
       </ThemeProvider>
     </ErrorBoundary>
   )

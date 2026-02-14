@@ -208,6 +208,10 @@ export async function* runAgentLoop(
         yield { type: 'tool_call_approval_needed', toolCall: { ...tc } }
         const approved = await onApprovalNeeded(tc)
         if (!approved) {
+          if (config.signal.aborted) {
+            yield { type: 'loop_end', reason: 'aborted' }
+            return
+          }
           yield { type: 'tool_call_result', toolCall: { ...tc, status: 'error', error: 'User denied permission' } }
           toolResults.push({
             type: 'tool_result',
@@ -223,19 +227,41 @@ export async function* runAgentLoop(
       yield { type: 'tool_call_start', toolCall: { ...tc, status: 'running', startedAt } }
 
       let output: ToolResultContent
+      let toolError: string | undefined
       try {
         output = await toolRegistry.execute(tc.name, tc.input, { ...toolCtx, currentToolUseId: tc.id })
       } catch (toolErr) {
+        if (config.signal.aborted) {
+          yield { type: 'loop_end', reason: 'aborted' }
+          return
+        }
         const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr)
+        toolError = errMsg
         output = JSON.stringify({ error: errMsg })
       }
 
-      yield { type: 'tool_call_result', toolCall: { ...tc, status: 'completed', output, startedAt, completedAt: Date.now() } }
+      if (config.signal.aborted) {
+        yield { type: 'loop_end', reason: 'aborted' }
+        return
+      }
+
+      yield {
+        type: 'tool_call_result',
+        toolCall: {
+          ...tc,
+          status: toolError ? 'error' : 'completed',
+          output,
+          ...(toolError ? { error: toolError } : {}),
+          startedAt,
+          completedAt: Date.now()
+        }
+      }
 
       toolResults.push({
         type: 'tool_result',
         toolUseId: tc.id,
         content: output,
+        ...(toolError ? { isError: true } : {}),
       })
     }
 
