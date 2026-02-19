@@ -3,6 +3,21 @@
 All notable changes to **OpenCowork** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.1.7] - 2026-02-19
+
+### Added
+- **Queued message workflow** — per-session FIFO queue with edit/save/delete controls in the composer so you can line up multiple drafts while a run is in progress.
+- **Pending message IPC hooks** — renderer now subscribes to queue updates via `subscribePendingSessionMessages`/`getPendingSessionMessages`, keeping UI state and persisted drafts in sync across restarts.
+
+### Changed
+- **Composer history navigation** — arrow-key history now integrates with the queued drafts, restoring text, attachments, and metadata exactly as saved.
+- **Auto-dispatch after runs** — the next queued draft is automatically sent as soon as the active agent loop finishes, reducing manual resend steps in multi-stage workflows.
+
+### Fixed
+- **Draft/attachment desync** — queue + history state now share a single source of truth, preventing stale attachments or mismatched drafts when editing/sending messages rapidly.
+
+---
+
 ## [0.1.6] - 2026-02-19
 
 ### Added
