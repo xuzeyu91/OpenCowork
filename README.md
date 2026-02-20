@@ -1,208 +1,176 @@
-# OpenCowork
-
-<div align="center">
-
-**Open-Source Alternative to Claude Cowork — AI Agent Desktop Collaboration Platform**
-
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/AIDotNet/OpenCowork)](https://github.com/AIDotNet/OpenCowork/releases)
-[![Electron](https://img.shields.io/badge/Electron-36+-blue.svg)](https://electronjs.org/)
-[![React](https://img.shields.io/badge/React-19+-blue.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue.svg)](https://typescriptlang.org/)
-
-Inspired by [Claude Cowork](https://claude.com/blog/cowork-research-preview), OpenCowork brings AI agent collaboration to your desktop — with **any model**, **fully local data**, and **completely open source**.
-
-[Download](https://github.com/AIDotNet/OpenCowork/releases) · [中文文档](README.zh-CN.md) · [Report Bug](https://github.com/AIDotNet/OpenCowork/issues) · [Request Feature](https://github.com/AIDotNet/OpenCowork/issues)
-
-</div>
+<p align="center">
+  <h1 align="center">OpenCowork</h1>
+  <p align="center">开源桌面 AI Agent 平台 — 让大模型真正动手干活</p>
+</p>
 
 ---
 
-## 💡 Why OpenCowork?
+OpenCowork 是一个基于 Electron + React + TypeScript 构建的桌面 AI Agent 应用。它不只是一个聊天界面，而是一个能让 LLM 调用文件系统、执行 Shell 命令、搜索代码、启动子 Agent、对接多平台消息插件的完整 Agent 工作台。
 
-[Claude Cowork](https://claude.com/blog/cowork-research-preview) showed us a powerful vision: AI that doesn't just chat — it **reads your files, executes commands, and gets work done**. But it's locked to Claude models, requires a $100+/month subscription, and sends data through the cloud.
+## 核心特性
 
-**OpenCowork is the open-source answer:**
+### 🤖 完整的 Agent Loop
 
-| | Claude Cowork | OpenCowork |
-|---|---|---|
-| **Open Source** | No | ✅ MIT License |
-| **Price** | $100/mo+ (Claude Max) | Free |
-| **Models** | Claude only | 13+ providers, any model |
-| **Data** | Anthropic cloud | 100% local |
-| **Platform** | macOS / Windows | Windows / Linux |
-| **Multi-Agent** | No | ✅ Parallel team collaboration |
-| **Extensible** | MCP connectors | Tools + Skills + SubAgents |
+- 基于 AsyncGenerator 的流式 Agent 循环，支持多轮工具调用自动迭代
+- 内置 10+ 工具：文件读写编辑（Read/Write/Edit）、Glob/Grep 搜索、Shell 执行、任务管理、定时任务、通知等
+- 子 Agent 系统：内置 code-search、code-review、planner、cron-agent 四个专业子 Agent
+- Agent 团队协作：Lead Agent 可并行启动多个 Teammate Agent，通过 MessageQueue 通信
+- 上下文压缩：自动检测 token 阈值，智能压缩对话历史，支持长任务不断档
 
-## ✨ Features
+### 🔌 多平台消息插件
 
-### 🤖 AI Agent System
-- **13+ Built-in Providers**: OpenAI, Anthropic, Google, DeepSeek, OpenRouter, SiliconFlow, Qwen, Moonshot, Gitee AI, Azure OpenAI, Ollama, and more
-- **Agentic Loop**: AI autonomously plans and executes multi-step tasks with tool calls
-- **Sub-Agent Framework**: Specialized agents for code review, code search, and planning
-- **Team Collaboration**: Multiple agents working in parallel on complex tasks
-- **Real-time Streaming**: Live response streaming with partial JSON rendering
+开箱即用的 IM 平台接入，将 AI Agent 能力直接投射到你的工作沟通场景：
 
-### �️ Built-in Tools
-- **File Operations** — Read, Write, Edit, List directories
-- **Code Search** — Glob file search + Grep content search (ripgrep-powered)
-- **Shell Execution** — Run commands with approval workflow
-- **Task Management** — Built-in todo list for tracking progress
-- **Skills System** — Pre-built skills for PDF analysis, web scraping, and more
-- **File Preview** — HTML, Markdown, Spreadsheet, Dev Server preview
+| 平台 | 协议 | 状态 |
+|------|------|------|
+| 飞书 (Feishu/Lark) | Lark SDK WebSocket | ✅ 支持流式响应 |
+| 钉钉 (DingTalk) | WebSocket | ✅ |
+| Telegram | Bot API | ✅ |
+| Discord | Gateway WebSocket | ✅ |
+| WhatsApp | WebSocket | ✅ |
+| 企业微信 (WeCom) | WebSocket | ✅ |
 
-### 🎨 Modern Desktop Experience
-- **Three Modes**: Chat (quick Q&A), Cowork (file operations + tools), Code (full dev toolkit)
-- **Dark / Light Themes** with system detection
-- **Monaco Editor** (VS Code's editor) for code highlighting and diff
-- **Session Management**: Multiple sessions, pinning, export, backup
-- **Keyboard Shortcuts**: Full shortcut system for power users
+每个插件支持：
+- **自动回复**：收到消息后自动触发 Agent Loop，带完整工具链
+- **独立会话管理**：每个聊天对话独立 session，保持上下文连续
+- **权限隔离**：插件级安全策略，限制文件访问范围和 Shell 执行权限
+- **独立模型绑定**：每个插件可绑定不同的 AI Provider 和模型
 
-### 🔒 Security
-- **Tool Approval System**: Dangerous operations require explicit user approval
-- **Local-Only Data**: All conversations and files stay on your machine
-- **Secure Key Storage**: API keys stored in the main process, never exposed to web
+### 💬 飞书 Bot 流式响应
 
-## � Download
+OpenCowork 的飞书集成是一个亮点功能。基于飞书 CardKit API 实现了真正的流式响应体验：
 
-Get the latest release for your platform:
+**工作原理：**
 
-**➡️ [Download v0.1.3](https://github.com/AIDotNet/OpenCowork/releases/tag/0.1.3)**
+1. 收到用户消息 → 通过 Lark SDK WebSocket 实时接收
+2. 创建 CardKit 流式卡片（`streaming_mode: true`）→ 回复到聊天
+3. Agent Loop 每产生一段文本 → 实时更新卡片内容（500ms 节流）
+4. Agent 完成 → 最终内容写入卡片，流式结束
 
-| Platform | Format |
-|----------|--------|
-| Windows | `.exe` installer |
-| Linux | `.AppImage`, `.deb` |
+用户在飞书中看到的效果是：AI 的回答像打字一样逐步出现，而不是等待漫长的处理后一次性返回。
 
-## 🚀 Quick Start
+**效果展示：**
 
-1. Download and install OpenCowork from the [Releases](https://github.com/AIDotNet/OpenCowork/releases) page
-2. Open the app, press `Ctrl+,` to open Settings
-3. Choose an AI provider and enter your API key
-4. Select a working folder and start collaborating!
+![飞书流式响应效果](images/1.jpg)
 
-### Supported Providers
+**额外能力：**
+- 支持图片消息识别（多模态）：用户发送图片，Agent 可以理解图片内容
+- 支持文件上传/下载：Agent 可以生成文件并直接发送到飞书聊天
+- 群聊 @机器人 触发：群聊中仅在被 @mention 时响应，不打扰正常讨论
+- 消息去重：防止 WebSocket 重连导致的重复处理
 
-| Provider | Models |
-|----------|--------|
-| OpenAI | GPT-4o, o3, o4-mini |
-| Anthropic | Claude Sonnet 4, Claude Opus 4 |
-| Google | Gemini 2.5 Pro, Gemini 2.5 Flash |
-| DeepSeek | DeepSeek V3, DeepSeek R1 |
-| OpenRouter | 100+ models |
-| SiliconFlow | Various open-source models |
-| Qwen (Alibaba) | Qwen series |
-| Moonshot (Kimi) | Moonshot models |
-| Ollama | Any local model |
-| Azure OpenAI | Enterprise OpenAI |
-| Gitee AI | Chinese AI models |
-| Xiaomi | MiLM models |
-| Custom | Any OpenAI-compatible API |
+### 🧠 多 AI Provider 支持
 
-## 🏗️ Development
+- **Anthropic**（Claude 系列）
+- **OpenAI Chat**（GPT 系列）
+- **OpenAI Responses API**
+- 支持自定义 Base URL，兼容各类 API 代理和中转服务
+- 支持 Thinking/Reasoning 模式（深度思考）
+- 按模型自动适配 token 上限和定价
 
-### Prerequisites
-- Node.js 18+
-- npm
+### 🛠 技能系统 (Skills)
 
-### Setup
+可扩展的技能模块，通过 Markdown 定义 + Python 脚本实现：
+
+- **PDF 处理**：学术论文提取、法律条款搜索、数据表格提取、文档摘要
+- **Web 爬虫**：动态页面抓取、链接提取、搜索引擎查询
+- **小红书**：内容搜索、笔记创作发布
+- **浏览器会话爬虫**：复用登录态抓取知乎、小红书等平台内容
+- **微信 UI 自动化**：通过 UI 操作发送微信消息
+
+### 📋 计划与任务管理
+
+- **Plan 模式**：Agent 先制定计划再执行，支持用户审批
+- **Todo 系统**：结构化任务追踪，实时显示进度
+- **Cron 定时任务**：基于 node-cron 的持久化调度，支持自然语言创建定时任务
+
+### 🔧 MCP 协议支持
+
+集成 Model Context Protocol (MCP)，可连接外部 MCP Server 扩展 Agent 能力边界。
+
+### 🎨 界面与体验
+
+- 无边框窗口 + 系统托盘，桌面原生体验
+- 深色/浅色主题切换
+- 中英双语 i18n
+- Monaco Editor 代码编辑器集成
+- 文件预览系统：支持 PDF、Excel、Word、图片、Markdown
+- 命令面板（cmdk）快速操作
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 框架 | Electron + electron-vite |
+| 前端 | React 19 + TypeScript 5 |
+| 状态管理 | Zustand + Immer |
+| 样式 | Tailwind CSS v4 + Radix UI |
+| 数据库 | SQLite (better-sqlite3) WAL 模式 |
+| AI SDK | @larksuiteoapi/node-sdk, @modelcontextprotocol/sdk |
+| 动画 | Motion (Framer Motion) |
+
+## 快速开始
 
 ```bash
-git clone https://github.com/AIDotNet/OpenCowork.git
-cd OpenCowork
+# 安装依赖
 npm install
+
+# 启动开发环境（Electron + HMR）
 npm run dev
-```
 
-### Build
+# 类型检查
+npm run typecheck
 
-```bash
+# 构建生产版本
 npm run build:win    # Windows
+npm run build:mac    # macOS
 npm run build:linux  # Linux
 ```
 
-## 📁 Project Structure
+## 项目结构
 
 ```
-OpenCowork/
-├── src/
-│   ├── main/                 # Electron main process
-│   │   ├── db/              # SQLite database (WAL mode)
-│   │   └── ipc/             # IPC handlers (fs, shell, api-proxy, etc.)
-│   ├── preload/              # Context bridge
-│   └── renderer/             # React frontend
-│       └── src/
-│           ├── components/   # UI components (chat, cowork, layout, settings)
-│           ├── lib/
-│           │   ├── agent/   # Agent loop, tool registry, sub-agents, teams
-│           │   ├── api/     # LLM provider adapters
-│           │   ├── tools/   # Built-in tools (fs, search, bash, todo, skill)
-│           │   └── preview/ # File viewer system
-│           ├── stores/      # Zustand state management
-│           └── hooks/       # React hooks
-├── resources/
-│   ├── agents/              # Built-in sub-agent definitions (.md)
-│   └── skills/              # Built-in skill definitions
+src/
+├── main/              # Electron 主进程
+│   ├── ipc/           # IPC 通信处理
+│   ├── plugins/       # 消息平台插件
+│   │   └── providers/ # 飞书/钉钉/Telegram/Discord/WhatsApp/企业微信
+│   ├── db/            # SQLite 数据库
+│   ├── cron/          # 定时任务调度
+│   └── mcp/           # MCP Server 管理
+├── renderer/          # React 前端
+│   └── src/
+│       ├── lib/
+│       │   ├── agent/   # Agent Loop 核心
+│       │   ├── api/     # AI Provider 适配
+│       │   ├── tools/   # 工具实现
+│       │   └── plugins/ # 插件前端逻辑
+│       ├── stores/      # Zustand 状态管理
+│       └── components/  # UI 组件
+├── preload/           # Electron Preload Bridge
+resources/
+├── agents/            # 子 Agent 定义 (.md)
+└── skills/            # 技能模块 (SKILL.md + scripts/)
 ```
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Electron 36 |
-| Frontend | React 19 + TypeScript 5.9 |
-| Build | electron-vite + Vite 7 |
-| Styling | Tailwind CSS 4 + shadcn/ui + Radix UI |
-| State | Zustand 5 + Immer |
-| Database | better-sqlite3 (WAL mode) |
-| Editor | Monaco Editor |
-| Animation | Motion (Framer Motion) |
-| Packaging | electron-builder |
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+N` | New session |
-| `Ctrl+Shift+N` | New session in next mode |
-| `Ctrl+1/2/3` | Switch to Chat/Cowork/Code mode |
-| `Ctrl+B` | Toggle left sidebar |
-| `Ctrl+Shift+B` | Toggle right panel |
-| `Ctrl+L` | Clear current conversation |
-| `Ctrl+D` | Duplicate current session |
-| `Ctrl+P` | Pin/unpin current session |
-| `Ctrl+Shift+C` | Copy conversation as markdown |
-| `Ctrl+Shift+E` | Export current conversation |
-| `Ctrl+Shift+A` | Toggle auto-approve tools |
-| `Ctrl+Shift+D` | Toggle dark/light theme |
-| `Escape` | Stop streaming |
-
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-[MIT License](LICENSE) — free to use, modify, and distribute.
-
-## 🙏 Acknowledgments
-
-- [Claude Cowork](https://claude.com/blog/cowork-research-preview) by Anthropic — the inspiration for this project
-- [Electron](https://electronjs.org/) · [React](https://reactjs.org/) · [Tailwind CSS](https://tailwindcss.com/) · [Radix UI](https://www.radix-ui.com/)
 
 ---
 
-<div align="center">
+## 📖 飞书 Bot 接入教程
 
-**Open Source · Free Forever · Built with ❤️**
+> 🚧 **教程编写中** — 即将发布完整的飞书机器人配置指南
+>
+> 内容将包括：
+> - 飞书开放平台创建应用
+> - 配置 App ID 和 App Secret
+> - 开启机器人能力和消息权限
+> - 在 OpenCowork 中添加飞书插件
+> - 流式响应和群聊 @机器人 配置
+> - 常见问题排查
+>
+> 敬请期待，或在 Issues 中提出你的问题。
 
-[![GitHub stars](https://img.shields.io/github/stars/AIDotNet/OpenCowork.svg?style=social&label=Star)](https://github.com/AIDotNet/OpenCowork)
-[![GitHub forks](https://img.shields.io/github/forks/AIDotNet/OpenCowork.svg?style=social&label=Fork)](https://github.com/AIDotNet/OpenCowork)
+---
 
-</div>
+## License
+
+MIT

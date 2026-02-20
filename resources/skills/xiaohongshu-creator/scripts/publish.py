@@ -104,8 +104,63 @@ async def check_login(page):
     return await _is_logged_in(page.context)
 
 
+XHS_TITLE_MAX_LEN = 20
+
+_EMOJI_RE_PATTERN = (
+    r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF'
+    r'\U0001F1E0-\U0001F1FF\U00002702-\U000027B0\U0001F900-\U0001F9FF'
+    r'\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002600-\U000026FF'
+    r'\U0000FE00-\U0000FE0F\U0000200D]+'
+)
+
+
+def _strip_emoji(text: str) -> str:
+    """去掉文本中的所有 emoji 字符。"""
+    import re
+    return re.sub(_EMOJI_RE_PATTERN, '', text)
+
+
+def _make_image_text(content: str, max_len: int = 500) -> str:
+    """从正文中提取适合生成配图的简短文字。去掉 emoji 和 # 标签，取前 max_len 字。"""
+    import re
+    text = _strip_emoji(content)
+    text = re.sub(r'#\S+', '', text)
+    text = text.strip()
+    if len(text) > max_len:
+        text = text[:max_len]
+    return text if text else content[:max_len]
+
+
+def _truncate_title(title: str, max_len: int = XHS_TITLE_MAX_LEN) -> str:
+    """确保标题 ≤ max_len 字。先去 emoji，再智能截断。"""
+    # 先去掉 emoji，小红书标题不适合放 emoji 且会占字数
+    title = _strip_emoji(title).strip()
+    if len(title) <= max_len:
+        return title
+    print(f"警告: 标题超过{max_len}字（当前{len(title)}字），自动截断")
+    truncated = title[:max_len]
+    # 尝试在最后一个标点或空格处断开，避免截断在词中间
+    for sep in ['！', '!', '，', ',', '。', '？', '?', '｜', '|', ' ', '、']:
+        idx = truncated.rfind(sep)
+        if idx > max_len // 2:
+            truncated = truncated[:idx + 1]
+            break
+    return truncated
+
+
 async def publish_content(title: str, content: str, images=None, tags=None):
-    """发布小红书笔记"""
+    """
+    发布小红书笔记（文字配图模式）。
+
+    流程：
+    1. 用简短摘要文字生成配图图片
+    2. 进入发布页后，填写真正的标题（≤20字）和完整正文
+    """
+    title = _truncate_title(title)
+
+    # 为文字配图阶段准备简短文字
+    image_text = _make_image_text(content)
+
     async with async_playwright() as p:
         context = await _launch_context(p)
 
@@ -114,49 +169,53 @@ async def publish_content(title: str, content: str, images=None, tags=None):
                 login_page = await _wait_for_login(context)
                 if not login_page:
                     return {"status": "not_logged_in"}
-                # 复用登录页导航到发布页
                 page = login_page
             else:
                 page = await context.new_page()
 
+            # 1. 直接访问图文发布页
+            print("打开图文发布页...")
             await page.goto(
-                "https://creator.xiaohongshu.com/publish/publish",
+                "https://creator.xiaohongshu.com/publish/publish?from=menu&target=image",
                 wait_until="networkidle",
                 timeout=60000,
             )
             await asyncio.sleep(2)
 
-            # 点击"上传图文"tab，切换到图文发布模式
-            print("切换到图文发布模式...")
-            try:
-                tab = page.get_by_text("上传图文", exact=True)
-                await tab.first.click()
-                await asyncio.sleep(2)
-                print("已切换到图文模式")
-            except Exception as e:
-                print(f"未找到图文 tab: {e}，继续尝试...")
-
-            # 填写标题
-            print(f"填写标题: {title}")
-            title_input = None
-            for sel in ["input[placeholder*='标题']", "input[placeholder*='title']", ".title-input input", "input[class*='title']"]:
+            # 2. 点击"文字配图"
+            print("点击文字配图...")
+            text_to_image_btn = None
+            for sel in [
+                "text=文字配图",
+                "div:has-text('文字配图')",
+                "span:has-text('文字配图')",
+                "button:has-text('文字配图')",
+                "[class*='text-image']",
+                "[class*='textImage']",
+            ]:
                 try:
-                    title_input = await page.wait_for_selector(sel, timeout=3000)
-                    if title_input:
+                    text_to_image_btn = await page.wait_for_selector(sel, timeout=3000)
+                    if text_to_image_btn:
                         break
                 except Exception:
                     continue
-            if title_input:
-                await title_input.click()
-                await title_input.fill(title)
-                await asyncio.sleep(0.5)
+            if text_to_image_btn:
+                await text_to_image_btn.click()
+                await asyncio.sleep(2)
+                print("已进入文字配图模式")
             else:
-                print("未找到标题输入框")
+                print("未找到文字配图按钮，请检查页面")
+                return {"status": "error", "message": "未找到文字配图按钮"}
 
-            # 填写正文（contenteditable 用 keyboard 输入更可靠）
-            print("填写正文...")
+            # 3. 在文字配图区域填入简短摘要（仅用于生成图片）
+            print("填写配图文字（简短摘要）...")
             content_input = None
-            for sel in ["div[contenteditable='true']", ".editor-content", "div[class*='editor']"]:
+            for sel in [
+                "div[contenteditable='true']",
+                "textarea",
+                ".editor-content",
+                "div[class*='editor']",
+            ]:
                 try:
                     content_input = await page.wait_for_selector(sel, timeout=3000)
                     if content_input:
@@ -168,24 +227,137 @@ async def publish_content(title: str, content: str, images=None, tags=None):
                 await asyncio.sleep(0.3)
                 await page.keyboard.press("Control+a")
                 await page.keyboard.press("Delete")
-                await page.keyboard.type(content, delay=20)
+                await page.evaluate("(text) => navigator.clipboard.writeText(text)", image_text)
+                await page.keyboard.press("Control+v")
+                await asyncio.sleep(0.5)
+            else:
+                print("未找到文字输入框")
+
+            # 4. 点击生成图片
+            print("点击生成图片...")
+            generate_btn = None
+            for sel in [
+                "text=生成图片",
+                "button:has-text('生成图片')",
+                "div:has-text('生成图片')",
+                "span:has-text('生成图片')",
+                "[class*='generate']",
+            ]:
+                try:
+                    generate_btn = await page.wait_for_selector(sel, timeout=5000)
+                    if generate_btn:
+                        break
+                except Exception:
+                    continue
+            if generate_btn:
+                await generate_btn.click()
+                print("已点击生成图片，等待生成...")
+                await asyncio.sleep(10)
+            else:
+                print("未找到生成图片按钮")
+                return {"status": "error", "message": "未找到生成图片按钮"}
+
+            # 5. 点击"下一步"进入发布编辑页
+            print("点击下一步...")
+            next_btn = None
+            for sel in [
+                "text=下一步",
+                "button:has-text('下一步')",
+                "div:has-text('下一步')",
+                "span:has-text('下一步')",
+            ]:
+                try:
+                    next_btn = await page.wait_for_selector(sel, timeout=10000)
+                    if next_btn:
+                        break
+                except Exception:
+                    continue
+            if next_btn:
+                await next_btn.click()
+                await asyncio.sleep(3)
+                print("已进入发布编辑页")
+            else:
+                print("未找到下一步按钮")
+                return {"status": "error", "message": "未找到下一步按钮"}
+
+            # 6. 在发布页填写标题（已确保 ≤ 20 字）
+            print(f"填写标题: {title}（{len(title)}字）")
+            title_input = None
+            for sel in [
+                "input[placeholder*='标题']",
+                "input[placeholder*='title']",
+                ".title-input input",
+                "input[class*='title']",
+            ]:
+                try:
+                    title_input = await page.wait_for_selector(sel, timeout=5000)
+                    if title_input:
+                        break
+                except Exception:
+                    continue
+            if title_input:
+                await title_input.click()
+                await page.keyboard.press("Control+a")
+                await page.keyboard.press("Delete")
+                await page.evaluate("(text) => navigator.clipboard.writeText(text)", title)
+                await page.keyboard.press("Control+v")
+                await asyncio.sleep(0.5)
+            else:
+                print("未找到标题输入框")
+
+            # 7. 在发布页填写完整正文描述
+            print("填写正文描述...")
+            desc_input = None
+            for sel in [
+                "div[contenteditable='true']",
+                "textarea",
+                ".editor-content",
+                "div[class*='editor']",
+            ]:
+                try:
+                    desc_input = await page.wait_for_selector(sel, timeout=5000)
+                    if desc_input:
+                        break
+                except Exception:
+                    continue
+            if desc_input:
+                await desc_input.click()
+                await asyncio.sleep(0.3)
+                await page.keyboard.press("Control+a")
+                await page.keyboard.press("Delete")
+                await page.evaluate("(text) => navigator.clipboard.writeText(text)", content)
+                await page.keyboard.press("Control+v")
                 await asyncio.sleep(0.5)
             else:
                 print("未找到正文输入框")
 
-            print("尝试自动发布...")
+            # 8. 等待图片上传完成，然后点击发布
+            print("等待图片上传完成...")
+            for _ in range(30):  # 最多等 30 秒
+                # 检查是否还有上传中的进度条/loading状态
+                uploading = await page.query_selector(
+                    ", ".join([
+                        "[class*='upload'][class*='loading']",
+                        "[class*='uploading']",
+                        "[class*='progress']",
+                        ".upload-loading",
+                        "[class*='spinner']",
+                    ])
+                )
+                if not uploading:
+                    break
+                await asyncio.sleep(1)
+            await asyncio.sleep(2)
+
+            print("尝试发布...")
             await asyncio.sleep(1)
 
+            publish_button = None
             try:
-                publish_button = await page.wait_for_selector(
-                    "button:has-text('发布')", timeout=5000
-                )
-                # 过滤掉"发布笔记"下拉按钮，找真正的提交按钮
                 buttons = await page.query_selector_all("button:has-text('发布')")
-                # 优先找不含下拉箭头的按钮（通常是最后一个或 type=submit）
                 publish_button = buttons[-1] if buttons else None
             except Exception:
-                publish_button = None
+                pass
 
             if publish_button:
                 print("点击发布按钮...")
@@ -196,7 +368,7 @@ async def publish_content(title: str, content: str, images=None, tags=None):
                     await page.wait_for_selector(
                         "text=发布成功, .success-toast", timeout=5000
                     )
-                    print("✅ 发布成功!")
+                    print("发布成功!")
                     return {"status": "published", "title": title}
                 except Exception:
                     pass
@@ -231,47 +403,64 @@ async def check_status():
             await context.close()
 
 
+def _read_content(value: str | None) -> str | None:
+    """如果 value 以 @开头，视为文件路径并读取内容；否则原样返回。"""
+    if value and value.startswith("@"):
+        filepath = value[1:]
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception as e:
+            print(f"读取文件失败 {filepath}: {e}")
+            sys.exit(1)
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(description="小红书内容发布工具")
     parser.add_argument("command", help="命令: publish, schedule, status")
-    parser.add_argument("title", nargs="?", help="笔记标题")
-    parser.add_argument("content", nargs="?", help="笔记正文")
+    parser.add_argument("title", nargs="?", help="笔记标题（或 @文件路径）")
+    parser.add_argument("content", nargs="?", help="笔记正文（或 @文件路径）")
     parser.add_argument("--images", help="图片路径(逗号分隔)")
     parser.add_argument("--tags", help="标签(逗号分隔)")
     parser.add_argument("--delay", type=int, help="延迟秒数(定时发布)")
-    
+
     args = parser.parse_args()
-    
+
     if args.command == "status":
         result = asyncio.run(check_status())
         print(json.dumps(result, ensure_ascii=False))
-        
+
     elif args.command == "publish":
-        if not args.title or not args.content:
-            print("错误: publish命令需要title和content参数")
+        title = _read_content(args.title)
+        content = _read_content(args.content)
+        if not title or not content:
+            print("错误: publish命令需要title和content参数（支持 @文件路径）")
             sys.exit(1)
-        
+
         images = args.images.split(",") if args.images else None
         tags = args.tags.split(",") if args.tags else None
-        
-        result = asyncio.run(publish_content(args.title, args.content, images, tags))
+
+        result = asyncio.run(publish_content(title, content, images, tags))
         print(json.dumps(result, ensure_ascii=False))
-        
+
     elif args.command == "schedule":
-        if not args.title or not args.content:
-            print("错误: schedule命令需要title和content参数")
+        title = _read_content(args.title)
+        content = _read_content(args.content)
+        if not title or not content:
+            print("错误: schedule命令需要title和content参数（支持 @文件路径）")
             sys.exit(1)
-        
+
         delay = args.delay or 0
         print(f"定时发布: {delay}秒后")
         time.sleep(delay)
-        
+
         images = args.images.split(",") if args.images else None
         tags = args.tags.split(",") if args.tags else None
-        
-        result = asyncio.run(publish_content(args.title, args.content, images, tags))
+
+        result = asyncio.run(publish_content(title, content, images, tags))
         print(json.dumps(result, ensure_ascii=False))
-        
+
     else:
         print(f"未知命令: {args.command}")
         sys.exit(1)

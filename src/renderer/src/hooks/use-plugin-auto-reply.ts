@@ -27,7 +27,6 @@ import type { PluginPermissions } from '@renderer/lib/plugins/types'
 import type { UnifiedMessage, ProviderConfig } from '@renderer/lib/api/types'
 import type { AgentLoopConfig } from '@renderer/lib/agent/types'
 import type { ToolContext } from '@renderer/lib/tools/tool-types'
-import type { ToolCallState } from '@renderer/lib/agent/types'
 
 interface PluginAutoReplyTask {
   sessionId: string
@@ -175,88 +174,7 @@ async function handlePluginAutoReply(task: PluginAutoReplyTask): Promise<void> {
   }
 }
 
-// ── Permission Enforcement Helpers ──
-
-function normalizePath(p: string): string {
-  // Normalize to forward slashes, collapse duplicates, strip trailing slash
-  let normalized = p.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
-  // Windows paths are case-insensitive — lowercase for comparison
-  if (/^[a-zA-Z]:/.test(normalized)) {
-    normalized = normalized.toLowerCase()
-  }
-  return normalized
-}
-
-function isPathAllowed(
-  targetPath: string,
-  workDir: string,
-  perms: PluginPermissions,
-  homedir: string,
-  mode: 'read' | 'write'
-): boolean {
-  if (!targetPath) return mode === 'read' // empty path reads (like LS with no arg) are ok
-  const normalized = normalizePath(targetPath)
-  const normalizedWorkDir = normalizePath(workDir)
-  const normalizedHome = normalizePath(homedir)
-
-  // Always allow access within plugin working directory
-  if (normalizedWorkDir && (normalized + '/').startsWith(normalizedWorkDir + '/')) return true
-
-  // Check if path is under home directory (ensure boundary match with trailing slash)
-  const homePrefix = normalizedHome.length > 0 ? normalizedHome + '/' : ''
-  const isUnderHome = homePrefix.length > 0 && (normalized + '/').startsWith(homePrefix)
-
-  if (mode === 'read') {
-    if (!isUnderHome) return true // Outside home — system files are generally safe to read
-    if (perms.allowReadHome) return true
-    // Check whitelist
-    return perms.readablePathPrefixes.some((prefix) => {
-      const np = normalizePath(prefix)
-      return (normalized + '/').startsWith(np + '/')
-    })
-  }
-
-  // Write mode
-  if (isUnderHome && !perms.allowWriteOutside) return false
-  return perms.allowWriteOutside
-}
-
-function createPluginApprovalFn(
-  perms: PluginPermissions,
-  workDir: string,
-  homedir: string
-): (tc: ToolCallState) => Promise<boolean> {
-  return async (tc: ToolCallState): Promise<boolean> => {
-    const { name: toolName, input } = tc
-
-    // Plugin messaging tools — always allowed
-    if (toolName.startsWith('Plugin') || toolName.startsWith('Feishu')) return true
-
-    // Shell — check permission
-    if (toolName === 'Bash' || toolName === 'Shell') {
-      return perms.allowShell
-    }
-
-    // File read tools
-    if (toolName === 'Read' || toolName === 'Glob' || toolName === 'Grep' || toolName === 'LS') {
-      const targetPath = String(input.file_path || input.path || input.pattern || '')
-      return isPathAllowed(targetPath, workDir, perms, homedir, 'read')
-    }
-
-    // File write tools
-    if (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit') {
-      const targetPath = String(input.file_path || '')
-      if (!targetPath) return false
-      return isPathAllowed(targetPath, workDir, perms, homedir, 'write')
-    }
-
-    // Sub-agent tools
-    if (toolName === 'Task') return perms.allowSubAgents
-
-    // Everything else (TaskCreate, TaskUpdate, AskUser, etc.) — allow
-    return true
-  }
-}
+// ── Security Prompt Builder ──
 
 function buildSecurityPrompt(perms: PluginPermissions, pluginWorkDir: string): string {
   return [
@@ -512,7 +430,6 @@ async function _runPluginAgent(task: PluginAutoReplyTask): Promise<void> {
     systemPrompt,
     workingFolder: session.workingFolder,
     signal: ac.signal,
-    forceApproval: true,
   }
 
   const toolCtx: ToolContext = {
@@ -523,6 +440,8 @@ async function _runPluginAgent(task: PluginAutoReplyTask): Promise<void> {
     currentToolUseId: undefined,
     pluginId,
     pluginChatId: chatId,
+    pluginPermissions: permissions,
+    pluginHomedir: homedir,
   }
 
   // ── Run Agent Loop ──
@@ -539,13 +458,10 @@ async function _runPluginAgent(task: PluginAutoReplyTask): Promise<void> {
       return false
     })
 
-  const approvalFn = createPluginApprovalFn(permissions, pluginWorkDir, homedir)
-
   const loop = runAgentLoop(
     historyMessages, // Clean history without empty assistant turns
     loopConfig,
     toolCtx,
-    approvalFn
   )
 
   let fullText = ''

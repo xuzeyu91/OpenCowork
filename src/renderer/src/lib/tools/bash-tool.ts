@@ -151,7 +151,11 @@ const bashHandler: ToolHandler = {
       cleanup()
     }
   },
-  requiresApproval: () => true, // Shell commands always require approval
+  requiresApproval: (_input, ctx) => {
+    // Plugin context: respect allowShell permission
+    if (ctx.pluginPermissions) return !ctx.pluginPermissions.allowShell
+    return true // Normal sessions: always require approval
+  },
 }
 
 export function registerBashTools(): void {

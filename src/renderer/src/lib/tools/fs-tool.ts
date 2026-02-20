@@ -1,6 +1,47 @@
 import { toolRegistry } from '../agent/tool-registry'
 import { IPC } from '../ipc/channels'
-import type { ToolHandler } from './tool-types'
+import type { ToolHandler, ToolContext } from './tool-types'
+
+// ── Plugin path permission helpers ──
+
+function normalizePath(p: string): string {
+  let normalized = p.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '')
+  if (/^[a-zA-Z]:/.test(normalized)) normalized = normalized.toLowerCase()
+  return normalized
+}
+
+function isPluginPathAllowed(
+  targetPath: string,
+  ctx: ToolContext,
+  mode: 'read' | 'write'
+): boolean {
+  const perms = ctx.pluginPermissions
+  if (!perms) return true // No plugin context — defer to normal approval logic
+
+  if (!targetPath) return mode === 'read'
+  const normalized = normalizePath(targetPath)
+  const normalizedWorkDir = ctx.workingFolder ? normalizePath(ctx.workingFolder) : ''
+  const normalizedHome = ctx.pluginHomedir ? normalizePath(ctx.pluginHomedir) : ''
+
+  // Always allow access within plugin working directory
+  if (normalizedWorkDir && (normalized + '/').startsWith(normalizedWorkDir + '/')) return true
+
+  const homePrefix = normalizedHome.length > 0 ? normalizedHome + '/' : ''
+  const isUnderHome = homePrefix.length > 0 && (normalized + '/').startsWith(homePrefix)
+
+  if (mode === 'read') {
+    if (!isUnderHome) return true
+    if (perms.allowReadHome) return true
+    return perms.readablePathPrefixes.some((prefix) => {
+      const np = normalizePath(prefix)
+      return (normalized + '/').startsWith(np + '/')
+    })
+  }
+
+  // Write mode
+  if (isUnderHome && !perms.allowWriteOutside) return false
+  return perms.allowWriteOutside
+}
 
 const readHandler: ToolHandler = {
   definition: {
@@ -34,7 +75,13 @@ const readHandler: ToolHandler = {
     }
     return String(result)
   },
-  requiresApproval: () => false,
+  requiresApproval: (input, ctx) => {
+    // Plugin context: check read permission
+    if (ctx.pluginPermissions) {
+      return !isPluginPathAllowed(String(input.file_path || ''), ctx, 'read')
+    }
+    return false
+  },
 }
 
 const writeHandler: ToolHandler = {
@@ -69,8 +116,12 @@ const writeHandler: ToolHandler = {
     return JSON.stringify({ success: true, path: input.file_path })
   },
   requiresApproval: (input, ctx) => {
-    // Writing outside working folder requires approval
     const filePath = String(input.file_path)
+    // Plugin context: check write permission
+    if (ctx.pluginPermissions) {
+      return !isPluginPathAllowed(filePath, ctx, 'write')
+    }
+    // Normal sessions: writing outside working folder requires approval
     if (!ctx.workingFolder) return true
     return !filePath.startsWith(ctx.workingFolder)
   },
@@ -125,6 +176,10 @@ const editHandler: ToolHandler = {
   },
   requiresApproval: (input, ctx) => {
     const filePath = String(input.file_path)
+    // Plugin context: check write permission
+    if (ctx.pluginPermissions) {
+      return !isPluginPathAllowed(filePath, ctx, 'write')
+    }
     if (!ctx.workingFolder) return true
     return !filePath.startsWith(ctx.workingFolder)
   },
@@ -253,6 +308,10 @@ const multiEditHandler: ToolHandler = {
   },
   requiresApproval: (input, ctx) => {
     const filePath = String(input.file_path)
+    // Plugin context: check write permission
+    if (ctx.pluginPermissions) {
+      return !isPluginPathAllowed(filePath, ctx, 'write')
+    }
     if (!ctx.workingFolder) return true
     return !filePath.startsWith(ctx.workingFolder)
   },
@@ -282,7 +341,12 @@ const lsHandler: ToolHandler = {
     })
     return JSON.stringify(result)
   },
-  requiresApproval: () => false,
+  requiresApproval: (input, ctx) => {
+    if (ctx.pluginPermissions) {
+      return !isPluginPathAllowed(String(input.path || ''), ctx, 'read')
+    }
+    return false
+  },
 }
 
 export function registerFsTools(): void {
