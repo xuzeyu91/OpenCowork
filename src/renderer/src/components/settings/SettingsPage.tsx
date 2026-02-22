@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Settings, BrainCircuit, Info, Server, Puzzle, Cable, Loader2, Download, Github, Sparkles, ShieldCheck, Layers, HardDriveDownload, HardDriveUpload, Trash2 } from 'lucide-react'
+import {
+  Settings,
+  BrainCircuit,
+  Server,
+  Puzzle,
+  Cable,
+  Loader2,
+  Download,
+  HardDriveDownload,
+  HardDriveUpload,
+  Trash2
+} from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -115,7 +126,6 @@ const menuItemDefs: { id: SettingsTab; icon: React.ReactNode; labelKey: string; 
   { id: 'plugin', icon: <Puzzle className="size-4" />, labelKey: 'plugin.title', descKey: 'plugin.subtitle' },
   { id: 'mcp', icon: <Cable className="size-4" />, labelKey: 'mcp.title', descKey: 'mcp.subtitle' },
   { id: 'model', icon: <BrainCircuit className="size-4" />, labelKey: 'model.title', descKey: 'model.subtitle' },
-  { id: 'about', icon: <Info className="size-4" />, labelKey: 'about.title', descKey: 'about.subtitle' },
 ]
 
 // ─── General Settings Panel ───
@@ -803,121 +813,12 @@ function ModelPanel(): React.JSX.Element {
   )
 }
 
-
-function AboutPanel(): React.JSX.Element {
-  const { t } = useTranslation('settings')
-  const appVersion = packageJson.version ?? '0.0.0'
-  const meta = [
-    { label: t('about.version'), value: appVersion },
-    { label: t('about.framework'), value: 'Electron · React · TypeScript' },
-    { label: t('about.ui'), value: 'shadcn/ui · TailwindCSS' },
-    { label: t('about.license'), value: 'MIT' },
-  ]
-  const featureCards = [
-    {
-      icon: Sparkles,
-      title: '多 Agent 编排',
-      desc: '以团队模式运行多个智能体，拆解复杂任务。',
-    },
-    {
-      icon: ShieldCheck,
-      title: '本地安全沙盒',
-      desc: '所有文件与秘钥均在本地处理，可控可审计。',
-    },
-    {
-      icon: Layers,
-      title: 'MCP / 插件体系',
-      desc: '无缝连接 MCP 服务器、Skills 与第三方插件。',
-    },
-  ]
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-lg font-semibold">{t('about.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('about.subtitle')}</p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-xs"
-          onClick={() => window.open('https://github.com/xuzeyu91/OpenCowork', '_blank', 'noopener')}
-        >
-          <Github className="size-3.5" /> GitHub
-        </Button>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-muted/60 via-background to-muted/40 p-6 shadow-inner">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="relative">
-              <div className="size-16 rounded-2xl bg-gradient-to-br from-primary/40 via-primary/60 to-primary p-[2px] shadow-lg shadow-primary/30">
-                <div className="flex h-full w-full items-center justify-center rounded-2xl bg-background text-lg font-semibold tracking-wide text-foreground">
-                  OC
-                </div>
-              </div>
-              <div className="absolute -inset-1 rounded-3xl bg-primary/10 blur-2xl" aria-hidden="true" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">AI 协作工作台</p>
-              <h3 className="text-2xl font-semibold text-foreground">OpenCowork</h3>
-              <p className="text-sm text-muted-foreground">多模型、多 Agent、多技能在同一桌面原生体验中协同运作。</p>
-            </div>
-          </div>
-          <Separator className="my-6 border-border/40" />
-          <div className="grid gap-4 sm:grid-cols-2">
-            {meta.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-border/50 bg-card px-4 py-3 text-sm">
-                <p className="text-xs uppercase text-muted-foreground/70">{item.label}</p>
-                <p className="mt-1 font-medium text-foreground">{item.value}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-border/70 bg-card/60 p-5 shadow-lg shadow-slate-900/5">
-          <p className="text-xs uppercase tracking-[0.3em] text-primary">WORKFLOW</p>
-          <h4 className="mt-2 text-lg font-semibold">智能体加速你的工程节奏</h4>
-          <p className="mt-1 text-sm text-muted-foreground">
-            在一个窗口里完成代码、文件、Shell、MCP 工具与插件调度，保持上下文与安全边界。
-          </p>
-          <div className="mt-4 space-y-3">
-            {featureCards.map((card) => (
-              <div key={card.title} className="flex gap-3 rounded-2xl border border-border/80 bg-background/70 px-3 py-2">
-                <card.icon className="mt-0.5 size-4 text-primary" />
-                <div>
-                  <p className="text-sm font-medium">{card.title}</p>
-                  <p className="text-xs text-muted-foreground">{card.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <Button
-            className="mt-4 h-9 w-full text-xs"
-            variant="secondary"
-            onClick={() => window.open('https://github.com/xuzeyu91/OpenCowork/releases', '_blank', 'noopener')}
-          >
-            查看发布历史
-          </Button>
-        </section>
-
-        <section className="rounded-3xl border border-dashed border-border/60 bg-muted/20 p-5 lg:col-span-2">
-          <p className="text-sm text-muted-foreground">
-            OpenCowork 是一个开源的 AI 协作平台，致力于将多模型、MCP 服务器、Skills 与自定义插件汇聚到同一个桌面工作流中。你可以根据不同任务模式（Chat / Cowork / Code）自由切换，并保留全部本地控制权。
-          </p>
-        </section>
-      </div>
-    </div>
-  )
-}
-
 const panelMap: Record<SettingsTab, () => React.JSX.Element> = {
   general: GeneralPanel,
   provider: ProviderPanel,
   plugin: PluginPanel,
   mcp: McpPanel,
-  model: ModelPanel,
-  about: AboutPanel
+  model: ModelPanel
 }
 
 export function SettingsPage(): React.JSX.Element {
