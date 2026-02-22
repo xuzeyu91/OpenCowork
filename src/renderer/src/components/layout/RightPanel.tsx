@@ -68,7 +68,6 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
     .filter((t) => effectiveMode !== 'code' || (t.value !== 'team' && t.value !== 'cron'))
     .filter((t) => teamToolsEnabled || t.value !== 'team')
     .filter((t) => (hasPlan || planMode) || t.value !== 'plan')
-
   useEffect(() => {
     if (visibleTabs.some((item) => item.value === tab)) return
     setTab(getDefaultRightPanelTab(effectiveMode))
@@ -86,16 +85,19 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
   return (
     <aside className={cn('flex shrink-0 flex-col border-l bg-background/50 backdrop-blur-sm transition-all duration-200', compact ? 'w-64' : 'w-96')}>
       {/* Tab Bar */}
-      <div className="flex h-10 min-w-0 items-center gap-0.5 overflow-x-auto px-2">
+      <div className="flex min-h-10 min-w-0 flex-wrap items-center gap-1 overflow-x-hidden px-2 py-1">
         {visibleTabs.map((tDef) => {
           const count = badgeCounts[tDef.value] ?? 0
+          const tabLabel = t(`rightPanel.${tDef.labelKey}`)
           return (
             <Button
               key={tDef.value}
               variant={tab === tDef.value ? 'secondary' : 'ghost'}
               size="sm"
+              title={tabLabel}
+              aria-label={tabLabel}
               className={cn(
-                'h-6 shrink-0 gap-1.5 rounded-md px-2 text-xs transition-all duration-200',
+                'relative h-auto min-h-11 w-14 shrink-0 flex-col gap-1 rounded-md px-1 py-1.5 text-[10px] leading-tight transition-all duration-200',
                 tab === tDef.value
                   ? 'bg-muted shadow-sm ring-1 ring-border/50'
                   : 'text-muted-foreground hover:text-foreground'
@@ -103,9 +105,9 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
               onClick={() => setTab(tDef.value)}
             >
               {tDef.icon}
-              <span className="hidden lg:inline">{t(`rightPanel.${tDef.labelKey}`)}</span>
+              <span className="max-w-full text-center whitespace-normal leading-tight">{tabLabel}</span>
               {count > 0 && tab !== tDef.value && (
-                <span className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/10 text-[9px] font-medium text-muted-foreground">
+                <span className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-muted-foreground/10 text-[9px] font-medium text-muted-foreground">
                   {count}
                 </span>
               )}
