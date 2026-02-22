@@ -4,7 +4,7 @@ export const antskAiPreset: BuiltinProviderPreset = {
   builtinId: 'antsk-ai',
   name: 'AntSK AI',
   type: 'openai-chat',
-  defaultBaseUrl: 'https://api.antsk.cn/',
+  defaultBaseUrl: 'https://api.antsk.cn/v1',
   homepage: 'https://api.antsk.cn/',
   apiKeyUrl: 'https://api.antsk.cn/',
   defaultEnabled: true,

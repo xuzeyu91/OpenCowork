@@ -384,6 +384,19 @@ function ensureBuiltinPresets(): void {
     }
   }
 
+  const providersAfterSync = useProviderStore.getState().providers
+  const antskProvider = providersAfterSync.find((p) => p.builtinId === 'antsk-ai')
+  if (antskProvider) {
+    const reordered = [
+      antskProvider,
+      ...providersAfterSync.filter((p) => p.id !== antskProvider.id),
+    ]
+    const unchanged = reordered.every((provider, index) => provider.id === providersAfterSync[index]?.id)
+    if (!unchanged) {
+      useProviderStore.setState({ providers: reordered })
+    }
+  }
+
   if (!useProviderStore.getState().activeProviderId) {
     const providers = useProviderStore.getState().providers
     const firstEnabled = providers.find((p) => p.enabled)
