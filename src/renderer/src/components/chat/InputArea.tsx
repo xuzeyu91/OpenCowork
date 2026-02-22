@@ -677,15 +677,15 @@ export function InputArea({
         </div>
       )}
 
-      {/* Working folder indicator */}
-      {workingFolder && (
-        <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <FolderOpen className="size-3" />
-          <span className="truncate">{workingFolder}</span>
-        </div>
-      )}
-
       <div className="mx-auto max-w-3xl">
+        {/* Working folder indicator */}
+        {workingFolder && (
+          <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <FolderOpen className="size-3" />
+            <span className="truncate">{workingFolder}</span>
+          </div>
+        )}
+
         <div className={`relative rounded-2xl border bg-background shadow-lg transition-shadow focus-within:shadow-xl focus-within:ring-1 focus-within:ring-ring/20 ${dragging ? 'ring-2 ring-primary/50' : ''}`}>
           {/* Queued message list (while current run is processing) */}
           {queuedMessages.length > 0 && (
