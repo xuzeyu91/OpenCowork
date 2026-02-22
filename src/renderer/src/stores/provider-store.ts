@@ -324,9 +324,11 @@ export const useProviderStore = create<ProviderStore>()(
  * Safe to call multiple times — idempotent.
  */
 function ensureBuiltinPresets(): void {
-  const legacyRoutin = useProviderStore
+  const legacyBuiltinId = 'routin-ai'
+  const legacyProviders = useProviderStore
     .getState()
-    .providers.find((p) => p.builtinId === 'routin-ai')
+    .providers.filter((p) => p.builtinId === legacyBuiltinId)
+  const legacyRoutin = legacyProviders[0]
   const antskPreset = builtinProviderPresets.find((p) => p.builtinId === 'antsk-ai')
   const antskExisting = useProviderStore
     .getState()
@@ -342,6 +344,23 @@ function ensureBuiltinPresets(): void {
     })
     const migratedModels = mergeBuiltinModels(legacyRoutin.models, antskPreset.defaultModels)
     useProviderStore.getState().setProviderModels(legacyRoutin.id, migratedModels)
+  }
+
+  // If AntSK already exists, remove any leftover legacy providers.
+  if (antskPreset) {
+    const currentProviders = useProviderStore.getState().providers
+    const activeProviderId = useProviderStore.getState().activeProviderId
+    const currentAntsk = currentProviders.find((p) => p.builtinId === antskPreset.builtinId)
+
+    for (const legacy of currentProviders.filter((p) => p.builtinId === legacyBuiltinId)) {
+      if (legacy.id !== currentAntsk?.id) {
+        const shouldSwitchActive = activeProviderId === legacy.id && currentAntsk
+        useProviderStore.getState().removeProvider(legacy.id)
+        if (shouldSwitchActive) {
+          useProviderStore.getState().setActiveProvider(currentAntsk.id)
+        }
+      }
+    }
   }
 
   for (const preset of builtinProviderPresets) {

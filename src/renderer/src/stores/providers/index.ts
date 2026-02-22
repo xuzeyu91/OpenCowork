@@ -1,6 +1,6 @@
 export type { BuiltinProviderPreset } from './types'
 
-import { antskAiPreset } from './routin-ai'
+import { antskAiPreset } from './antsk-ai'
 import { openaiPreset } from './openai'
 import { anthropicPreset } from './anthropic'
 import { googlePreset } from './google'
