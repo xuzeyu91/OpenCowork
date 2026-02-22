@@ -388,7 +388,7 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
       '<div style="display:flex;flex-direction:column;justify-content:center;gap:2px;">',
       '  <span style="font-weight:600;font-size:14px;color:rgba(128,128,128,0.75);">OpenCowork</span>',
       '  <span style="font-size:11px;color:rgba(128,128,128,0.5);">AI-Powered Collaborative Development Platform</span>',
-      '  <span style="font-size:11px;color:rgba(128,128,128,0.45);">github.com/AIDotNet/OpenCowork</span>',
+      '  <span style="font-size:11px;color:rgba(128,128,128,0.45);">github.com/xuzeyu91/OpenCowork</span>',
       '</div>',
     ].join('\n')
     node.appendChild(footer)

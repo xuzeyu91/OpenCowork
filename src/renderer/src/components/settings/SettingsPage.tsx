@@ -34,7 +34,7 @@ import { WindowControls } from '@renderer/components/layout/WindowControls'
 import { ModelIcon } from './provider-icons'
 import packageJson from '../../../../../package.json'
 
-const GITHUB_RELEASE_API_URL = 'https://api.github.com/repos/AIDotNet/OpenCowork/releases/latest'
+const GITHUB_RELEASE_API_URL = 'https://api.github.com/repos/xuzeyu91/OpenCowork/releases/latest'
 
 interface GithubAsset {
   id: number
@@ -149,7 +149,7 @@ function GeneralPanel(): React.JSX.Element {
       const tag = data.tag_name ?? data.name ?? null
       const normalized = tag?.startsWith('v') ? tag.slice(1) : tag
       setLatestVersion(normalized ?? null)
-      setReleaseUrl(data.html_url ?? (tag ? `https://github.com/AIDotNet/OpenCowork/releases/tag/${tag}` : null))
+      setReleaseUrl(data.html_url ?? (tag ? `https://github.com/xuzeyu91/OpenCowork/releases/tag/${tag}` : null))
 
       const assets = (data.assets ?? [])
         .map((asset) => {
@@ -841,7 +841,7 @@ function AboutPanel(): React.JSX.Element {
           variant="outline"
           size="sm"
           className="gap-1.5 text-xs"
-          onClick={() => window.open('https://github.com/AIDotNet/OpenCowork', '_blank', 'noopener')}
+          onClick={() => window.open('https://github.com/xuzeyu91/OpenCowork', '_blank', 'noopener')}
         >
           <Github className="size-3.5" /> GitHub
         </Button>
@@ -895,7 +895,7 @@ function AboutPanel(): React.JSX.Element {
           <Button
             className="mt-4 h-9 w-full text-xs"
             variant="secondary"
-            onClick={() => window.open('https://github.com/AIDotNet/OpenCowork/releases', '_blank', 'noopener')}
+            onClick={() => window.open('https://github.com/xuzeyu91/OpenCowork/releases', '_blank', 'noopener')}
           >
             查看发布历史
           </Button>
