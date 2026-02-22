@@ -17,7 +17,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { SidebarTrigger } from '@renderer/components/ui/sidebar'
-import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
+import { useUIStore, type AppMode, getEffectiveMode, isAgentMode } from '@renderer/stores/ui-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { useTeamStore } from '@renderer/stores/team-store'
@@ -36,8 +36,9 @@ const modes: { value: AppMode; labelKey: string; icon: React.ReactNode }[] = [
 export function TopBar(): React.JSX.Element {
   const { t: tCommon } = useTranslation('common')
   const { t } = useTranslation('layout')
-  const mode = useUIStore((s) => s.mode)
-  const setMode = useUIStore((s) => s.setMode)
+  const newSessionMode = useUIStore((s) => s.newSessionMode)
+  const setNewSessionMode = useUIStore((s) => s.setNewSessionMode)
+  const applyModeDefaults = useUIStore((s) => s.applyModeDefaults)
   const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
   const toggleRightPanel = useUIStore((s) => s.toggleRightPanel)
   const openDetailPanel = useUIStore((s) => s.openDetailPanel)
@@ -46,6 +47,9 @@ export function TopBar(): React.JSX.Element {
   const { theme, setTheme } = useTheme()
 
   const activeSessionId = useChatStore((s) => s.activeSessionId)
+  const activeSessionMode = useChatStore((s) => s.sessions.find((session) => session.id === s.activeSessionId)?.mode)
+  const updateSessionMode = useChatStore((s) => s.updateSessionMode)
+  const effectiveMode = getEffectiveMode(activeSessionMode, newSessionMode)
   const autoApprove = useSettingsStore((s) => s.autoApprove)
   const pendingApprovals = useAgentStore((s) => s.pendingToolCalls).length
   const errorCount = useAgentStore((s) => s.executedToolCalls.filter((t) => t.status === 'error').length)
@@ -78,15 +82,22 @@ export function TopBar(): React.JSX.Element {
           <Tooltip key={m.value}>
             <TooltipTrigger asChild>
               <Button
-                variant={mode === m.value ? 'secondary' : 'ghost'}
+                variant={effectiveMode === m.value ? 'secondary' : 'ghost'}
                 size="sm"
                 className={cn(
                   'titlebar-no-drag h-6 gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all duration-200',
-                  mode === m.value
+                  effectiveMode === m.value
                     ? 'bg-background shadow-sm ring-1 ring-border/50'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
-                onClick={() => { console.log('[TopBar] Mode switch clicked:', m.value); setMode(m.value) }}
+                onClick={() => {
+                  setNewSessionMode(m.value)
+                  if (activeSessionId) {
+                    updateSessionMode(activeSessionId, m.value)
+                    return
+                  }
+                  applyModeDefaults(m.value)
+                }}
               >
                 {m.icon}
                 {tCommon(m.labelKey)}
@@ -102,7 +113,7 @@ export function TopBar(): React.JSX.Element {
       {/* Right-side controls — must not shrink */}
       <div className="flex shrink-0 items-center gap-1">
       {/* Right Panel Toggle (cowork & code modes) */}
-      {mode !== 'chat' && (
+      {isAgentMode(effectiveMode) && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon" className="titlebar-no-drag size-7" onClick={toggleRightPanel}>

@@ -42,7 +42,7 @@ import {
 } from '@renderer/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { useChatStore, type SessionMode } from '@renderer/stores/chat-store'
-import { useUIStore } from '@renderer/stores/ui-store'
+import { useUIStore, getEffectiveMode } from '@renderer/stores/ui-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useTeamStore } from '@renderer/stores/team-store'
 import { abortSession } from '@renderer/hooks/use-chat-actions'
@@ -111,7 +111,7 @@ export function AppSidebar(): React.JSX.Element {
   const duplicateSession = useChatStore((s) => s.duplicateSession)
   const updateSessionMode = useChatStore((s) => s.updateSessionMode)
   const togglePinSession = useChatStore((s) => s.togglePinSession)
-  const mode = useUIStore((s) => s.mode)
+  const newSessionMode = useUIStore((s) => s.newSessionMode)
   const runningSessions = useAgentStore((s) => s.runningSessions)
   const activeSubAgents = useAgentStore((s) => s.activeSubAgents)
   const activeTeam = useTeamStore((s) => s.activeTeam)
@@ -122,6 +122,11 @@ export function AppSidebar(): React.JSX.Element {
   const editRef = useRef<HTMLInputElement>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string; msgCount: number } | null>(null)
   const appVersion = packageJson.version ?? '0.0.0'
+  const activeSessionMode = useMemo(
+    () => sessions.find((session) => session.id === activeSessionId)?.mode,
+    [sessions, activeSessionId]
+  )
+  const effectiveMode = getEffectiveMode(activeSessionMode, newSessionMode)
   const getSessionSnapshot = useCallback(
     (sessionId: string) => useChatStore.getState().sessions.find((session) => session.id === sessionId),
     []
@@ -157,7 +162,7 @@ export function AppSidebar(): React.JSX.Element {
 
 
   const handleNewSession = (): void => {
-    createSession(mode)
+    createSession(newSessionMode)
   }
 
   const handleExport = async (sessionId: string): Promise<void> => {
@@ -413,7 +418,7 @@ export function AppSidebar(): React.JSX.Element {
                                   {session.pinned && (
                                     <Pin className="size-2.5 text-muted-foreground/30 -rotate-45" />
                                   )}
-                                  {session.mode !== mode && (
+                                  {session.mode !== effectiveMode && (
                                     <span className="rounded bg-muted px-1 py-px text-[8px] uppercase text-muted-foreground/40">{session.mode}</span>
                                   )}
                                   {session.messageCount > 0 && (

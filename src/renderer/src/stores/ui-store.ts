@@ -6,6 +6,18 @@ export type AppMode = 'chat' | 'cowork' | 'code'
 
 export type RightPanelTab = 'steps' | 'team' | 'artifacts' | 'context' | 'skills' | 'files' | 'plan' | 'cron'
 
+export function getEffectiveMode(activeSessionMode: AppMode | undefined, newSessionMode: AppMode): AppMode {
+  return activeSessionMode ?? newSessionMode
+}
+
+export function isAgentMode(mode: AppMode): boolean {
+  return mode !== 'chat'
+}
+
+export function getDefaultRightPanelTab(mode: AppMode): RightPanelTab {
+  return mode === 'code' ? 'files' : 'steps'
+}
+
 export type PreviewSource = 'file' | 'dev-server' | 'markdown'
 
 export interface PreviewPanelState {
@@ -41,9 +53,13 @@ export type DetailPanelContent =
 
 interface UIStore {
 
-  mode: AppMode
+  /** Preferred mode for creating new sessions when no active session overrides it */
+  newSessionMode: AppMode
 
-  setMode: (mode: AppMode) => void
+  setNewSessionMode: (mode: AppMode) => void
+
+  /** Apply default panel behavior for the currently effective mode */
+  applyModeDefaults: (mode: AppMode) => void
 
 
 
@@ -130,9 +146,14 @@ interface UIStore {
 
 export const useUIStore = create<UIStore>((set) => ({
 
-  mode: 'chat',
+  newSessionMode: 'chat',
 
-  setMode: (mode) => set({ mode, rightPanelOpen: mode === 'cowork' }),
+  setNewSessionMode: (mode) => set({ newSessionMode: mode }),
+
+  applyModeDefaults: (mode) => set((state) => ({
+    rightPanelOpen: isAgentMode(mode),
+    rightPanelTab: isAgentMode(mode) ? getDefaultRightPanelTab(mode) : state.rightPanelTab,
+  })),
 
 
 

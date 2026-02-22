@@ -353,6 +353,16 @@ export const useChatStore = create<ChatStore>()(
           nextActiveSessionId = state.activeSessionId ?? sessions[0]?.id ?? null
           state.activeSessionId = nextActiveSessionId
         })
+        const ui = useUIStore.getState()
+        if (nextActiveSessionId) {
+          const nextSession = sessions.find((s) => s.id === nextActiveSessionId)
+          if (nextSession) {
+            ui.setNewSessionMode(nextSession.mode)
+            ui.applyModeDefaults(nextSession.mode)
+          }
+        } else {
+          ui.applyModeDefaults(ui.newSessionMode)
+        }
         if (nextActiveSessionId) {
           await get().loadSessionMessages(nextActiveSessionId)
           await useTaskStore.getState().loadTasksForSession(nextActiveSessionId)
@@ -386,6 +396,9 @@ export const useChatStore = create<ChatStore>()(
         state.activeSessionId = id
       })
       dbCreateSession(newSession)
+      const ui = useUIStore.getState()
+      ui.setNewSessionMode(mode)
+      ui.applyModeDefaults(mode)
       useTaskStore.getState().clearTasks()
       usePlanStore.getState().setActivePlan(null)
       if (useUIStore.getState().planMode) {
@@ -437,6 +450,16 @@ export const useChatStore = create<ChatStore>()(
         // Sync convenience field to the new active session's streaming state
         state.streamingMessageId = id ? (state.streamingMessages[id] ?? null) : null
       })
+      const ui = useUIStore.getState()
+      if (id) {
+        const nextSession = get().sessions.find((s) => s.id === id)
+        if (nextSession) {
+          ui.setNewSessionMode(nextSession.mode)
+          ui.applyModeDefaults(nextSession.mode)
+        }
+      } else {
+        ui.applyModeDefaults(ui.newSessionMode)
+      }
       if (prevId !== id && useUIStore.getState().planMode) {
         useUIStore.getState().exitPlanMode()
       }
@@ -488,6 +511,11 @@ export const useChatStore = create<ChatStore>()(
         }
       })
       dbUpdateSession(id, { mode, updatedAt: now })
+      if (get().activeSessionId === id) {
+        const ui = useUIStore.getState()
+        ui.setNewSessionMode(mode)
+        ui.applyModeDefaults(mode)
+      }
     },
 
     setWorkingFolder: (sessionId, folder) => {

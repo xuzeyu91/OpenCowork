@@ -10,7 +10,7 @@ import { useProviderStore } from '@renderer/stores/provider-store'
 import type { AIModelConfig, ReasoningEffortLevel } from '@renderer/lib/api/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@renderer/components/ui/popover'
 import { useSettingsStore } from '@renderer/stores/settings-store'
-import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
+import { useUIStore, type AppMode, getEffectiveMode } from '@renderer/stores/ui-store'
 import { formatTokens } from '@renderer/lib/format-tokens'
 import { useDebouncedTokens } from '@renderer/hooks/use-estimated-tokens'
 import { useChatStore } from '@renderer/stores/chat-store'
@@ -277,8 +277,10 @@ export function InputArea({
     useSettingsStore.getState().updateSettings({ reasoningEffort: level, thinkingEnabled: true })
   }, [])
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
-  const mode = useUIStore((s) => s.mode)
+  const newSessionMode = useUIStore((s) => s.newSessionMode)
   const activeSessionId = useChatStore((s) => s.activeSessionId)
+  const activeSessionMode = useChatStore((s) => s.sessions.find((session) => session.id === s.activeSessionId)?.mode)
+  const mode = getEffectiveMode(activeSessionMode, newSessionMode)
   const queuedMessages = React.useSyncExternalStore(
     subscribePendingSessionMessages,
     () => (activeSessionId ? getPendingSessionMessages(activeSessionId) : EMPTY_QUEUED_MESSAGES),

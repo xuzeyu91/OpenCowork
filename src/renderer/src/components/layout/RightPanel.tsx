@@ -1,7 +1,8 @@
+import { useEffect } from 'react'
 import { ListChecks, FileOutput, Database, Sparkles, FolderTree, Users, ClipboardList, Clock } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Separator } from '@renderer/components/ui/separator'
-import { useUIStore, type RightPanelTab } from '@renderer/stores/ui-store'
+import { useUIStore, type RightPanelTab, getEffectiveMode, getDefaultRightPanelTab } from '@renderer/stores/ui-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useTaskStore } from '@renderer/stores/task-store'
 import { StepsPanel } from '@renderer/components/cowork/StepsPanel'
@@ -39,6 +40,7 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
   const { t } = useTranslation('layout')
   const tab = useUIStore((s) => s.rightPanelTab)
   const setTab = useUIStore((s) => s.setRightPanelTab)
+  const newSessionMode = useUIStore((s) => s.newSessionMode)
   const executedToolCalls = useAgentStore((s) => s.executedToolCalls)
   const todos = useTaskStore((s) => s.todos)
   const activeTeam = useTeamStore((s) => s.activeTeam)
@@ -46,6 +48,8 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
   const cronEnabledCount = useCronStore((s) => s.jobs.filter((j) => j.enabled).length)
 
   const activeSessionId = useChatStore((s) => s.activeSessionId)
+  const activeSessionMode = useChatStore((s) => s.sessions.find((session) => session.id === s.activeSessionId)?.mode)
+  const effectiveMode = getEffectiveMode(activeSessionMode, newSessionMode)
   const runningCommandCount = useAgentStore((s) =>
     Object.values(s.backgroundProcesses).filter(
       (p) =>
@@ -61,9 +65,14 @@ export function RightPanel({ compact = false }: { compact?: boolean }): React.JS
   const planMode = useUIStore((s) => s.planMode)
 
   const visibleTabs = tabDefs
+    .filter((t) => effectiveMode !== 'code' || (t.value !== 'team' && t.value !== 'cron'))
     .filter((t) => teamToolsEnabled || t.value !== 'team')
     .filter((t) => (hasPlan || planMode) || t.value !== 'plan')
-    // Cron tab is always visible
+
+  useEffect(() => {
+    if (visibleTabs.some((item) => item.value === tab)) return
+    setTab(getDefaultRightPanelTab(effectiveMode))
+  }, [effectiveMode, setTab, tab, visibleTabs])
 
   const badgeCounts: Partial<Record<RightPanelTab, number>> = {
     steps: todos.length,

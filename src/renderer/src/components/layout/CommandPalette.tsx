@@ -28,7 +28,7 @@ import {
   CommandSeparator,
 } from '@renderer/components/ui/command'
 import { useChatStore } from '@renderer/stores/chat-store'
-import { useUIStore, type AppMode } from '@renderer/stores/ui-store'
+import { useUIStore, type AppMode, getEffectiveMode } from '@renderer/stores/ui-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
 import { useTheme } from 'next-themes'
 import type { ProviderType } from '@renderer/lib/api/types'
@@ -52,9 +52,11 @@ export function CommandPalette(): React.JSX.Element {
   const setActiveSession = useChatStore((s) => s.setActiveSession)
   const deleteSession = useChatStore((s) => s.deleteSession)
   const togglePinSession = useChatStore((s) => s.togglePinSession)
+  const updateSessionMode = useChatStore((s) => s.updateSessionMode)
 
-  const mode = useUIStore((s) => s.mode)
-  const setMode = useUIStore((s) => s.setMode)
+  const newSessionMode = useUIStore((s) => s.newSessionMode)
+  const setNewSessionMode = useUIStore((s) => s.setNewSessionMode)
+  const applyModeDefaults = useUIStore((s) => s.applyModeDefaults)
   const toggleLeftSidebar = useUIStore((s) => s.toggleLeftSidebar)
   const toggleRightPanel = useUIStore((s) => s.toggleRightPanel)
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
@@ -80,6 +82,7 @@ export function CommandPalette(): React.JSX.Element {
   }, [])
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
+  const effectiveMode = getEffectiveMode(activeSession?.mode, newSessionMode)
   const otherSessions = [...sessions]
     .filter((s) => s.id !== activeSessionId)
     .sort((a, b) => {
@@ -105,6 +108,15 @@ export function CommandPalette(): React.JSX.Element {
     return texts.join(' ').slice(0, 500)
   }
 
+  const switchMode = useCallback((mode: AppMode): void => {
+    setNewSessionMode(mode)
+    if (activeSessionId) {
+      updateSessionMode(activeSessionId, mode)
+      return
+    }
+    applyModeDefaults(mode)
+  }, [activeSessionId, applyModeDefaults, setNewSessionMode, updateSessionMode])
+
   return (
     <CommandDialog open={open} onOpenChange={setOpen} showCloseButton={false}>
       <CommandInput placeholder={t('commandPalette.placeholder')} />
@@ -113,7 +125,7 @@ export function CommandPalette(): React.JSX.Element {
 
         {/* Quick Actions */}
         <CommandGroup heading={t('commandPalette.actions')}>
-          <CommandItem onSelect={() => runAndClose(() => { const id = createSession(mode); setActiveSession(id) })}>
+          <CommandItem onSelect={() => runAndClose(() => { const id = createSession(newSessionMode); setActiveSession(id) })}>
             <Plus className="size-4" />
             <span>{t('commandPalette.newChat')}</span>
             <CommandShortcut>Ctrl+N</CommandShortcut>
@@ -175,8 +187,8 @@ export function CommandPalette(): React.JSX.Element {
             { value: 'chat' as AppMode, label: t('commandPalette.switchToChat'), icon: <MessageSquare className="size-4" /> },
             { value: 'cowork' as AppMode, label: t('commandPalette.switchToCowork'), icon: <Briefcase className="size-4" /> },
             { value: 'code' as AppMode, label: t('commandPalette.switchToCode'), icon: <Code2 className="size-4" /> },
-          ] as const).filter((m) => m.value !== mode).map((m) => (
-            <CommandItem key={m.value} onSelect={() => runAndClose(() => setMode(m.value))}>
+          ] as const).filter((m) => m.value !== effectiveMode).map((m) => (
+            <CommandItem key={m.value} onSelect={() => runAndClose(() => switchMode(m.value))}>
               {m.icon}
               <span>{m.label}</span>
             </CommandItem>

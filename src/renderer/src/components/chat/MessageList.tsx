@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '@renderer/stores/chat-store'
-import { useUIStore } from '@renderer/stores/ui-store'
+import { useUIStore, getEffectiveMode } from '@renderer/stores/ui-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { MessageItem } from './MessageItem'
 import { MessageSquare, Briefcase, Code2, RefreshCw, ArrowDown, ClipboardCopy, Check, ImageDown, Loader2 } from 'lucide-react'
@@ -130,7 +130,8 @@ export function MessageList({ onRetry, onEditUserMessage }: MessageListProps): R
   const activeSession = useChatStore((s) => s.sessions.find((session) => session.id === s.activeSessionId))
   const activeSessionId = useChatStore((s) => s.activeSessionId)
   const streamingMessageId = useChatStore((s) => s.streamingMessageId)
-  const mode = useUIStore((s) => s.mode)
+  const newSessionMode = useUIStore((s) => s.newSessionMode)
+  const mode = getEffectiveMode(activeSession?.mode, newSessionMode)
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const bottomRef = React.useRef<HTMLDivElement>(null)
   const [isAtBottom, setIsAtBottom] = React.useState(true)

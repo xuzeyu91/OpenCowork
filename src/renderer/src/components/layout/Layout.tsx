@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
 import { confirm } from '@renderer/components/ui/confirm-dialog'
@@ -17,7 +17,7 @@ import { KeyboardShortcutsDialog } from '@renderer/components/settings/KeyboardS
 import { PermissionDialog } from '@renderer/components/cowork/PermissionDialog'
 import { CommandPalette } from './CommandPalette'
 import { ErrorBoundary } from '@renderer/components/error-boundary'
-import { useUIStore } from '@renderer/stores/ui-store'
+import { useUIStore, getEffectiveMode, isAgentMode } from '@renderer/stores/ui-store'
 import { useChatStore, type SessionMode } from '@renderer/stores/chat-store'
 import { useAgentStore } from '@renderer/stores/agent-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
@@ -31,7 +31,9 @@ import { useShallow } from 'zustand/react/shallow'
 
 export function Layout(): React.JSX.Element {
   const { t } = useTranslation('layout')
-  const mode = useUIStore((s) => s.mode)
+  const newSessionMode = useUIStore((s) => s.newSessionMode)
+  const setNewSessionMode = useUIStore((s) => s.setNewSessionMode)
+  const applyModeDefaults = useUIStore((s) => s.applyModeDefaults)
   const leftSidebarOpen = useUIStore((s) => s.leftSidebarOpen)
   const setLeftSidebarOpen = useUIStore((s) => s.setLeftSidebarOpen)
   const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
@@ -49,8 +51,11 @@ export function Layout(): React.JSX.Element {
   )
   const { activeSessionTitle, activeSessionMode, activeWorkingFolder } = activeSessionView
   const activeSessionId = useChatStore((s) => s.activeSessionId)
+  const createSession = useChatStore((s) => s.createSession)
+  const updateSessionMode = useChatStore((s) => s.updateSessionMode)
   const streamingMessageId = useChatStore((s) => s.streamingMessageId)
   const isStreaming = !!streamingMessageId
+  const effectiveMode = getEffectiveMode(activeSessionMode, newSessionMode)
   const pendingToolCalls = useAgentStore((s) => s.pendingToolCalls)
   const resolveApproval = useAgentStore((s) => s.resolveApproval)
   const initBackgroundProcessTracking = useAgentStore((s) => s.initBackgroundProcessTracking)
@@ -80,15 +85,6 @@ export function Layout(): React.JSX.Element {
     document.title = `${prefix}${base}`
   }, [activeSessionTitle, pendingToolCalls.length, streamingMessageId, runningSubAgents])
 
-  // Sync UI mode only when session info changes, so manual top-bar toggles are respected
-  useEffect(() => {
-    if (!activeSessionMode) return
-    const currentMode = useUIStore.getState().mode
-    if (currentMode !== activeSessionMode) {
-      useUIStore.getState().setMode(activeSessionMode)
-    }
-  }, [activeSessionId, activeSessionMode])
-
   // Close detail/preview panels when switching sessions (they are session-specific)
   const prevActiveSessionRef = useRef<string | null>(null)
   useEffect(() => {
@@ -101,10 +97,17 @@ export function Layout(): React.JSX.Element {
   }, [activeSessionId])
 
   const pendingApproval = pendingToolCalls[0] ?? null
-  const createSession = useChatStore((s) => s.createSession)
-  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen)
   const settingsPageOpen = useUIStore((s) => s.settingsPageOpen)
   const toggleLeftSidebar = useUIStore((s) => s.toggleLeftSidebar)
+
+  const switchMode = useCallback((nextMode: SessionMode): void => {
+    setNewSessionMode(nextMode)
+    if (activeSessionId) {
+      updateSessionMode(activeSessionId, nextMode)
+      return
+    }
+    applyModeDefaults(nextMode)
+  }, [activeSessionId, applyModeDefaults, setNewSessionMode, updateSessionMode])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -113,8 +116,8 @@ export function Layout(): React.JSX.Element {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
         e.preventDefault()
         const modes = ['chat', 'cowork', 'code'] as const
-        const nextMode = modes[(modes.indexOf(mode) + 1) % modes.length]
-        useUIStore.getState().setMode(nextMode)
+        const nextMode = modes[(modes.indexOf(effectiveMode) + 1) % modes.length]
+        setNewSessionMode(nextMode)
         createSession(nextMode)
         toast.success(t('layout.newModeSession', { mode: nextMode }))
         return
@@ -122,7 +125,7 @@ export function Layout(): React.JSX.Element {
       // Ctrl+N: New chat
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault()
-        createSession(mode)
+        createSession(newSessionMode)
       }
       // Ctrl+,: Open settings
       if ((e.metaKey || e.ctrlKey) && e.key === ',') {
@@ -133,7 +136,7 @@ export function Layout(): React.JSX.Element {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && ['1', '2', '3'].includes(e.key)) {
         e.preventDefault()
         const modeMap = { '1': 'chat', '2': 'cowork', '3': 'code' } as const
-        useUIStore.getState().setMode(modeMap[e.key as '1' | '2' | '3'])
+        switchMode(modeMap[e.key as '1' | '2' | '3'])
       }
       // Ctrl+B: Toggle left sidebar
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'b') {
@@ -341,7 +344,7 @@ export function Layout(): React.JSX.Element {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [mode, createSession, setSettingsOpen, toggleLeftSidebar, activeSessionId])
+  }, [effectiveMode, newSessionMode, createSession, setNewSessionMode, switchMode, toggleLeftSidebar, activeSessionId])
 
   const handleSelectFolder = async (): Promise<void> => {
     const result = (await ipcClient.invoke('fs:select-folder')) as { canceled?: boolean; path?: string }
@@ -349,7 +352,7 @@ export function Layout(): React.JSX.Element {
       return
     }
     const chatStore = useChatStore.getState()
-    const sessionId = chatStore.activeSessionId ?? chatStore.createSession(mode)
+    const sessionId = chatStore.activeSessionId ?? chatStore.createSession(newSessionMode)
     if (sessionId) {
       chatStore.setWorkingFolder(sessionId, result.path)
     }
@@ -419,7 +422,7 @@ export function Layout(): React.JSX.Element {
                       <InputArea
                         onSend={sendMessage}
                         onStop={stopStreaming}
-                        onSelectFolder={mode !== 'chat' ? handleSelectFolder : undefined}
+                        onSelectFolder={isAgentMode(effectiveMode) ? handleSelectFolder : undefined}
                         workingFolder={activeWorkingFolder}
                         isStreaming={isStreaming}
                       />
@@ -453,7 +456,7 @@ export function Layout(): React.JSX.Element {
 
                     {/* Right: Cowork/Code Panel */}
                     <AnimatePresence>
-                      {mode !== 'chat' && rightPanelOpen && (
+                      {isAgentMode(effectiveMode) && rightPanelOpen && (
                         <PanelTransition side="right" disabled={isStreaming} className="h-full z-0">
                           <RightPanel compact={previewPanelOpen} />
                         </PanelTransition>

@@ -119,6 +119,7 @@ export function buildSystemPrompt(options: {
     parts.push(
       `\n## Mode: Cowork`,
       `You have access to the user's local filesystem and can execute shell commands.`,
+      `This mode is collaboration-first: broad project tasks, coordination, and cross-functional workflows are allowed.`,
       `Follow a Plan-Act-Observe loop: understand the request, plan your approach, use tools to act, then observe results before continuing.`,
       `Always read files before editing them. Use the Edit tool for precise changes — never rewrite entire files unless creating new ones.`,
       `When running shell commands, explain what you're doing and why.`
@@ -126,9 +127,11 @@ export function buildSystemPrompt(options: {
   } else {
     parts.push(
       `\n## Mode: Code`,
-      `Focus on writing clean, well-structured code.`,
-      `You have access to the filesystem and can create or modify files.`,
-      `Prefer editing existing files over rewriting them entirely.`
+      `This mode is implementation-first: prioritize coding, debugging, refactoring, and tests.`,
+      `Default workflow: understand requirement 鈫?inspect codebase 鈫?make focused edits 鈫?validate changed paths.`,
+      `Prefer concrete code changes over broad project coordination or operations tasks.`,
+      `Keep diffs minimal and maintainable. Prefer editing existing files over rewriting them entirely.`,
+      `When uncertain about behavior, inspect real code paths and verify assumptions before editing.`
     )
   }
 

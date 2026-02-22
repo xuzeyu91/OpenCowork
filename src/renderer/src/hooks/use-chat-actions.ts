@@ -38,7 +38,7 @@ import type { CompressionConfig } from '@renderer/lib/agent/context-compression'
 import { usePluginStore } from '@renderer/stores/plugin-store'
 import { registerPluginTools, unregisterPluginTools, isPluginToolsRegistered } from '@renderer/lib/plugins/plugin-tools'
 import { useMcpStore } from '@renderer/stores/mcp-store'
-import { registerMcpTools, unregisterMcpTools, isMcpToolsRegistered } from '@renderer/lib/mcp/mcp-tools'
+import { registerMcpTools, unregisterMcpTools, isMcpToolsRegistered, isMcpTool } from '@renderer/lib/mcp/mcp-tools'
 
 /** Per-session abort controllers — module-level so concurrent sessions don't overwrite each other */
 const sessionAbortControllers = new Map<string, AbortController>()
@@ -208,6 +208,35 @@ let _autoTriggerCount = 0
 const MAX_AUTO_TRIGGERS = 10
 // 0 => unlimited iterations (run until loop_end by completion/error/abort)
 const DEFAULT_AGENT_MAX_ITERATIONS = 0
+const CODE_MODE_BLOCKED_TOOLS = new Set<string>([
+  ...TEAM_TOOL_NAMES,
+  'CronAdd',
+  'CronUpdate',
+  'CronRemove',
+  'CronList',
+  'PluginSendMessage',
+  'PluginReplyMessage',
+  'PluginGetGroupMessages',
+  'PluginListGroups',
+  'PluginSummarizeGroup',
+  'FeishuSendImage',
+  'FeishuSendFile',
+])
+const CODE_MODE_ALWAYS_CONFIRM_TOOLS = new Set<string>([
+  'Bash',
+  'Write',
+  'Edit',
+  'MultiEdit',
+  'Delete',
+])
+
+function isCodeModeToolAllowed(toolName: string): boolean {
+  return !CODE_MODE_BLOCKED_TOOLS.has(toolName)
+}
+
+function isCodeModeSensitiveTool(toolName: string): boolean {
+  return CODE_MODE_ALWAYS_CONFIRM_TOOLS.has(toolName) || isMcpTool(toolName)
+}
 
 /** Debounce timer for batching teammate reports before draining */
 let _drainTimer: ReturnType<typeof setTimeout> | null = null
@@ -535,7 +564,7 @@ export function useChatActions(): {
     // Ensure we have an active session
     let sessionId = targetSessionId ?? chatStore.activeSessionId
     if (!sessionId) {
-      sessionId = chatStore.createSession(uiStore.mode)
+      sessionId = chatStore.createSession(uiStore.newSessionMode)
     }
     await chatStore.loadSessionMessages(sessionId)
 
@@ -569,7 +598,7 @@ export function useChatActions(): {
     }
 
     const sessionSnapshot = useChatStore.getState().sessions.find((s) => s.id === sessionId)
-    const sessionMode = sessionSnapshot?.mode ?? uiStore.mode
+    const sessionMode = sessionSnapshot?.mode ?? uiStore.newSessionMode
 
     // Build dynamic context for every message in cowork/code mode (skip for team notifications)
     const currentMode = sessionMode
@@ -726,6 +755,11 @@ export function useChatActions(): {
         ? finalToolDefs
         : finalToolDefs.filter((t) => !TEAM_TOOL_NAMES.has(t.name))
 
+      // Code mode uses a coding-focused toolset.
+      if (mode === 'code') {
+        finalEffectiveToolDefs = finalEffectiveToolDefs.filter((t) => isCodeModeToolAllowed(t.name))
+      }
+
       // Plan mode: restrict to read-only + planning tools
       const isPlanMode = useUIStore.getState().planMode
       if (isPlanMode) {
@@ -734,6 +768,16 @@ export function useChatActions(): {
 
       // Build plugin info for system prompt — inject plugin metadata + per-plugin system prompts
       let userPrompt = settings.systemPrompt || ''
+      if (mode === 'code') {
+        const codeModePrompt = [
+          '## Code Mode Defaults',
+          '- Focus on implementation, debugging, refactoring, and tests.',
+          '- Prefer concrete code edits over broad project coordination.',
+          '- Before finishing, verify changed files are internally consistent and runnable.',
+          '- Keep responses concise and engineering-focused: what changed, why, and validation status.'
+        ].join('\n')
+        userPrompt = userPrompt ? `${userPrompt}\n${codeModePrompt}` : codeModePrompt
+      }
       if (activePlugins.length > 0) {
         const pluginLines: string[] = ['\n## Active Plugins']
         for (const p of activePlugins) {
@@ -934,13 +978,14 @@ export function useChatActions(): {
             }),
           },
           async (tc) => {
+            const requiresPerCallApproval = mode === 'code' && isCodeModeSensitiveTool(tc.name)
             const autoApprove = useSettingsStore.getState().autoApprove
-            if (autoApprove) return true
+            if (autoApprove && !requiresPerCallApproval) return true
             // Per-session tool approval memory: skip re-approval for previously approved tools
             const approved = useAgentStore.getState().approvedToolNames
-            if (approved.includes(tc.name)) return true
+            if (!requiresPerCallApproval && approved.includes(tc.name)) return true
             const result = await agentStore.requestApproval(tc.id)
-            if (result) useAgentStore.getState().addApprovedTool(tc.name)
+            if (result && !requiresPerCallApproval) useAgentStore.getState().addApprovedTool(tc.name)
             return result
           }
         )
@@ -1036,9 +1081,12 @@ export function useChatActions(): {
             case 'tool_call_approval_needed': {
               // Skip adding to pendingToolCalls when auto-approve is active —
               // the callback will return true immediately, so no dialog needed.
+              const requiresPerCallApproval = mode === 'code' && isCodeModeSensitiveTool(event.toolCall.name)
+              const autoApprove = useSettingsStore.getState().autoApprove
               const willAutoApprove =
-                useSettingsStore.getState().autoApprove ||
-                useAgentStore.getState().approvedToolNames.includes(event.toolCall.name)
+                (autoApprove && !requiresPerCallApproval) ||
+                (!requiresPerCallApproval &&
+                  useAgentStore.getState().approvedToolNames.includes(event.toolCall.name))
               if (!willAutoApprove) {
                 useAgentStore.getState().addToolCall(event.toolCall)
               }
