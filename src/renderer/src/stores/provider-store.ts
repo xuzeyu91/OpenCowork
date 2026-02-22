@@ -324,6 +324,26 @@ export const useProviderStore = create<ProviderStore>()(
  * Safe to call multiple times — idempotent.
  */
 function ensureBuiltinPresets(): void {
+  const legacyRoutin = useProviderStore
+    .getState()
+    .providers.find((p) => p.builtinId === 'routin-ai')
+  const antskPreset = builtinProviderPresets.find((p) => p.builtinId === 'antsk-ai')
+  const antskExisting = useProviderStore
+    .getState()
+    .providers.find((p) => p.builtinId === 'antsk-ai')
+
+  if (legacyRoutin && antskPreset && !antskExisting) {
+    useProviderStore.getState().updateProvider(legacyRoutin.id, {
+      builtinId: antskPreset.builtinId,
+      name: antskPreset.name,
+      type: antskPreset.type,
+      baseUrl: antskPreset.defaultBaseUrl,
+      requiresApiKey: antskPreset.requiresApiKey ?? true,
+    })
+    const migratedModels = mergeBuiltinModels(legacyRoutin.models, antskPreset.defaultModels)
+    useProviderStore.getState().setProviderModels(legacyRoutin.id, migratedModels)
+  }
+
   for (const preset of builtinProviderPresets) {
     const existing = useProviderStore
       .getState()

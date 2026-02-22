@@ -283,7 +283,7 @@ Renderer (AsyncIterable) ◄── IPC events ◄── Main (stream-chunk/end/e
 ```
 
 **内置供应商预设** (15+):
-Anthropic, OpenAI, DeepSeek, Google, Moonshot, Qwen, SiliconFlow, OpenRouter, Azure OpenAI, Gitee AI, Routin AI, Ollama, Xiaomi 等
+Anthropic, OpenAI, DeepSeek, Google, Moonshot, Qwen, SiliconFlow, OpenRouter, Azure OpenAI, Gitee AI, AntSK AI, Ollama, Xiaomi 等
 
 ### 7. 状态管理
 

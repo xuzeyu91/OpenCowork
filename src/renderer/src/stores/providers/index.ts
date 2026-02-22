@@ -1,6 +1,6 @@
 export type { BuiltinProviderPreset } from './types'
 
-import { routinAiPreset } from './routin-ai'
+import { antskAiPreset } from './routin-ai'
 import { openaiPreset } from './openai'
 import { anthropicPreset } from './anthropic'
 import { googlePreset } from './google'
@@ -18,7 +18,7 @@ import { xiaomiPreset } from './xiaomi'
 import type { BuiltinProviderPreset } from './types'
 
 export const builtinProviderPresets: BuiltinProviderPreset[] = [
-  routinAiPreset,
+  antskAiPreset,
   openaiPreset,
   anthropicPreset,
   googlePreset,

@@ -25,7 +25,7 @@ import Doubao from '@lobehub/icons/es/Doubao/components/Mono'
 import { Bot } from 'lucide-react'
 
 const iconUrlMap: Record<string, string> = {
-  'routin-ai': 'https://routin.ai/icons/favicon.ico',
+  'antsk-ai': 'https://api.antsk.cn/favicon.ico',
 }
 
 const iconMap: Record<string, React.ComponentType<{ size?: number }>> = {
