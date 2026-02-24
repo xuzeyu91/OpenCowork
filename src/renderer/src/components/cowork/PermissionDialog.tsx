@@ -154,7 +154,7 @@ export function PermissionDialog({
 
   return (
     <AlertDialog open={!!toolCall}>
-      <AlertDialogContent className="max-w-md">
+      <AlertDialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <ShieldAlert className={`size-5 ${riskColor}`} />
