@@ -42,6 +42,8 @@ import type { ProviderType, AIModelConfig, AIProvider, ThinkingConfig } from '@r
 import { Tooltip, TooltipContent, TooltipTrigger } from '@renderer/components/ui/tooltip'
 import { ProviderIcon, ModelIcon } from './provider-icons'
 
+const MODEL_PROTOCOL_INHERIT = '__inherit_provider__'
+
 // --- Fetch models from provider API ---
 
 async function fetchModelsFromProvider(
@@ -198,6 +200,7 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
   const [testing, setTesting] = useState(false)
   const [newModelId, setNewModelId] = useState('')
   const [newModelName, setNewModelName] = useState('')
+  const [newModelType, setNewModelType] = useState<string>(MODEL_PROTOCOL_INHERIT)
   const [modelSearch, setModelSearch] = useState('')
   const [editingThinkingModel, setEditingThinkingModel] = useState<AIModelConfig | null>(null)
   const [testModelId, setTestModelId] = useState(provider.models.find((m) => m.enabled)?.id ?? provider.models[0]?.id ?? '')
@@ -473,17 +476,35 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
                 onChange={(e) => setNewModelName(e.target.value)}
                 className="flex-1 h-8 text-xs"
               />
+              <Select value={newModelType} onValueChange={setNewModelType}>
+                <SelectTrigger className="w-44 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={MODEL_PROTOCOL_INHERIT} className="text-xs">{t('provider.followProvider')}</SelectItem>
+                  <SelectItem value="openai-chat" className="text-xs">{t('provider.openaiChatCompat')}</SelectItem>
+                  <SelectItem value="openai-responses" className="text-xs">{t('provider.openaiResponses')}</SelectItem>
+                  <SelectItem value="anthropic" className="text-xs">{t('provider.anthropicMessages')}</SelectItem>
+                </SelectContent>
+              </Select>
               <Button
                 variant="ghost" size="sm" className="h-8 w-8 p-0"
                 disabled={!newModelId.trim()}
                 onClick={() => {
-                  addModel(provider.id, { id: newModelId.trim(), name: newModelName.trim() || newModelId.trim(), enabled: true })
-                  setNewModelId(''); setNewModelName(''); setAddingModel(false)
+                  addModel(provider.id, {
+                    id: newModelId.trim(),
+                    name: newModelName.trim() || newModelId.trim(),
+                    enabled: true,
+                    ...(newModelType !== MODEL_PROTOCOL_INHERIT
+                      ? { type: newModelType as ProviderType }
+                      : {}),
+                  })
+                  setNewModelId(''); setNewModelName(''); setNewModelType(MODEL_PROTOCOL_INHERIT); setAddingModel(false)
                 }}
               >
                 <Check className="size-3.5" />
               </Button>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setAddingModel(false); setNewModelId(''); setNewModelName('') }}>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setAddingModel(false); setNewModelId(''); setNewModelName(''); setNewModelType(MODEL_PROTOCOL_INHERIT) }}>
                 <X className="size-3.5" />
               </Button>
             </div>
@@ -523,6 +544,24 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
                         )}
                       </div>
                     </div>
+                    <Select
+                      value={model.type ?? MODEL_PROTOCOL_INHERIT}
+                      onValueChange={(v) =>
+                        updateModel(provider.id, model.id, {
+                          type: v === MODEL_PROTOCOL_INHERIT ? undefined : (v as ProviderType),
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-32 h-7 text-[10px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={MODEL_PROTOCOL_INHERIT} className="text-xs">{t('provider.followProvider')}</SelectItem>
+                        <SelectItem value="openai-chat" className="text-xs">Chat</SelectItem>
+                        <SelectItem value="openai-responses" className="text-xs">Responses</SelectItem>
+                        <SelectItem value="anthropic" className="text-xs">Messages</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button

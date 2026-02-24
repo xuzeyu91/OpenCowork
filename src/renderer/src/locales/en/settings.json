@@ -149,6 +149,7 @@
     "addCustomProvider": "Add Custom Provider",
     "addCustomProviderDesc": "Add a custom AI provider compatible with OpenAI or Anthropic protocol",
     "protocolType": "Protocol Type",
+    "followProvider": "Follow Provider",
     "openaiChatCompat": "OpenAI Chat Completions Compatible",
     "openaiResponses": "OpenAI Responses",
     "anthropicMessages": "Anthropic Messages",
