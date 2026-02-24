@@ -402,25 +402,23 @@ function ProviderConfigPanel({ provider }: { provider: AIProvider }): React.JSX.
           </div>
         </section>
 
-        {/* Protocol type (for custom providers) */}
-        {!provider.builtinId && (
-          <section className="space-y-2 mt-5">
-            <label className="text-sm font-medium">{t('provider.protocolType')}</label>
-            <Select
-              value={provider.type}
-              onValueChange={(v) => updateProvider(provider.id, { type: v as ProviderType })}
-            >
-              <SelectTrigger className="text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai-chat" className="text-xs">{t('provider.openaiChatCompat')}</SelectItem>
-                <SelectItem value="openai-responses" className="text-xs">{t('provider.openaiResponses')}</SelectItem>
-                <SelectItem value="anthropic" className="text-xs">Anthropic</SelectItem>
-              </SelectContent>
-            </Select>
-          </section>
-        )}
+        {/* Protocol type */}
+        <section className="space-y-2 mt-5">
+          <label className="text-sm font-medium">{t('provider.protocolType')}</label>
+          <Select
+            value={provider.type}
+            onValueChange={(v) => updateProvider(provider.id, { type: v as ProviderType })}
+          >
+            <SelectTrigger className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="openai-chat" className="text-xs">{t('provider.openaiChatCompat')}</SelectItem>
+              <SelectItem value="openai-responses" className="text-xs">{t('provider.openaiResponses')}</SelectItem>
+              <SelectItem value="anthropic" className="text-xs">{t('provider.anthropicMessages')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </section>
 
         <Separator className="my-5" />
 
