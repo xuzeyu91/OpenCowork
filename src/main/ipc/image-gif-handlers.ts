@@ -1,11 +1,13 @@
-import { app, ipcMain, nativeImage } from 'electron'
+import { ipcMain, nativeImage } from 'electron'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { homedir } from 'os'
 import { encodeGif } from '../image/gif-encoder'
 const IMAGE_CREATE_GIF_FROM_GRID = 'image:create-gif-from-grid'
 
-const GENERATED_IMAGES_DIR = 'generated-images'
+const GENERATED_IMAGES_DIR = 'open-cowork'
+const GENERATED_IMAGES_SUBDIR = 'image'
 const GRID_SIZE = 768
 const GRID_COLUMNS = 3
 const GRID_ROWS = 3
@@ -50,7 +52,7 @@ interface ColorSwatch {
 }
 
 function getGeneratedImagesDir(): string {
-  const dir = join(app.getPath('userData'), GENERATED_IMAGES_DIR)
+  const dir = join(homedir(), GENERATED_IMAGES_DIR, GENERATED_IMAGES_SUBDIR)
   mkdirSync(dir, { recursive: true })
   return dir
 }

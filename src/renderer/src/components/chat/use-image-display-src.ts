@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { IPC } from '@renderer/lib/ipc/channels'
+import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 
 export interface ImageDimensions {
   width: number
@@ -13,6 +15,37 @@ function isHttpUrl(value: string): boolean {
 
 function isDataUrl(value: string): boolean {
   return value.startsWith('data:')
+}
+
+function isFileUrl(value: string): boolean {
+  return /^file:\/\//i.test(value)
+}
+
+function guessMimeTypeFromPath(value: string): string {
+  const pathWithoutQuery = value.split(/[?#]/, 1)[0].toLowerCase()
+  if (pathWithoutQuery.endsWith('.jpg') || pathWithoutQuery.endsWith('.jpeg')) {
+    return 'image/jpeg'
+  }
+  if (pathWithoutQuery.endsWith('.webp')) return 'image/webp'
+  if (pathWithoutQuery.endsWith('.gif')) return 'image/gif'
+  if (pathWithoutQuery.endsWith('.bmp')) return 'image/bmp'
+  if (pathWithoutQuery.endsWith('.svg')) return 'image/svg+xml'
+  return 'image/png'
+}
+
+function fileUrlToFilePath(fileUrl: string): string {
+  try {
+    const parsed = new URL(fileUrl)
+    if (parsed.protocol !== 'file:') return ''
+
+    const decodedPath = decodeURIComponent(parsed.pathname)
+    if (parsed.hostname) {
+      return `//${parsed.hostname}${decodedPath}`
+    }
+    return decodedPath.replace(/^\/([A-Za-z]:\/)/, '$1')
+  } catch {
+    return ''
+  }
 }
 
 export function buildImageDimensionCacheKey(src: string, filePath?: string): string {
@@ -79,11 +112,9 @@ export function useImageDisplaySrc(src?: string, filePath?: string): string {
   const rawSrc = src ?? ''
   const sourceKey = buildImageDimensionCacheKey(rawSrc, filePath)
   const directSrc = (() => {
-    if (filePath) return filePathToFileUrl(filePath)
+    if (rawSrc.startsWith('blob:') || isDataUrl(rawSrc)) return rawSrc
     if (!rawSrc || isHttpUrl(rawSrc)) return ''
-    if (rawSrc.startsWith('blob:') || rawSrc.startsWith('file://') || isDataUrl(rawSrc)) {
-      return rawSrc
-    }
+    if (isFileUrl(rawSrc)) return ''
     if (!isDataUrl(rawSrc) && !isHttpUrl(rawSrc)) return rawSrc
     return ''
   })()
@@ -101,13 +132,29 @@ export function useImageDisplaySrc(src?: string, filePath?: string): string {
       cancelled = true
     }
 
-    if (
-      filePath ||
-      !rawSrc ||
-      rawSrc.startsWith('blob:') ||
-      rawSrc.startsWith('file://') ||
-      isDataUrl(rawSrc)
-    ) {
+    if (rawSrc.startsWith('blob:') || isDataUrl(rawSrc)) {
+      return cleanup
+    }
+
+    const localPath = filePath?.trim() || (isFileUrl(rawSrc) ? fileUrlToFilePath(rawSrc) : '')
+    if (localPath) {
+      void ipcClient
+        .invoke(IPC.FS_READ_FILE_BINARY, { path: localPath })
+        .then((result) => {
+          if (cancelled) return
+          const readResult = result as { data?: string; error?: string }
+          if (!readResult.data) return
+          setDisplayState({
+            key: sourceKey,
+            src: `data:${guessMimeTypeFromPath(localPath)};base64,${readResult.data}`
+          })
+        })
+        .catch(() => undefined)
+
+      return cleanup
+    }
+
+    if (!rawSrc) {
       return cleanup
     }
 

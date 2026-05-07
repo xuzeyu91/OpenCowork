@@ -122,10 +122,6 @@ class OpenAIResponsesProvider implements APIProvider {
       stream: true
     }
 
-    if (runtimeConfig.enablePromptCache !== false) {
-      body.prompt_cache_key = getGlobalPromptCacheKey()
-    }
-
     const formattedTools = this.buildToolsPayload(tools, runtimeConfig)
     if (formattedTools.length > 0) {
       body.tools = formattedTools
@@ -188,6 +184,9 @@ class OpenAIResponsesProvider implements APIProvider {
     }
 
     applyBodyOverrides(body, runtimeConfig)
+    if (typeof body.prompt_cache_key !== 'string' || !body.prompt_cache_key.trim()) {
+      body.prompt_cache_key = getGlobalPromptCacheKey(runtimeConfig)
+    }
     delete body.previous_response_id
     delete body.previousResponseId
 
@@ -263,7 +262,7 @@ class OpenAIResponsesProvider implements APIProvider {
       return { type: 'image_generation_started' }
     }
 
-    const buildImageGenerationEvents = function* (item: unknown): Iterable<StreamEvent> {
+    const buildImageGenerationEvents = async function* (item: unknown): AsyncIterable<StreamEvent> {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return
       const record = item as { type?: unknown }
       if (record.type !== 'image_generation_call') return
@@ -276,7 +275,7 @@ class OpenAIResponsesProvider implements APIProvider {
       const itemId = getImageGenerationItemId(item)
       if (itemId && emittedImageOutputItemIds.has(itemId)) return
 
-      const imageBlocks = extractResponsesImageBlocks(
+      const imageBlocks = await extractResponsesImageBlocks(
         item,
         runtimeConfig.responsesImageGeneration?.outputFormat
       )
@@ -434,7 +433,7 @@ class OpenAIResponsesProvider implements APIProvider {
             if (thinkingEncryptedEvent) {
               yield thinkingEncryptedEvent
             }
-            for (const imageEvent of buildImageGenerationEvents(data.item)) {
+            for await (const imageEvent of buildImageGenerationEvents(data.item)) {
               yield imageEvent
             }
             break
@@ -445,7 +444,7 @@ class OpenAIResponsesProvider implements APIProvider {
             if (startEvent) {
               yield startEvent
             }
-            const imageBlock = extractResponsesPartialImageBlock(
+            const imageBlock = await extractResponsesPartialImageBlock(
               data,
               runtimeConfig.responsesImageGeneration?.outputFormat
             )
@@ -515,7 +514,7 @@ class OpenAIResponsesProvider implements APIProvider {
                 if (thinkingEncryptedEvent) {
                   yield thinkingEncryptedEvent
                 }
-                for (const imageEvent of buildImageGenerationEvents(item)) {
+                for await (const imageEvent of buildImageGenerationEvents(item)) {
                   yield imageEvent
                 }
               }

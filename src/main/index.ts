@@ -110,7 +110,8 @@ let tray: Tray | null = null
 let isQuiting = false
 const detachedSessionWindows = new Map<string, BrowserWindow>()
 
-const GENERATED_IMAGES_DIR = 'generated-images'
+const GENERATED_IMAGES_DIR = 'open-cowork'
+const GENERATED_IMAGES_SUBDIR = 'image'
 const MACOS_SHELL_ENV_TIMEOUT_MS = 4000
 const SHELL_ENV_LINE_RE = /^[A-Za-z_][A-Za-z0-9_]*=/
 const SHELL_ENV_SKIP_KEYS = new Set(['PWD', 'OLDPWD', 'SHLVL', '_'])
@@ -244,7 +245,7 @@ async function syncMacOSShellEnvironment(): Promise<void> {
 }
 
 function getGeneratedImagesDir(): string {
-  const dir = join(app.getPath('userData'), GENERATED_IMAGES_DIR)
+  const dir = join(homedir(), GENERATED_IMAGES_DIR, GENERATED_IMAGES_SUBDIR)
   mkdirSync(dir, { recursive: true })
   return dir
 }

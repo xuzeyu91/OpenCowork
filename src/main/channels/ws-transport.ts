@@ -62,16 +62,19 @@ export class WebSocketTransport {
 
   private doConnect(): void {
     try {
-      this.ws = new WebSocket(this.url)
+      const ws = new WebSocket(this.url)
+      this.ws = ws
 
-      this.ws.on('open', () => {
+      ws.on('open', () => {
+        if (this.ws !== ws) return
         this.reconnectAttempt = 0
         this.onStatusChange('connected')
         this.startHeartbeat()
         console.log(`[WsTransport] Connected to ${this.url}`)
       })
 
-      this.ws.on('message', (data: WebSocket.Data) => {
+      ws.on('message', (data: WebSocket.Data) => {
+        if (this.ws !== ws) return
         try {
           const raw = typeof data === 'string' ? data : data.toString()
           this.onMessage(raw)
@@ -80,9 +83,11 @@ export class WebSocketTransport {
         }
       })
 
-      this.ws.on('close', (code, reason) => {
+      ws.on('close', (code, reason) => {
+        if (this.ws !== ws) return
         console.log(`[WsTransport] Closed: ${code} ${reason.toString()}`)
         this.stopHeartbeat()
+        this.ws = null
         if (!this.intentionalClose && this.shouldReconnect) {
           this.scheduleReconnect()
         } else {
@@ -90,12 +95,20 @@ export class WebSocketTransport {
         }
       })
 
-      this.ws.on('error', (err) => {
+      ws.on('error', (err) => {
+        if (this.ws !== ws) return
         console.error('[WsTransport] Error:', err.message)
         this.onError(err)
+        this.stopHeartbeat()
+        ws.removeAllListeners()
+        ws.terminate()
+        this.ws = null
+        if (!this.intentionalClose && this.shouldReconnect) {
+          this.scheduleReconnect()
+        }
       })
 
-      this.ws.on('pong', () => {
+      ws.on('pong', () => {
         // Heartbeat acknowledged
       })
     } catch (err) {
@@ -107,6 +120,8 @@ export class WebSocketTransport {
   }
 
   private scheduleReconnect(): void {
+    if (this.reconnectTimer) return
+
     const delay = Math.min(
       WebSocketTransport.BASE_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempt),
       WebSocketTransport.MAX_RECONNECT_DELAY

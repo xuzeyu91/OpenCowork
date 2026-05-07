@@ -264,7 +264,8 @@ export class QQService implements MessagingChannelService {
     })
   }
 
-  private emitStatus(state: string, _extra?: Record<string, unknown>): void {
+  private emitStatus(state: string, extra?: Record<string, unknown>): void {
+    void extra
     const normalized = state === 'error' ? 'error' : state === 'stopped' ? 'stopped' : 'running'
     this.emit('status_change', normalized)
   }
@@ -353,9 +354,18 @@ export class QQService implements MessagingChannelService {
       })
 
       ws.on('error', (error) => {
+        if (this.ws !== ws) return
         console.error(`[qq-bot:${this.pluginId}] Gateway error: ${error.message}`)
         this.emit('error', error.message)
         this.emitStatus('error', { message: error.message })
+        this.stopHeartbeat()
+        ws.removeAllListeners()
+        ws.terminate()
+        this.ws = null
+        if (this.running && !this.intentionalClose) {
+          this.emitStatus('reconnecting', { message: error.message })
+          this.scheduleReconnect()
+        }
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

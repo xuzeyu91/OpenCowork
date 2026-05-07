@@ -10,6 +10,7 @@ import type {
   ResponsesImageGenerationQuality,
   ResponsesImageGenerationSize
 } from './types'
+import { ipcClient } from '../ipc/ipc-client'
 
 export const RESPONSES_IMAGE_GENERATION_DEFAULT_OPTION = 'default'
 export const RESPONSES_IMAGE_GENERATION_DEFAULT_PARTIAL_IMAGES = 3
@@ -210,20 +211,41 @@ export function detectResponsesImageGenerationMediaTypeFromBase64(
   return undefined
 }
 
-export function createResponsesImageBlock(
+export async function createResponsesImageBlock(
   imageBase64: string,
   outputFormat?: string | null
-): ImageBlock {
+): Promise<ImageBlock> {
   const mediaType =
     getResponsesImageGenerationMediaType(outputFormat) ??
     detectResponsesImageGenerationMediaTypeFromBase64(imageBase64) ??
     'image/png'
+
+  const persisted = (await ipcClient.invoke('image:persist-generated', {
+    data: imageBase64,
+    mediaType
+  })) as { filePath?: string; mediaType?: string; data?: string; error?: string }
+
+  if (persisted?.error) {
+    return {
+      type: 'image',
+      source: {
+        type: 'base64',
+        data: imageBase64,
+        ...(mediaType ? { mediaType } : {})
+      }
+    }
+  }
+
   return {
     type: 'image',
     source: {
       type: 'base64',
-      data: imageBase64,
-      ...(mediaType ? { mediaType } : {})
+      data: typeof persisted?.data === 'string' && persisted.data ? persisted.data : imageBase64,
+      mediaType:
+        typeof persisted?.mediaType === 'string' && persisted.mediaType ? persisted.mediaType : mediaType,
+      ...(typeof persisted?.filePath === 'string' && persisted.filePath
+        ? { filePath: persisted.filePath }
+        : {})
     }
   }
 }
@@ -256,25 +278,27 @@ function collectResponsesImageBase64Values(value: unknown): string[] {
   return []
 }
 
-export function extractResponsesImageBlocks(
+export async function extractResponsesImageBlocks(
   item: unknown,
   fallbackOutputFormat?: string | null
-): ImageBlock[] {
+): Promise<ImageBlock[]> {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return []
   const record = item as { result?: unknown; output_format?: unknown }
   const rawResults = collectResponsesImageBase64Values(record.result)
   const outputFormat =
     typeof record.output_format === 'string' ? record.output_format : fallbackOutputFormat
 
-  return rawResults
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .map((value) => createResponsesImageBlock(value, outputFormat))
+  return Promise.all(
+    rawResults
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => createResponsesImageBlock(value, outputFormat))
+  )
 }
 
-export function extractResponsesPartialImageBlock(
+export async function extractResponsesPartialImageBlock(
   item: unknown,
   fallbackOutputFormat?: string | null
-): ImageBlock | null {
+): Promise<ImageBlock | null> {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return null
   const record = item as { partial_image_b64?: unknown; output_format?: unknown }
   if (typeof record.partial_image_b64 !== 'string' || !record.partial_image_b64.trim()) {

@@ -471,7 +471,6 @@ function ModelFormDialog({
   const [websocketMode, setWebsocketMode] = useState<'auto' | 'disabled'>(
     initial?.websocketMode ?? 'auto'
   )
-  const [enablePromptCache, setEnablePromptCache] = useState(initial?.enablePromptCache ?? true)
   const [enableSystemPromptCache, setEnableSystemPromptCache] = useState(
     initial?.enableSystemPromptCache ?? true
   )
@@ -560,7 +559,6 @@ function ModelFormDialog({
     model.enableComputerUse = supportsComputerUse && enableComputerUse
     if (icon.trim()) model.icon = icon.trim()
     if (responseSummary && responseSummary !== 'none') model.responseSummary = responseSummary
-    model.enablePromptCache = enablePromptCache
     model.enableSystemPromptCache = enableSystemPromptCache
     if (isResponsesModel) {
       model.websocketMode = websocketMode
@@ -1215,10 +1213,6 @@ function ModelFormDialog({
                   )}
                 </>
               )}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{t('provider.promptCache')}</span>
-                <Switch checked={enablePromptCache} onCheckedChange={setEnablePromptCache} />
-              </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   {t('provider.systemPromptCache')}

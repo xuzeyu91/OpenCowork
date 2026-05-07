@@ -177,10 +177,6 @@ class OpenAIChatProvider implements APIProvider {
       stream_options: { include_usage: true }
     }
 
-    if (runtimeConfig.enablePromptCache !== false) {
-      body.prompt_cache_key = getGlobalPromptCacheKey()
-    }
-
     if (tools.length > 0) {
       body.tools = this.formatTools(tools)
       body.tool_choice = 'auto'
@@ -211,6 +207,9 @@ class OpenAIChatProvider implements APIProvider {
     }
 
     applyBodyOverrides(body, runtimeConfig)
+    if (typeof body.prompt_cache_key !== 'string' || !body.prompt_cache_key.trim()) {
+      body.prompt_cache_key = getGlobalPromptCacheKey(runtimeConfig)
+    }
 
     const url = `${baseUrl}/chat/completions`
 

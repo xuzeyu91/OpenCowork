@@ -54,6 +54,27 @@ const secureHttpsAgent = new https.Agent()
 const insecureProxyAgents = new Map<string, HttpsProxyAgent<string>>()
 const secureProxyAgents = new Map<string, HttpsProxyAgent<string>>()
 const responsesWsManager = new ResponsesWebSocketSessionManager('cron')
+const promptCacheKeyPrefix = 'opencowork'
+const globalPromptCacheKey = createPromptCacheKey()
+const promptCacheKeysBySession = new Map<string, string>()
+
+function createPromptCacheKey(seed?: string): string {
+  const normalizedSeed = seed?.trim()
+  if (normalizedSeed) return `${promptCacheKeyPrefix}-${normalizedSeed}`
+  return `${promptCacheKeyPrefix}-${nanoid()}`
+}
+
+function getPromptCacheKey(config?: Pick<ProviderConfig, 'sessionId'>): string {
+  const sessionId = config?.sessionId?.trim()
+  if (!sessionId) return globalPromptCacheKey
+
+  const existing = promptCacheKeysBySession.get(sessionId)
+  if (existing) return existing
+
+  const created = createPromptCacheKey(sessionId)
+  promptCacheKeysBySession.set(sessionId, created)
+  return created
+}
 
 const FALLBACK_CRON_AGENT = {
   name: DEFAULT_AGENT,
@@ -1647,6 +1668,9 @@ async function* sendOpenAIChat(
     }
   }
   applyBodyOverrides(body, config)
+  if (typeof body.prompt_cache_key !== 'string' || !body.prompt_cache_key.trim()) {
+    body.prompt_cache_key = getPromptCacheKey(config)
+  }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${config.apiKey}`
@@ -2081,6 +2105,9 @@ async function* sendOpenAIResponses(
     }
   }
   applyBodyOverrides(body, config)
+  if (typeof body.prompt_cache_key !== 'string' || !body.prompt_cache_key.trim()) {
+    body.prompt_cache_key = getPromptCacheKey(config)
+  }
   delete body.previous_response_id
   delete body.previousResponseId
   const headers: Record<string, string> = {
