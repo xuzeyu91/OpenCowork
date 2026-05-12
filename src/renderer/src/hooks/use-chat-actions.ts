@@ -403,6 +403,49 @@ function getTaskProgressSnapshot(sessionId: string): string {
   return `${tasks.length}:${pending}:${inProgress}:${completed}`
 }
 
+function buildGoalCompletionGateBlockers(options: {
+  sessionId: string
+  isPlanMode: boolean
+  loopEndReason: 'completed' | 'max_iterations' | 'aborted' | 'error' | null
+  failedToolNames: Iterable<string>
+  unsettledToolNames: Iterable<string>
+}): string[] {
+  const blockers: string[] = []
+  const tasks = useTaskStore.getState().getTasksBySession(options.sessionId)
+  const pendingTasks = tasks.filter((task) => task.status === 'pending').length
+  const inProgressTasks = tasks.filter((task) => task.status === 'in_progress').length
+  const failedTools = [...new Set([...options.failedToolNames])].sort()
+  const unsettledTools = [...new Set([...options.unsettledToolNames])].sort()
+
+  if (options.loopEndReason !== 'completed') {
+    blockers.push(
+      options.loopEndReason === 'max_iterations'
+        ? 'the agent reached its iteration limit before a final completion turn'
+        : `the run ended with ${options.loopEndReason ?? 'an unknown state'}`
+    )
+  }
+  if (options.isPlanMode) {
+    blockers.push('Plan Mode is still active')
+  }
+  if (pendingTasks > 0 || inProgressTasks > 0) {
+    blockers.push(`${pendingTasks} pending and ${inProgressTasks} in-progress tasks remain`)
+  }
+  if (failedTools.length > 0) {
+    blockers.push(`failed tools: ${failedTools.join(', ')}`)
+  }
+  if (unsettledTools.length > 0) {
+    blockers.push(`unfinished tool calls: ${unsettledTools.join(', ')}`)
+  }
+  if (hasPendingSessionMessages(options.sessionId)) {
+    blockers.push('queued user messages have not been handled')
+  }
+  if (isPendingSessionDispatchPaused(options.sessionId)) {
+    blockers.push('queued user message dispatch is paused')
+  }
+
+  return blockers
+}
+
 function shouldClearCompletedSessionTasks(sessionId: string): boolean {
   const tasks = useTaskStore.getState().getTasksBySession(sessionId)
   return tasks.length > 0 && tasks.every((task) => task.status === 'completed')
@@ -1541,13 +1584,15 @@ function appendGoalCommandMessages(
   })
 }
 
+type GoalSlashResult = false | 'handled' | 'start_goal'
+
 async function tryHandleGoalSlashCommand(args: {
   sessionId: string
   text: string
   source?: MessageSource
   images?: ImageAttachment[]
   commandOverride?: SystemCommandSnapshot | null
-}): Promise<boolean> {
+}): Promise<GoalSlashResult> {
   if (args.commandOverride || args.images?.length || args.source === 'continue') return false
 
   const parsed = parseSlashCommandInput(args.text)
@@ -1567,9 +1612,9 @@ async function tryHandleGoalSlashCommand(args: {
       commandText,
       current
         ? formatGoalSummary(current)
-        : 'Usage: `/goal <objective>`\n\nNo goal is currently set.'
+        : 'No goal is currently set. Use the Goal bar to set one.'
     )
-    return true
+    return 'handled'
   }
 
   if (control === 'clear') {
@@ -1583,7 +1628,7 @@ async function tryHandleGoalSlashCommand(args: {
           ? `Failed to clear goal: ${result.error}`
           : 'No goal is currently set.'
     )
-    return true
+    return 'handled'
   }
 
   if (control === 'pause' || control === 'resume') {
@@ -1591,9 +1636,9 @@ async function tryHandleGoalSlashCommand(args: {
       appendGoalCommandMessages(
         args.sessionId,
         commandText,
-        'No goal is currently set. Use `/goal <objective>` first.'
+        'No goal is currently set. Use the Goal bar to set one first.'
       )
-      return true
+      return 'handled'
     }
     const result = await goalStore.updateGoal(args.sessionId, {
       status: control === 'pause' ? 'paused' : 'active'
@@ -1603,7 +1648,7 @@ async function tryHandleGoalSlashCommand(args: {
       commandText,
       result.goal ? formatGoalSummary(result.goal) : `Failed to update goal: ${result.error}`
     )
-    return true
+    return control === 'resume' && result.goal?.status === 'active' ? 'start_goal' : 'handled'
   }
 
   if (control === 'edit') {
@@ -1611,16 +1656,16 @@ async function tryHandleGoalSlashCommand(args: {
       appendGoalCommandMessages(
         args.sessionId,
         commandText,
-        'No goal is currently set. Use `/goal <objective>` first.'
+        'No goal is currently set. Use the Goal bar to set one first.'
       )
-      return true
+      return 'handled'
     }
     const edited = window.prompt('Edit goal objective', current.objective)
-    if (edited === null) return true
+    if (edited === null) return 'handled'
     const error = validateGoalObjective(edited)
     if (error) {
       appendGoalCommandMessages(args.sessionId, commandText, error)
-      return true
+      return 'handled'
     }
     const result = await goalStore.updateGoal(args.sessionId, { objective: edited.trim() })
     appendGoalCommandMessages(
@@ -1628,13 +1673,13 @@ async function tryHandleGoalSlashCommand(args: {
       commandText,
       result.goal ? formatGoalSummary(result.goal) : `Failed to edit goal: ${result.error}`
     )
-    return true
+    return result.goal?.status === 'active' ? 'start_goal' : 'handled'
   }
 
   const validationError = validateGoalObjective(objectiveOrCommand)
   if (validationError) {
     appendGoalCommandMessages(args.sessionId, commandText, validationError)
-    return true
+    return 'handled'
   }
 
   const result = await goalStore.setGoal({
@@ -1646,7 +1691,7 @@ async function tryHandleGoalSlashCommand(args: {
     commandText,
     result.goal ? formatGoalSummary(result.goal) : `Failed to set goal: ${result.error}`
   )
-  return true
+  return result.goal?.status === 'active' ? 'start_goal' : 'handled'
 }
 
 function findLastEditableUserMessage(messages: UnifiedMessage[]): EditableUserMessageTarget | null {
@@ -2731,15 +2776,19 @@ export function useChatActions(): {
       }
       await chatStore.loadRecentSessionMessages(sessionId)
 
-      if (
-        await tryHandleGoalSlashCommand({
-          sessionId,
-          text,
-          source,
-          images,
-          commandOverride
-        })
-      ) {
+      const goalSlashResult = await tryHandleGoalSlashCommand({
+        sessionId,
+        text,
+        source,
+        images,
+        commandOverride
+      })
+      if (goalSlashResult) {
+        if (goalSlashResult === 'start_goal') {
+          queueMicrotask(() => {
+            void sendMessage('', undefined, 'continue', sessionId, null)
+          })
+        }
         return
       }
 
@@ -3561,6 +3610,8 @@ export function useChatActions(): {
           let loopEndReasonForGoal: 'completed' | 'max_iterations' | 'aborted' | 'error' | null =
             null
           const liveToolNames = new Map<string, string>()
+          const goalRunFailedToolNames = new Set<string>()
+          const goalRunUnsettledToolCalls = new Map<string, string>()
 
           // Tool input throttling state — defined before try block so finally can safely dispose
           const liveToolInputThrottle = new Map<string, LiveToolInputThrottleEntry>()
@@ -4206,6 +4257,9 @@ export function useChatActions(): {
 
                 case 'tool_use_streaming_start':
                   liveToolNames.set(event.toolCallId, event.toolName)
+                  if (activeGoalForRun) {
+                    goalRunUnsettledToolCalls.set(event.toolCallId, event.toolName)
+                  }
                   // Preserve stream order: flush any pending thinking/text before inserting tool block.
                   streamDeltaBuffer.flushNow()
                   if (!thinkingDone) {
@@ -4249,6 +4303,9 @@ export function useChatActions(): {
                 case 'tool_use_generated': {
                   runUsedTools = true
                   liveToolNames.set(event.toolUseBlock.id, event.toolUseBlock.name)
+                  if (activeGoalForRun) {
+                    goalRunUnsettledToolCalls.set(event.toolUseBlock.id, event.toolUseBlock.name)
+                  }
                   if (event.toolUseBlock.name === 'Write') {
                     console.log('[WriteTrace] tool_use_generated', {
                       sessionId,
@@ -4338,6 +4395,9 @@ export function useChatActions(): {
                 case 'tool_call_start':
                   runUsedTools = true
                   liveToolNames.set(event.toolCall.id, event.toolCall.name)
+                  if (activeGoalForRun) {
+                    goalRunUnsettledToolCalls.set(event.toolCall.id, event.toolCall.name)
+                  }
                   if (isSessionForeground(sessionId!)) {
                     useAgentStore.getState().addToolCall(
                       {
@@ -4378,6 +4438,12 @@ export function useChatActions(): {
 
                 case 'tool_call_result': {
                   liveToolNames.set(event.toolCall.id, event.toolCall.name)
+                  if (activeGoalForRun) {
+                    goalRunUnsettledToolCalls.delete(event.toolCall.id)
+                    if (event.toolCall.status === 'error' || event.toolCall.status === 'canceled') {
+                      goalRunFailedToolNames.add(event.toolCall.name)
+                    }
+                  }
                   clearToolInputPending(event.toolCall.id)
                   if (event.toolCall.name === 'Write') {
                     console.log('[WriteTrace] tool_call_result', {
@@ -4827,7 +4893,7 @@ export function useChatActions(): {
                 tokenDelta,
                 expectedGoalId: activeGoalForRun.goalId
               })
-              const latestGoal =
+              let latestGoal =
                 accountResult.goal ?? useGoalStore.getState().getGoalBySession(sessionId)
               if (
                 latestGoal?.goalId === activeGoalForRun.goalId &&
@@ -4842,11 +4908,33 @@ export function useChatActions(): {
                 latestGoal?.goalId === activeGoalForRun.goalId &&
                 latestGoal.status === 'complete'
               ) {
-                appendRuntimeTextDelta(
+                const completionBlockers = buildGoalCompletionGateBlockers({
                   sessionId,
-                  assistantMsgId,
-                  `\n\n> Goal complete. Final usage: ${formatGoalFinalUsage(latestGoal)}.`
-                )
+                  isPlanMode,
+                  loopEndReason: loopEndReasonForGoal,
+                  failedToolNames: goalRunFailedToolNames,
+                  unsettledToolNames: goalRunUnsettledToolCalls.values()
+                })
+
+                if (completionBlockers.length > 0) {
+                  const restoreResult = await useGoalStore
+                    .getState()
+                    .updateGoal(sessionId, { status: 'active' })
+                  if (restoreResult.success && restoreResult.goal) {
+                    latestGoal = restoreResult.goal
+                  }
+                  appendRuntimeTextDelta(
+                    sessionId,
+                    assistantMsgId,
+                    `\n\n> Goal completion deferred. Completion gate found: ${completionBlockers.join('; ')}. The goal remains active.`
+                  )
+                } else {
+                  appendRuntimeTextDelta(
+                    sessionId,
+                    assistantMsgId,
+                    `\n\n> Goal complete. Final audit: ${formatGoalFinalUsage(latestGoal)}; no unfinished tasks, failed tools, queued user messages, or pending plan gate.`
+                  )
+                }
               }
               shouldAutoContinueGoal = Boolean(
                 latestGoal?.goalId === activeGoalForRun.goalId &&

@@ -101,6 +101,8 @@ Budget:
 - Tokens remaining: ${remainingTokens}
 
 Before deciding that the goal is achieved, verify the current state against the objective. Only call update_goal with status "complete" when every requirement is satisfied and no required work remains.
+The runtime will defer completion if the run still has pending or in-progress tasks, failed or unfinished tool calls, queued user messages, or an active Plan Mode gate.
+If completion is deferred, keep the goal active, fix the blocking issue, and continue.
 Do not call update_goal merely because the budget is nearly exhausted or because you are stopping work.
 </goal_context>`
 }
