@@ -299,10 +299,12 @@ async function requestOAuthJson(args: {
   try {
     data = JSON.parse(result.body) as Record<string, unknown>
   } catch {
+    const snippet = result.body.slice(0, 500)
+    console.error(`[OAuth] JSON parse failed for ${args.url} status=${result.statusCode} body=${snippet}`)
     if (result.statusCode && result.statusCode >= 400) {
-      throw new Error(`HTTP ${result.statusCode}: ${result.body.slice(0, 200)}`)
+      throw new Error(`HTTP ${result.statusCode}: ${snippet}`)
     }
-    throw new Error('Invalid JSON token response')
+    throw new Error(`Invalid JSON token response: ${snippet}`)
   }
 
   return { statusCode: result.statusCode, data, rawBody: result.body }
