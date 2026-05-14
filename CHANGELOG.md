@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.95] - 2026-05-14
+
+### Added
+
+- Added a runtime status panel in the session view that surfaces sub-agent execution summaries from the title-bar control without occupying the input area.
+- Added a standalone runtime todo list with collapse/expand handling and earlier-task indicators for long task histories.
+
+### Changed
+
+- Unified sub-agent run data aggregation for the runtime panel and sub-agent list so both views share filtering, summaries, failure details, and tool-state mapping.
+- Moved in-progress todo presentation out of embedded tool-call rendering and replaced the ping animation with a rotating progress indicator for calmer task updates.
+- Removed duplicated layout-side session workspace derivation so panel state is computed from the shared runtime data source.
+
 ## [0.9.94] - 2026-05-13
 
 ### Changed
