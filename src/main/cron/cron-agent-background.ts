@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { Allow, parse as parsePartialJSON } from 'partial-json'
 import { glob } from 'glob'
 import { spawn } from 'child_process'
+import { TextDecoder } from 'util'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
@@ -51,6 +52,14 @@ const DEFAULT_BASH_TIMEOUT_MS = 600_000
 const BASH_RESULT_PREVIEW_CHARS = 5_000
 const BASH_RESULT_PREVIEW_LINES = 120
 const BASH_IMPORTANT_LINE_LIMIT = 80
+const WINDOWS_SHELL_OUTPUT_ENCODINGS = [
+  'gb18030',
+  'big5',
+  'shift_jis',
+  'euc-kr',
+  'ibm866',
+  'windows-1252'
+]
 // One initial attempt plus at least five retries for retryable upstream failures.
 const MAX_PROVIDER_RETRIES = 6
 const BASE_RETRY_DELAY_MS = 1_500
@@ -512,6 +521,69 @@ function encodeStructuredToolResult(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+const shellOutputDecoderCache = new Map<string, TextDecoder>()
+
+function getShellOutputDecoder(label: string): TextDecoder | null {
+  const cached = shellOutputDecoderCache.get(label)
+  if (cached) return cached
+
+  try {
+    const decoder = new TextDecoder(label)
+    shellOutputDecoderCache.set(label, decoder)
+    return decoder
+  } catch {
+    return null
+  }
+}
+
+function countDecodedTextIssues(text: string): { replacementChars: number; controlChars: number } {
+  let replacementChars = 0
+  let controlChars = 0
+
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    if (code === 0xfffd) {
+      replacementChars += 1
+    } else if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) {
+      controlChars += 1
+    }
+  }
+
+  return { replacementChars, controlChars }
+}
+
+function scoreDecodedShellText(text: string): number {
+  const issues = countDecodedTextIssues(text)
+  return issues.replacementChars * 10 + issues.controlChars * 4
+}
+
+function decodeShellOutputChunks(chunks: Buffer[]): string {
+  if (chunks.length === 0) return ''
+
+  const buffer = Buffer.concat(chunks)
+  const utf8 = buffer.toString('utf8')
+  if (process.platform !== 'win32' || !utf8.includes('\uFFFD') || buffer.includes(0)) {
+    return utf8
+  }
+
+  let bestText = utf8
+  let bestScore = scoreDecodedShellText(utf8)
+
+  for (const encoding of WINDOWS_SHELL_OUTPUT_ENCODINGS) {
+    const decoder = getShellOutputDecoder(encoding)
+    if (!decoder) continue
+
+    const text = decoder.decode(buffer)
+    const score = scoreDecodedShellText(text)
+    if (score < bestScore) {
+      bestText = text
+      bestScore = score
+    }
+  }
+
+  return bestText
 }
 
 function compactCronShellPayload(payload: Record<string, unknown>): Record<string, unknown> {
@@ -6111,9 +6183,13 @@ function buildToolHandlers(): Record<string, ToolHandler> {
             PYTHONUTF8: '1'
           }
         })
-        let stdout = ''
-        let stderr = ''
+        const stdoutChunks: Buffer[] = []
+        const stderrChunks: Buffer[] = []
         let settled = false
+        const readOutput = (): { stdout: string; stderr: string } => ({
+          stdout: decodeShellOutputChunks(stdoutChunks),
+          stderr: decodeShellOutputChunks(stderrChunks)
+        })
         const timer = setTimeout(() => {
           if (settled) return
           settled = true
@@ -6122,6 +6198,7 @@ function buildToolHandlers(): Record<string, ToolHandler> {
           } catch {
             // ignore
           }
+          const { stdout, stderr } = readOutput()
           resolve(
             encodeShellToolResult({
               exitCode: 124,
@@ -6131,21 +6208,23 @@ function buildToolHandlers(): Record<string, ToolHandler> {
           )
         }, timeout)
         child.stdout?.on('data', (chunk: Buffer) => {
-          stdout += chunk.toString('utf8')
+          stdoutChunks.push(chunk)
         })
         child.stderr?.on('data', (chunk: Buffer) => {
-          stderr += chunk.toString('utf8')
+          stderrChunks.push(chunk)
         })
         child.on('error', (err) => {
           if (settled) return
           settled = true
           clearTimeout(timer)
+          const { stdout, stderr } = readOutput()
           resolve(encodeShellToolResult({ exitCode: 1, stdout, stderr: err.message || stderr }))
         })
         child.on('exit', (code) => {
           if (settled) return
           settled = true
           clearTimeout(timer)
+          const { stdout, stderr } = readOutput()
           resolve(encodeShellToolResult({ exitCode: code ?? 0, stdout, stderr }))
         })
         ctx.signal.addEventListener(
@@ -6159,6 +6238,7 @@ function buildToolHandlers(): Record<string, ToolHandler> {
             } catch {
               // ignore
             }
+            const { stdout, stderr } = readOutput()
             resolve(
               encodeShellToolResult({
                 exitCode: 130,
