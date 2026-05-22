@@ -18,6 +18,7 @@ export const IPC = {
   FS_SELECT_SAVE_FILE: 'fs:select-save-file',
   FS_READ_DOCUMENT: 'fs:read-document',
   FS_READ_FILE: 'fs:read-file',
+  FS_STAT_PATH: 'fs:stat-path',
   FS_WRITE_FILE: 'fs:write-file',
   FS_LIST_DIR: 'fs:list-dir',
   FS_MKDIR: 'fs:mkdir',
@@ -324,6 +325,7 @@ export const IPC = {
 
   // SSH File Operations (SFTP)
   SSH_FS_READ_FILE: 'ssh:fs:read-file',
+  SSH_FS_STAT_PATH: 'ssh:fs:stat-path',
   SSH_FS_WRITE_FILE: 'ssh:fs:write-file',
   SSH_FS_READ_FILE_BINARY: 'ssh:fs:read-file-binary',
   SSH_FS_WRITE_FILE_BINARY: 'ssh:fs:write-file-binary',

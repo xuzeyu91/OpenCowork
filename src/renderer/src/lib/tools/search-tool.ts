@@ -67,9 +67,9 @@ type GrepToolResult = {
   error?: string
 }
 
-const PROMPT_SEARCH_MAX_MATCHES = 20
+const PROMPT_SEARCH_MAX_MATCHES = 100
 const PROMPT_SEARCH_FETCH_LIMIT = PROMPT_SEARCH_MAX_MATCHES + 1
-const PROMPT_SEARCH_MAX_OUTPUT_BYTES = 8 * 1024
+const PROMPT_SEARCH_MAX_OUTPUT_BYTES = 64 * 1024
 const PROMPT_GREP_MAX_LINE_LENGTH = 160
 const PROMPT_GREP_MAX_MATCHES = 200
 const PROMPT_GREP_MAX_OUTPUT_BYTES = 64 * 1024
@@ -123,9 +123,10 @@ function normalizeWarnings(value: unknown): string[] {
 }
 
 function normalizeGrepOutputMode(value: unknown): GrepOutputMode {
+  if (value === 'content' || value === 'matches') return 'matches'
   return value === 'files_with_matches' || value === 'files_without_matches' || value === 'count'
     ? value
-    : 'matches'
+    : 'files_with_matches'
 }
 
 function normalizeOptionalNumber(value: unknown): number | undefined {
@@ -584,7 +585,8 @@ function normalizeGrepResult(
 const globHandler: ToolHandler = {
   definition: {
     name: 'Glob',
-    description: 'Fast file pattern matching tool (returns at most 20 matches)',
+    description:
+      'Find files by glob pattern. Returns up to 100 paths sorted by modification time. Does not respect .gitignore unless respectGitignore=true.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -592,7 +594,11 @@ const globHandler: ToolHandler = {
         path: {
           type: 'string',
           description: 'Optional search directory (absolute or relative to the working folder)'
-        }
+        },
+        hidden: { type: 'boolean', description: 'Include hidden files and directories' },
+        respectGitignore: { type: 'boolean', description: 'Respect .gitignore files' },
+        followSymlinks: { type: 'boolean', description: 'Follow symbolic links' },
+        maxDepth: { type: 'number', description: 'Maximum directory depth to search' }
       },
       required: ['pattern']
     }
@@ -605,7 +611,11 @@ const globHandler: ToolHandler = {
         connectionId: ctx.sshConnectionId,
         pattern: input.pattern,
         path: resolvedPath,
-        limit: PROMPT_SEARCH_FETCH_LIMIT
+        limit: PROMPT_SEARCH_FETCH_LIMIT,
+        hidden: input.hidden,
+        respectGitignore: input.respectGitignore,
+        followSymlinks: input.followSymlinks,
+        maxDepth: input.maxDepth
       })
       return encodeStructuredToolResult(
         formatGlobResultForPrompt(
@@ -620,7 +630,11 @@ const globHandler: ToolHandler = {
     const result = await ctx.ipc.invoke(IPC.FS_GLOB, {
       pattern: input.pattern,
       path: resolvedPath,
-      limit: PROMPT_SEARCH_FETCH_LIMIT
+      limit: PROMPT_SEARCH_FETCH_LIMIT,
+      hidden: input.hidden,
+      respectGitignore: input.respectGitignore,
+      followSymlinks: input.followSymlinks,
+      maxDepth: input.maxDepth
     })
     return encodeStructuredToolResult(
       formatGlobResultForPrompt(
@@ -639,11 +653,19 @@ const grepHandler: ToolHandler = {
   definition: {
     name: 'Grep',
     description:
-      'Search file contents. Uses git grep in Git worktrees, then falls back to ripgrep/Node search. Defaults to grep-like file:line:text output.',
+      'Search file contents using ripgrep-style regex. Defaults to files_with_matches. Use output_mode="content" for file:line:text output.',
     inputSchema: {
       type: 'object',
       properties: {
         pattern: { type: 'string', description: 'Regex pattern to search for' },
+        glob: {
+          type: 'string',
+          description: 'Code-agent-style file glob filter, e.g. **/*.tsx'
+        },
+        type: {
+          type: 'string',
+          description: 'Ripgrep file type filter, e.g. py, rust, ts'
+        },
         patterns: {
           type: 'array',
           items: {
@@ -678,7 +700,7 @@ const grepHandler: ToolHandler = {
         patternMode: {
           type: 'string',
           enum: ['fixed', 'basic', 'extended', 'perl'],
-          description: 'Pattern dialect, matching git grep -F/-G/-E/-P. Default perl.'
+          description: 'Pattern dialect. Default uses ripgrep/Rust regex syntax.'
         },
         patternOperator: {
           type: 'string',
@@ -718,7 +740,11 @@ const grepHandler: ToolHandler = {
         beforeContext: { type: 'number', description: 'Number of context lines before each match' },
         afterContext: { type: 'number', description: 'Number of context lines after each match' },
         maxCount: { type: 'number', description: 'Maximum matches per file, like git grep -m' },
-        maxResults: { type: 'number', description: 'Maximum result rows to return (default 20)' },
+        head_limit: {
+          type: 'number',
+          description: 'Code-agent-style maximum output rows to return'
+        },
+        maxResults: { type: 'number', description: 'Maximum result rows to return' },
         maxOutputBytes: { type: 'number', description: 'Maximum encoded result size' },
         maxLineLength: { type: 'number', description: 'Maximum text length per result line' },
         maxDepth: { type: 'number', description: 'Maximum directory depth to search' },
@@ -732,11 +758,16 @@ const grepHandler: ToolHandler = {
         text: { type: 'boolean', description: 'Process binary files as text' },
         textconv: { type: 'boolean', description: 'Use Git textconv filters when available' },
         threads: { type: 'number', description: 'Worker threads for git grep' },
+        multiline: { type: 'boolean', description: 'Allow matches across line boundaries' },
+        output_mode: {
+          type: 'string',
+          enum: ['files_with_matches', 'content', 'count'],
+          description: 'Code-agent output mode. Default files_with_matches.'
+        },
         outputMode: {
           type: 'string',
-          enum: ['matches', 'files_with_matches', 'files_without_matches', 'count'],
-          description:
-            'matches returns file:line:text, files_with_matches returns paths, files_without_matches returns paths without matches, count returns file:count'
+          enum: ['matches', 'content', 'files_with_matches', 'files_without_matches', 'count'],
+          description: 'Legacy output mode. matches/content returns file:line:text.'
         },
         pathStyle: {
           type: 'string',
@@ -754,6 +785,8 @@ const grepHandler: ToolHandler = {
       pattern: input.pattern,
       patterns: input.patterns,
       path: resolvedPath,
+      glob: input.glob,
+      type: input.type,
       pathspecs: input.pathspecs,
       include: input.include,
       exclude: input.exclude,
@@ -778,6 +811,7 @@ const grepHandler: ToolHandler = {
       beforeContext: input.beforeContext,
       afterContext: input.afterContext,
       maxCount: input.maxCount,
+      head_limit: input.head_limit,
       maxResults: input.maxResults,
       maxOutputBytes: input.maxOutputBytes,
       maxLineLength: input.maxLineLength,
@@ -792,6 +826,8 @@ const grepHandler: ToolHandler = {
       text: input.text,
       textconv: input.textconv,
       threads: input.threads,
+      multiline: input.multiline,
+      output_mode: input.output_mode,
       outputMode: input.outputMode,
       pathStyle: input.pathStyle
     }

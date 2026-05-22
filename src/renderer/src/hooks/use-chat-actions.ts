@@ -370,6 +370,8 @@ export interface SendMessageOptions {
   longRunningMode?: boolean
   clearCompletedTasksOnTurnStart?: boolean
   skipPendingPlanRevision?: boolean
+  enablePlanMode?: boolean
+  goalObjective?: string
   imageEdit?: {
     maskDataUrl?: string
   }
@@ -2919,6 +2921,65 @@ export function useChatActions(): {
       }
       await chatStore.loadRecentSessionMessages(sessionId)
 
+      if (options?.enablePlanMode) {
+        useUIStore.getState().enterPlanMode(sessionId)
+      }
+
+      if (options?.goalObjective !== undefined && source !== 'continue') {
+        if (commandOverride || images?.length) {
+          toast.error(i18n.t('goal.toasts.createFailed', { ns: 'chat' }), {
+            description: i18n.t('goal.errors.objectiveOnly', {
+              ns: 'chat',
+              defaultValue: 'Goal mode can only start from text input.'
+            })
+          })
+          return
+        }
+
+        const objective = options.goalObjective.trim()
+        const validationError = validateGoalObjective(objective)
+        if (validationError) {
+          toast.error(i18n.t('goal.toasts.objectiveInvalid', { ns: 'chat' }), {
+            description: validationError
+          })
+          return
+        }
+
+        const result = await useGoalStore.getState().setGoal({
+          sessionId,
+          objective,
+          status: 'active'
+        })
+        if (!result.success) {
+          toast.error(i18n.t('goal.toasts.createFailed', { ns: 'chat' }), {
+            description: result.error
+          })
+          return
+        }
+
+        const goalSession = useChatStore.getState().sessions.find((s) => s.id === sessionId)
+        if (goalSession && canAutoGenerateSessionTitle(goalSession.title)) {
+          const capturedSessionId = sessionId
+          generateSessionTitle(objective)
+            .then((titleResult) => {
+              if (!titleResult) return
+              const store = useChatStore.getState()
+              const latestSession = store.sessions.find((item) => item.id === capturedSessionId)
+              if (!latestSession || !canAutoGenerateSessionTitle(latestSession.title)) return
+              store.updateSessionTitle(capturedSessionId, titleResult.title)
+              store.updateSessionIcon(capturedSessionId, titleResult.icon)
+            })
+            .catch(() => {
+              /* keep default title on failure */
+            })
+        }
+
+        queueMicrotask(() => {
+          void sendMessage('', undefined, 'continue', sessionId, null)
+        })
+        return
+      }
+
       const goalSlashResult = await tryHandleGoalSlashCommand({
         sessionId,
         text,
@@ -3581,7 +3642,7 @@ export function useChatActions(): {
             userPrompt = userPrompt ? `${userPrompt}\n${channelCtx}` : channelCtx
           }
 
-          const sessionScope: SessionMemoryScope = session?.pluginId ? 'shared' : 'main'
+          const sessionScope: SessionMemoryScope = session?.pluginId ? 'channel' : 'main'
           const sessionWorkingFolder = resolveSessionWorkingFolder(session)
           const memorySnapshot = await loadLayeredMemorySnapshot(ipcClient, {
             workingFolder: sessionWorkingFolder,

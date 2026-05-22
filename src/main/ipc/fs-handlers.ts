@@ -40,7 +40,7 @@ const MAX_FILE_READ_BYTES = 50 * 1024 * 1024 // 50 MB
 const MAX_IMAGE_READ_BYTES = 20 * 1024 * 1024 // 20 MB
 const MAX_LIST_DIR_ITEMS = 1_000
 const MAX_GLOB_MATCHES = 1_000
-const SEARCH_TOOL_MAX_RESULTS = 20
+const SEARCH_TOOL_MAX_RESULTS = 100
 
 async function assertFileSize(filePath: string, limit: number): Promise<number> {
   const stat = await fs.promises.stat(filePath)
@@ -183,6 +183,8 @@ type GrepSearchOptions = {
   pathspecs: string[]
   pathspecIncludePatterns: string[]
   pathspecExcludePatterns: string[]
+  typeFilters: string[]
+  multiline: boolean
 }
 
 type ProcessTextResult = {
@@ -340,6 +342,45 @@ function parsePatternList(value?: unknown): string[] {
 
 function parseGlobPatterns(value?: unknown): string[] {
   return parseDelimitedPatterns(value)
+}
+
+function parseTypeFilters(value?: unknown): string[] {
+  return parseDelimitedPatterns(value).map((item) => item.replace(/^--?type=/, '').trim())
+}
+
+const GREP_TYPE_GLOBS: Record<string, string[]> = {
+  c: ['*.c', '*.h'],
+  cpp: ['*.cc', '*.cpp', '*.cxx', '*.hpp', '*.hxx'],
+  cs: ['*.cs'],
+  css: ['*.css'],
+  go: ['*.go'],
+  html: ['*.html', '*.htm'],
+  java: ['*.java'],
+  js: ['*.js', '*.jsx', '*.mjs', '*.cjs'],
+  json: ['*.json'],
+  jsx: ['*.jsx'],
+  kt: ['*.kt', '*.kts'],
+  md: ['*.md', '*.mdx'],
+  php: ['*.php'],
+  py: ['*.py', '*.pyw'],
+  rb: ['*.rb'],
+  rs: ['*.rs'],
+  rust: ['*.rs'],
+  scss: ['*.scss'],
+  sh: ['*.sh', '*.bash', '*.zsh'],
+  sql: ['*.sql'],
+  svelte: ['*.svelte'],
+  swift: ['*.swift'],
+  ts: ['*.ts', '*.tsx'],
+  tsx: ['*.tsx'],
+  vue: ['*.vue'],
+  xml: ['*.xml'],
+  yaml: ['*.yaml', '*.yml'],
+  yml: ['*.yaml', '*.yml']
+}
+
+function typeFiltersToIncludePatterns(typeFilters: string[]): string[] {
+  return typeFilters.flatMap((item) => GREP_TYPE_GLOBS[item.toLowerCase()] ?? [])
 }
 
 function normalizeGrepLine(text: string, maxLineLength: number): string {
@@ -545,9 +586,11 @@ function normalizeOptionalBoolean(value: unknown): boolean | null {
 }
 
 function normalizeGrepOutputMode(value: unknown): GrepOutputMode {
-  return value === 'files_with_matches' || value === 'files_without_matches' || value === 'count'
-    ? value
-    : 'matches'
+  if (value === 'content' || value === 'matches') return 'matches'
+  if (value === 'files_with_matches' || value === 'files_without_matches' || value === 'count') {
+    return value
+  }
+  return 'files_with_matches'
 }
 
 function normalizeGrepPathStyle(value: unknown): GrepPathStyle {
@@ -579,7 +622,7 @@ function normalizeGrepPatternMode(args: {
   if (args.basic === true || args.basicRegexp === true) return 'basic'
   if (args.extended === true || args.extendedRegexp === true) return 'extended'
   if (args.perl === true || args.perlRegexp === true) return 'perl'
-  return 'perl'
+  return 'extended'
 }
 
 function normalizeGrepPatternOperator(value: unknown): GrepPatternOperator {
@@ -654,6 +697,8 @@ function normalizeGrepOptions(args: {
   andPatterns?: unknown
   orPatterns?: unknown
   notPatterns?: unknown
+  glob?: unknown
+  type?: unknown
   include?: unknown
   exclude?: unknown
   pathspec?: unknown
@@ -694,6 +739,8 @@ function normalizeGrepOptions(args: {
   afterContext?: unknown
   maxCount?: unknown
   maxResults?: unknown
+  head_limit?: unknown
+  headLimit?: unknown
   limit?: unknown
   maxOutputBytes?: unknown
   maxLineLength?: unknown
@@ -703,6 +750,7 @@ function normalizeGrepOptions(args: {
   excludeStandard?: unknown
   followSymlinks?: unknown
   outputMode?: unknown
+  output_mode?: unknown
   pathStyle?: unknown
   filesWithMatches?: unknown
   filesWithoutMatches?: unknown
@@ -714,6 +762,7 @@ function normalizeGrepOptions(args: {
   text?: unknown
   textconv?: unknown
   threads?: unknown
+  multiline?: unknown
 }): GrepSearchOptions {
   const pattern = String(args.pattern ?? '')
   const patternMode = normalizeGrepPatternMode(args)
@@ -735,6 +784,9 @@ function normalizeGrepOptions(args: {
     args.afterContext === undefined ? context : clampGrepContext(args.afterContext)
   const include = typeof args.include === 'string' ? args.include.trim() : undefined
   const exclude = typeof args.exclude === 'string' ? args.exclude.trim() : undefined
+  const codeGlobPatterns = parseGlobPatterns(args.glob)
+  const typeFilters = parseTypeFilters(args.type)
+  const typeIncludePatterns = typeFiltersToIncludePatterns(typeFilters)
   const pathspecs = [...parsePatternList(args.pathspec), ...parsePatternList(args.pathspecs)]
   const pathspecIncludePatterns = [
     ...parseGlobPatterns(args.pathspecInclude),
@@ -746,7 +798,7 @@ function normalizeGrepOptions(args: {
     ...parseGlobPatterns(args.pathspecExcludes),
     ...parseGlobPatterns(args.excludes)
   ]
-  const requestedOutputMode = normalizeGrepOutputMode(args.outputMode)
+  const requestedOutputMode = normalizeGrepOutputMode(args.output_mode ?? args.outputMode)
   const outputMode =
     args.filesWithMatches === true
       ? 'files_with_matches'
@@ -771,7 +823,7 @@ function normalizeGrepOptions(args: {
     allMatch: normalizeBoolean(args.allMatch, false),
     include: include || undefined,
     exclude: exclude || undefined,
-    includePatterns: parseGlobPatterns(include),
+    includePatterns: [...parseGlobPatterns(include), ...codeGlobPatterns, ...typeIncludePatterns],
     excludePatterns: parseGlobPatterns(exclude),
     caseSensitive,
     smartCase,
@@ -784,7 +836,7 @@ function normalizeGrepOptions(args: {
     beforeContext,
     afterContext,
     maxResults: clampGrepNumber(
-      args.maxResults ?? args.limit,
+      args.head_limit ?? args.headLimit ?? args.maxResults ?? args.limit,
       GREP_DEFAULT_MAX_RESULTS,
       GREP_MAX_RESULTS
     ),
@@ -818,7 +870,9 @@ function normalizeGrepOptions(args: {
     threads: normalizeGrepThreads(args.threads),
     pathspecs,
     pathspecIncludePatterns,
-    pathspecExcludePatterns
+    pathspecExcludePatterns,
+    typeFilters,
+    multiline: normalizeBoolean(args.multiline, false)
   }
 }
 
@@ -861,7 +915,19 @@ function isBasicSidecarGrepOptions(options: GrepSearchOptions): boolean {
     options.threads === null &&
     options.pathspecs.length === 0 &&
     options.pathspecIncludePatterns.length === 0 &&
-    options.pathspecExcludePatterns.length === 0
+    options.pathspecExcludePatterns.length === 0 &&
+    options.typeFilters.length === 0 &&
+    !options.multiline
+  )
+}
+
+function shouldUseGitGrepFirst(options: GrepSearchOptions): boolean {
+  return (
+    options.cached ||
+    options.index ||
+    options.noIndex ||
+    options.textconv ||
+    options.pathspecs.length > 0
   )
 }
 
@@ -976,6 +1042,10 @@ function createGlobToolResult(args: {
   truncated?: boolean
   limitReason?: GrepLimitReason
   warnings?: string[]
+  hiddenIncluded?: boolean
+  respectGitignore?: boolean
+  followSymlinks?: boolean
+  maxDepth?: number | null
   error?: string
 }): GlobToolResult {
   return {
@@ -987,6 +1057,10 @@ function createGlobToolResult(args: {
       truncated: args.truncated,
       limitReason: args.limitReason,
       warnings: args.warnings,
+      hiddenIncluded: args.hiddenIncluded,
+      respectGitignore: args.respectGitignore,
+      followSymlinks: args.followSymlinks,
+      maxDepth: args.maxDepth,
       pathStyle: 'absolute'
     }),
     error: args.error
@@ -2131,12 +2205,18 @@ async function runRipgrepSearch(args: {
   if (args.options.onlyMatching) rgArgs.push('--only-matching')
   if (args.options.column) rgArgs.push('--column')
   if (args.options.hidden) rgArgs.push('--hidden')
-  if (!args.options.respectGitignore) rgArgs.push('--no-ignore')
+  if (args.options.respectGitignore) rgArgs.push('--no-require-git')
+  else rgArgs.push('--no-ignore')
   if (args.options.followSymlinks) rgArgs.push('--follow')
   if (args.options.maxDepth !== null) rgArgs.push('--max-depth', String(args.options.maxDepth))
   if (args.options.maxCount !== null) rgArgs.push('--max-count', String(args.options.maxCount))
   if (args.options.threads !== null) rgArgs.push('--threads', String(args.options.threads))
   if (args.options.text) rgArgs.push('--text')
+  if (args.options.multiline) rgArgs.push('--multiline', '--multiline-dotall')
+
+  for (const typeFilter of args.options.typeFilters) {
+    rgArgs.push('--type', typeFilter)
+  }
 
   for (const dir of GREP_IGNORE_DIRS) {
     rgArgs.push('--glob', `!${dir}/**`)
@@ -2370,6 +2450,7 @@ export function registerFsHandlers(): void {
       args: {
         path: string
         content: string
+        beforeContent?: string
         changeMeta?: { runId?: string; sessionId?: string; toolUseId?: string; toolName?: string }
       }
     ) => {
@@ -2381,6 +2462,12 @@ export function registerFsHandlers(): void {
             beforeText = await fs.promises.readFile(args.path, 'utf-8')
           } catch {
             // best-effort: skip diff if read fails
+          }
+        }
+        if (typeof args.beforeContent === 'string' && beforeText !== args.beforeContent) {
+          return {
+            error:
+              'File changed since it was read. Read the file again before editing or writing.'
           }
         }
         const dir = path.dirname(args.path)
@@ -2401,6 +2488,22 @@ export function registerFsHandlers(): void {
       }
     }
   )
+
+  ipcMain.handle('fs:stat-path', async (_event, args: { path: string }) => {
+    try {
+      const stats = await fs.promises.stat(args.path)
+      return {
+        exists: true,
+        type: stats.isFile() ? 'file' : stats.isDirectory() ? 'directory' : 'other',
+        size: stats.size,
+        mtimeMs: stats.mtimeMs
+      }
+    } catch (err) {
+      const code = err && typeof err === 'object' ? (err as { code?: unknown }).code : undefined
+      if (code === 'ENOENT') return { exists: false, type: null, size: null, mtimeMs: null }
+      return { error: String(err) }
+    }
+  })
 
   ipcMain.handle(
     'fs:list-dir',
@@ -2504,17 +2607,37 @@ export function registerFsHandlers(): void {
 
   ipcMain.handle(
     'fs:glob',
-    async (_event, args: { pattern: string; path?: string; limit?: number }) => {
+    async (
+      _event,
+      args: {
+        pattern: string
+        path?: string
+        limit?: number
+        hidden?: boolean
+        respectGitignore?: boolean
+        followSymlinks?: boolean
+        maxDepth?: number
+      }
+    ) => {
       const cwd = path.resolve(args.path || process.cwd())
       try {
-        const matcher = await createLocalGitIgnoreContext(cwd)
-        const filteredMatches: Array<{ path: string; type?: 'file' | 'directory' }> = []
-        const limit = clampToolResultLimit(args.limit, MAX_GLOB_MATCHES)
+        const hidden = args.hidden !== false
+        const respectGitignore = args.respectGitignore === true
+        const followSymlinks = args.followSymlinks === true
+        const maxDepth = clampGrepOptionalNumber(args.maxDepth, GREP_MAX_DEPTH)
+        const matcher = respectGitignore ? await createLocalGitIgnoreContext(cwd) : null
+        const filteredMatches: Array<{
+          path: string
+          type?: 'file' | 'directory'
+          mtimeMs: number
+        }> = []
+        const limit = clampToolResultLimit(args.limit, MAX_GLOB_MATCHES) ?? 100
         let truncated = false
         const globber = new Glob(args.pattern, {
           cwd,
           mark: true,
-          dot: true,
+          dot: hidden,
+          follow: followSymlinks,
           ignore: buildGlobIgnorePatterns(args.pattern)
         })
 
@@ -2523,27 +2646,47 @@ export function registerFsHandlers(): void {
           const normalizedMatch = match.replace(/[\\/]+$/, '')
           if (!normalizedMatch) continue
           const absolutePath = path.resolve(cwd, normalizedMatch)
-          if (await matcher.ignores(absolutePath, isDir)) continue
-          filteredMatches.push({ path: absolutePath, type: isDir ? 'directory' : 'file' })
+          if (maxDepth !== null && getSearchRootDepth(cwd, absolutePath) > maxDepth) continue
+          if (matcher && (await matcher.ignores(absolutePath, isDir))) continue
+          const stats = await fs.promises.stat(absolutePath).catch(() => null)
+          filteredMatches.push({
+            path: absolutePath,
+            type: isDir ? 'directory' : 'file',
+            mtimeMs: stats?.mtimeMs ?? 0
+          })
 
-          if (limit !== null && filteredMatches.length >= limit) {
+          if (filteredMatches.length >= MAX_GLOB_MATCHES) {
             truncated = true
             break
           }
         }
 
+        filteredMatches.sort(
+          (left, right) =>
+            right.mtimeMs - left.mtimeMs ||
+            left.path.localeCompare(right.path, undefined, { sensitivity: 'base' })
+        )
+        const limitedMatches = filteredMatches.slice(0, limit)
+        if (filteredMatches.length > limitedMatches.length) truncated = true
+
         return createGlobToolResult({
           searchRoot: cwd,
           pattern: args.pattern,
-          matches: filteredMatches,
+          matches: limitedMatches.map(({ path: matchPath, type }) => ({ path: matchPath, type })),
           truncated,
-          limitReason: truncated ? 'max_results' : null
+          limitReason: truncated ? 'max_results' : null,
+          hiddenIncluded: hidden,
+          respectGitignore,
+          followSymlinks,
+          maxDepth
         })
       } catch (err) {
         return createGlobToolResult({
           searchRoot: cwd,
           pattern: args.pattern,
           matches: [],
+          respectGitignore: args.respectGitignore === true,
+          followSymlinks: args.followSymlinks === true,
           error: String(err)
         })
       }
@@ -2609,6 +2752,8 @@ export function registerFsHandlers(): void {
         andPatterns?: unknown
         orPatterns?: unknown
         notPatterns?: unknown
+        glob?: unknown
+        type?: unknown
         path?: string
         include?: string
         exclude?: string
@@ -2650,6 +2795,8 @@ export function registerFsHandlers(): void {
         afterContext?: number
         maxCount?: number
         maxResults?: number
+        head_limit?: number
+        headLimit?: number
         limit?: number
         maxOutputBytes?: number
         maxLineLength?: number
@@ -2669,7 +2816,9 @@ export function registerFsHandlers(): void {
         textconv?: boolean
         threads?: number
         outputMode?: GrepOutputMode
+        output_mode?: string
         pathStyle?: GrepPathStyle
+        multiline?: boolean
       }
     ) => {
       try {
@@ -2694,16 +2843,16 @@ export function registerFsHandlers(): void {
         }
 
         const searchRoot = targetStats.isDirectory() ? searchTarget : path.dirname(searchTarget)
+        const tryGitGrep = async (): Promise<GrepToolResult | null> => {
+          const gitGrepResult = await runGitGrepSearch({
+            searchRoot,
+            searchTarget,
+            targetIsDirectory: targetStats.isDirectory(),
+            options,
+            startTime
+          })
 
-        const gitGrepResult = await runGitGrepSearch({
-          searchRoot,
-          searchTarget,
-          targetIsDirectory: targetStats.isDirectory(),
-          options,
-          startTime
-        })
-
-        if (gitGrepResult) {
+          if (!gitGrepResult) return null
           return createGrepToolResult({
             searchRoot,
             pattern: options.pattern,
@@ -2728,36 +2877,9 @@ export function registerFsHandlers(): void {
           })
         }
 
-        if (isBasicSidecarGrepOptions(options)) {
-          const sidecarResult = await runSidecarGrepSearch({
-            pattern: options.pattern,
-            searchTarget,
-            include: options.include
-          })
-
-          if (sidecarResult) {
-            return createGrepToolResult({
-              searchRoot,
-              pattern: options.pattern,
-              include: options.include,
-              exclude: options.exclude,
-              outputMode: options.outputMode,
-              matches: sidecarResult.results
-                .filter((item) => !includesDefaultIgnoredDir(item.file, searchRoot))
-                .map((item) => ({
-                  path: formatGrepResultPath(searchRoot, item.file, options.pathStyle),
-                  line: item.line,
-                  text: item.text,
-                  kind: 'match' as const
-                })),
-              truncated: sidecarResult.truncated,
-              timedOut: sidecarResult.timedOut,
-              limitReason: sidecarResult.limitReason,
-              engine: 'sidecar',
-              searchTime: sidecarResult.searchTime,
-              options
-            })
-          }
+        if (shouldUseGitGrepFirst(options)) {
+          const gitResult = await tryGitGrep()
+          if (gitResult) return gitResult
         }
 
         const ripgrepResult = await runRipgrepSearch({
@@ -2790,6 +2912,43 @@ export function registerFsHandlers(): void {
             searchTime: Date.now() - startTime,
             options
           })
+        }
+
+        if (!shouldUseGitGrepFirst(options)) {
+          const gitResult = await tryGitGrep()
+          if (gitResult) return gitResult
+        }
+
+        if (isBasicSidecarGrepOptions(options)) {
+          const sidecarResult = await runSidecarGrepSearch({
+            pattern: options.pattern,
+            searchTarget,
+            include: options.include
+          })
+
+          if (sidecarResult) {
+            return createGrepToolResult({
+              searchRoot,
+              pattern: options.pattern,
+              include: options.include,
+              exclude: options.exclude,
+              outputMode: options.outputMode,
+              matches: sidecarResult.results
+                .filter((item) => !includesDefaultIgnoredDir(item.file, searchRoot))
+                .map((item) => ({
+                  path: formatGrepResultPath(searchRoot, item.file, options.pathStyle),
+                  line: item.line,
+                  text: item.text,
+                  kind: 'match' as const
+                })),
+              truncated: sidecarResult.truncated,
+              timedOut: sidecarResult.timedOut,
+              limitReason: sidecarResult.limitReason,
+              engine: 'sidecar',
+              searchTime: sidecarResult.searchTime,
+              options
+            })
+          }
         }
 
         let matcher: CompiledGrepMatcher

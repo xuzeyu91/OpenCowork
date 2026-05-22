@@ -238,6 +238,14 @@ function appendMemoryContext(
       `SOUL.md defines your core identity, personality, tone, and behavioral constraints. You MUST embody and adhere to its directives throughout the entire conversation without exception, even when they are not explicitly repeated in follow-up messages.`,
       `</memory_loading_policy>`
     )
+  } else if (sessionScope === 'channel') {
+    parts.push(
+      `\n<memory_loading_policy>`,
+      `Session scope: CHANNEL. Load workspace protocol plus long-term persona/style from SOUL.md for channel replies.`,
+      `Do not rely on USER.md, MEMORY.md, or daily memory files in channel contexts unless explicitly provided in the conversation.`,
+      `Project-level SOUL.md refines or overrides the global soul for this workspace. System prompt rules still take priority over all memory files.`,
+      `</memory_loading_policy>`
+    )
   } else {
     parts.push(
       `\n<memory_loading_policy>`,
@@ -257,7 +265,7 @@ function appendMemoryContext(
     )
   }
 
-  if (sessionScope === 'main' && globalSoul) {
+  if (sessionScope !== 'shared' && globalSoul) {
     parts.push(
       `\n<global_soul priority="high">`,
       `The following is global SOUL.md from \`${snapshot.globalSoul?.path}\`.`,
@@ -270,7 +278,7 @@ function appendMemoryContext(
     )
   }
 
-  if (sessionScope === 'main' && projectSoul) {
+  if (sessionScope !== 'shared' && projectSoul) {
     parts.push(
       `\n<project_soul priority="high">`,
       `The following is project SOUL.md from \`${snapshot.projectSoul?.path}\`. It refines or overrides the global soul for this workspace. Where it conflicts with global SOUL.md, this file wins.`,

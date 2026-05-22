@@ -62,6 +62,9 @@
     "optimizationResultsDesc": "Select one of the optimized versions below to use in your prompt.",
     "useThisOption": "Use This",
     "noWorkingFolder": "Please select a working folder before using {{mode}} mode. Click here to select.",
+    "planModeMenu": "Plan Mode",
+    "pursueGoalMenu": "Pursue Goal",
+    "planModeUnavailable": "Plan Mode needs a project working folder.",
     "enterPlanMode": "Enter Plan Mode",
     "exitPlanMode": "Exit Plan Mode",
     "planModeActive": "Plan Mode — exploring codebase, no file changes",
@@ -268,6 +271,10 @@
   },
   "goal": {
     "title": "Goal",
+    "runningTitle": "Pursuing goal",
+    "pausedTitle": "Paused goal",
+    "completedTitle": "Completed goal",
+    "limitedTitle": "Budget-limited goal",
     "notSet": "not set",
     "noSessionGoal": "No session goal.",
     "noUsage": "0s",
@@ -281,6 +288,7 @@
     "show": "Show",
     "hide": "Hide",
     "managerTitle": "Goal Manager",
+    "editTitle": "Edit goal",
     "statusLabel": "Status",
     "tokensLabel": "Tokens",
     "budgetLabel": "Budget",
@@ -306,7 +314,8 @@
       "complete": "complete"
     },
     "errors": {
-      "invalidBudget": "Token budget must be a positive integer."
+      "invalidBudget": "Token budget must be a positive integer.",
+      "objectiveOnly": "Goal mode can only start from text input."
     },
     "toasts": {
       "updateFailed": "Goal update failed",

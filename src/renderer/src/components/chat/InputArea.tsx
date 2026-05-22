@@ -77,6 +77,8 @@ import { FileAwareEditor, type FileAwareEditorHandle } from './FileAwareEditor'
 import { listCommands, type CommandCatalogItem } from '@renderer/lib/commands/command-loader'
 import { useMcpStore } from '@renderer/stores/mcp-store'
 import { usePlanStore } from '@renderer/stores/plan-store'
+import { useGoalStore } from '@renderer/stores/goal-store'
+import { validateGoalObjective } from '@renderer/lib/agent/goal-context'
 import {
   clearPendingSessionMessages,
   dispatchNextQueuedMessageForSession,
@@ -440,7 +442,8 @@ export function InputArea({
   disabled = false,
   draftKeyOverride,
   suppressPendingQueue = false,
-  hideGoalSessionBar = false
+  hideGoalSessionBar = false,
+  hideModeSwitch = false
 }: InputAreaProps): React.JSX.Element {
   const { t } = useTranslation('chat')
   const chatView = useUIStore((s) => s.chatView)
@@ -805,6 +808,7 @@ export function InputArea({
   const [queueClearConfirmOpen, setQueueClearConfirmOpen] = React.useState(false)
   const [autoAcceptCountdown, setAutoAcceptCountdown] = React.useState<number | null>(null)
   const [isWorkspaceAgentsMissing, setIsWorkspaceAgentsMissing] = React.useState(false)
+  const [pendingPlanMode, setPendingPlanMode] = React.useState(false)
 
   React.useLayoutEffect(() => {
     if (inputHeight === null) return
@@ -1274,11 +1278,20 @@ export function InputArea({
   const hasApiKey = !!activeProvider?.apiKey || activeProvider?.requiresApiKey === false
   const needsWorkingFolder = projectScoped && !workingFolder
   const planMode = useUIStore((s) =>
-    draftSessionId ? Boolean(s.planModesBySession[draftSessionId]) : false
+    draftSessionId ? Boolean(s.planModesBySession[draftSessionId]) : pendingPlanMode
+  )
+  const activeGoal = useGoalStore((s) =>
+    draftSessionId ? s.goalsBySession[draftSessionId] : undefined
   )
   const pendingReviewPlanId = usePlanStore((s) =>
     draftSessionId ? (s.getPendingReviewPlan(draftSessionId)?.id ?? null) : null
   )
+
+  React.useEffect(() => {
+    if (draftSessionId) {
+      setPendingPlanMode(false)
+    }
+  }, [draftSessionId])
 
   React.useEffect(() => {
     let cancelled = false
@@ -1734,6 +1747,23 @@ export function InputArea({
     }
   }, [])
 
+  const resetComposer = React.useCallback((): void => {
+    if (activeDraftKey) {
+      removePersistedDraft(activeDraftKey)
+    }
+
+    setDocumentNodes([])
+    setSelectedFiles([])
+    setHighlightedFileId(null)
+    setEditorSelection({ start: 0, end: 0 })
+    setAttachedImages([])
+    setPreviewImage(null)
+    setSelectedSkill(null)
+    requestAnimationFrame(() => {
+      editorRef.current?.setSelectionOffsets(0, 0)
+    })
+  }, [activeDraftKey, removePersistedDraft])
+
   const handleSend = React.useCallback((): void => {
     const liveEditorState = getLiveEditorState()
     const serialized = liveEditorState.serializedText.trim()
@@ -1749,23 +1779,11 @@ export function InputArea({
         : serialized
 
     onSend(message, attachedImages.length > 0 ? attachedImages : undefined, {
-      clearCompletedTasksOnTurnStart: true
+      clearCompletedTasksOnTurnStart: true,
+      enablePlanMode: planMode || undefined
     })
 
-    if (activeDraftKey) {
-      removePersistedDraft(activeDraftKey)
-    }
-
-    setDocumentNodes([])
-    setSelectedFiles([])
-    setHighlightedFileId(null)
-    setEditorSelection({ start: 0, end: 0 })
-    setAttachedImages([])
-    setPreviewImage(null)
-    setSelectedSkill(null)
-    requestAnimationFrame(() => {
-      editorRef.current?.setSelectionOffsets(0, 0)
-    })
+    resetComposer()
   }, [
     getLiveEditorState,
     attachedImages,
@@ -1775,9 +1793,88 @@ export function InputArea({
     cancelPromptRecommendation,
     selectedSkill,
     onSend,
-    activeDraftKey,
-    removePersistedDraft
+    planMode,
+    resetComposer
   ])
+
+  const handlePlanModeChange = React.useCallback(
+    (enabled: boolean): void => {
+      if (enabled && !projectScoped) {
+        toast.error(
+          t('input.planModeUnavailable', {
+            defaultValue: 'Plan Mode needs a project working folder.'
+          })
+        )
+        return
+      }
+
+      if (draftSessionId) {
+        if (enabled) {
+          useUIStore.getState().enterPlanMode(draftSessionId)
+        } else {
+          useUIStore.getState().exitPlanMode(draftSessionId)
+        }
+        return
+      }
+
+      setPendingPlanMode(enabled)
+    },
+    [draftSessionId, projectScoped, t]
+  )
+
+  const handleGoalModeChange = React.useCallback(
+    (enabled: boolean): void => {
+      if (disabled || isStreaming || isOptimizing || pendingImageReads > 0) return
+
+      if (!enabled) {
+        if (draftSessionId && activeGoal?.status === 'active') {
+          void useGoalStore
+            .getState()
+            .updateGoal(draftSessionId, { status: 'paused' })
+            .then((result) => {
+              if (!result.success) {
+                toast.error(t('goal.toasts.updateFailed'), { description: result.error })
+              }
+            })
+        }
+        return
+      }
+
+      const liveEditorState = getLiveEditorState()
+      const objective = liveEditorState.serializedText.trim() || activeGoal?.objective.trim() || ''
+      const validation = validateGoalObjective(objective)
+      if (validation) {
+        toast.error(t('goal.toasts.objectiveInvalid'), { description: validation })
+        return
+      }
+
+      cancelPromptRecommendation()
+      onSend('', undefined, {
+        clearCompletedTasksOnTurnStart: true,
+        enablePlanMode: planMode || undefined,
+        goalObjective: objective
+      })
+
+      if (liveEditorState.serializedText.trim()) {
+        resetComposer()
+      }
+    },
+    [
+      activeGoal?.objective,
+      activeGoal?.status,
+      cancelPromptRecommendation,
+      disabled,
+      draftSessionId,
+      getLiveEditorState,
+      isOptimizing,
+      isStreaming,
+      onSend,
+      pendingImageReads,
+      planMode,
+      resetComposer,
+      t
+    ]
+  )
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -2190,6 +2287,19 @@ export function InputArea({
       showChannels={mode !== 'chat'}
       triggerClassName={composerIconControlClass}
       menuClassName="composer-flyout"
+      showModeToggles={!hideModeSwitch}
+      planModeEnabled={planMode}
+      goalModeEnabled={activeGoal?.status === 'active'}
+      planModeDisabled={disabled || isStreaming || !projectScoped}
+      goalModeDisabled={
+        disabled ||
+        isStreaming ||
+        isOptimizing ||
+        pendingImageReads > 0 ||
+        (!finalSerializedText.trim() && !activeGoal)
+      }
+      onPlanModeChange={handlePlanModeChange}
+      onGoalModeChange={handleGoalModeChange}
     />
   )
 
@@ -2334,6 +2444,10 @@ export function InputArea({
           <FolderOpen className="size-3" />
           <span className="truncate">{workingFolder}</span>
         </div>
+      )}
+
+      {!hideGoalSessionBar && draftSessionId && (
+        <GoalSessionBar sessionId={draftSessionId} className="mb-2" />
       )}
 
       <div className="mx-auto w-full max-w-[820px]">
@@ -3095,7 +3209,6 @@ export function InputArea({
             </div>
           </div>
         </div>
-        {!hideGoalSessionBar && draftSessionId && <GoalSessionBar sessionId={draftSessionId} />}
       </div>
     </div>
   )

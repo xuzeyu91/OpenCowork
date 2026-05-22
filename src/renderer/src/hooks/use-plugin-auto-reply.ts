@@ -34,7 +34,10 @@ import {
   getDefaultPluginToolNamesForType
 } from '@renderer/lib/channel/plugin-tools'
 import { DEFAULT_PLUGIN_PERMISSIONS } from '@renderer/lib/channel/types'
-import { loadLayeredMemorySnapshot } from '@renderer/lib/agent/memory-files'
+import {
+  loadLayeredMemorySnapshot,
+  type SessionMemoryScope
+} from '@renderer/lib/agent/memory-files'
 import type {
   UnifiedMessage,
   ProviderConfig,
@@ -677,10 +680,11 @@ async function _runPluginAgent(task: PluginAutoReplyTask): Promise<void> {
     .join('\n')
   userPrompt = userPrompt ? `${userPrompt}\n${channelCtx}` : channelCtx
 
+  const sessionScope: SessionMemoryScope = 'channel'
   const memorySnapshot = await loadLayeredMemorySnapshot(ipcClient, {
     workingFolder: session.workingFolder,
     sshConnectionId: session.sshConnectionId,
-    scope: 'shared'
+    scope: sessionScope
   })
   const sshConnection = session.sshConnectionId
     ? useSshStore
@@ -723,7 +727,7 @@ async function _runPluginAgent(task: PluginAutoReplyTask): Promise<void> {
       toolDefs: allToolDefs,
       language: settings.language,
       memorySnapshot,
-      sessionScope: 'shared',
+      sessionScope,
       environmentContext
     })
 

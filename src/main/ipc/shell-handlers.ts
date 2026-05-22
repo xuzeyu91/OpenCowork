@@ -1,4 +1,6 @@
-import { ipcMain, shell, BrowserWindow } from 'electron'
+import { ipcMain, shell, BrowserWindow, app } from 'electron'
+import * as fs from 'fs'
+import * as path from 'path'
 import { safeSendToWindow } from '../window-ipc'
 import {
   createTerminalSession,
@@ -36,6 +38,7 @@ interface ShellOutputSummary {
   spawnMs?: number
   firstChunkMs?: number
   shell?: string
+  outputFile?: string
   executionEngine?: 'main'
   timedOut?: boolean
   aborted?: boolean
@@ -177,6 +180,7 @@ function buildShellResult(payload: {
   error?: string
   processId?: string
   terminalId?: string
+  outputFile?: string
   summary: ShellOutputSummary
 } {
   const stdout = compactStreamOutput(
@@ -191,6 +195,10 @@ function buildShellResult(payload: {
     payload.exitCode,
     MAX_RETURNED_STDERR_CHARS
   )
+  const outputFile =
+    stdout.compacted || stderr.compacted
+      ? writeShellOutputArchive(payload.stdout, payload.stderr)
+      : undefined
 
   return {
     exitCode: payload.exitCode,
@@ -199,6 +207,7 @@ function buildShellResult(payload: {
     ...(payload.error ? { error: payload.error } : {}),
     ...(payload.processId ? { processId: payload.processId } : {}),
     ...(payload.terminalId ? { terminalId: payload.terminalId } : {}),
+    ...(outputFile ? { outputFile } : {}),
     summary: {
       mode: stdout.compacted || stderr.compacted ? 'compact' : 'full',
       noisy: stdout.compacted || stderr.compacted,
@@ -208,6 +217,7 @@ function buildShellResult(payload: {
       stderrLines: stderr.totalLines,
       errorLikeLines: stdout.errorLikeLines + stderr.errorLikeLines,
       warningLikeLines: stdout.warningLikeLines + stderr.warningLikeLines,
+      ...(outputFile ? { outputFile } : {}),
       ...(payload.timing
         ? {
             totalMs: payload.timing.totalMs,
@@ -222,6 +232,22 @@ function buildShellResult(payload: {
           }
         : {})
     }
+  }
+}
+
+function writeShellOutputArchive(stdout: string, stderr: string): string | undefined {
+  try {
+    const outputDir = path.join(app.getPath('userData'), 'shell-output')
+    fs.mkdirSync(outputDir, { recursive: true })
+    const filePath = path.join(outputDir, `shell-output-${Date.now()}.txt`)
+    const sections = [
+      stdout ? `# stdout\n${stripAnsi(stdout)}` : '',
+      stderr ? `# stderr\n${stripAnsi(stderr)}` : ''
+    ].filter(Boolean)
+    fs.writeFileSync(filePath, `${sections.join('\n\n')}\n`, 'utf-8')
+    return filePath
+  } catch {
+    return undefined
   }
 }
 

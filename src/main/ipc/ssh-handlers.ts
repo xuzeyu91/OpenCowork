@@ -318,6 +318,7 @@ type SshGrepOptions = {
   pattern: string
   include?: string
   exclude?: string
+  typeFilters: string[]
   caseSensitive: boolean
   smartCase: boolean
   literal: boolean
@@ -333,6 +334,7 @@ type SshGrepOptions = {
   followSymlinks: boolean
   outputMode: GrepOutputMode
   pathStyle: GrepPathStyle
+  multiline: boolean
 }
 
 function createSshSearchMeta(args: {
@@ -449,9 +451,14 @@ function appendSshRipgrepSearchFlags(cmd: string, options: SshGrepOptions): stri
   if (options.line) next += ' --line-regexp'
   if (options.invertMatch) next += ' --invert-match'
   if (options.hidden) next += ' --hidden'
-  if (!options.respectGitignore) next += ' --no-ignore'
+  if (options.respectGitignore) next += ' --no-require-git'
+  else next += ' --no-ignore'
   if (options.followSymlinks) next += ' --follow'
   if (options.maxDepth !== null) next += ` --max-depth ${options.maxDepth}`
+  if (options.multiline) next += ' --multiline --multiline-dotall'
+  for (const typeFilter of options.typeFilters) {
+    next += ` --type ${shellEscape(typeFilter)}`
+  }
   return next
 }
 
@@ -489,13 +496,15 @@ function normalizeSshBoolean(value: unknown, fallback: boolean): boolean {
 }
 
 function normalizeSshOutputMode(value: unknown): GrepOutputMode {
+  if (value === 'content' || value === 'matches') return 'matches'
   return value === 'files_with_matches' || value === 'files_without_matches' || value === 'count'
     ? value
-    : 'matches'
+    : 'files_with_matches'
 }
 
-function parseSshGlobPatterns(value?: string): string[] {
-  return (value ?? '')
+function parseSshGlobPatterns(value?: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap((item) => parseSshGlobPatterns(item))
+  return (typeof value === 'string' ? value : '')
     .split(',')
     .map((pattern) => pattern.trim())
     .filter(Boolean)
@@ -507,6 +516,8 @@ function normalizeSshPathStyle(value: unknown): GrepPathStyle {
 
 function normalizeSshGrepOptions(args: {
   pattern?: unknown
+  glob?: unknown
+  type?: unknown
   include?: unknown
   exclude?: unknown
   caseSensitive?: unknown
@@ -519,13 +530,17 @@ function normalizeSshGrepOptions(args: {
   beforeContext?: unknown
   afterContext?: unknown
   maxResults?: unknown
+  head_limit?: unknown
+  headLimit?: unknown
   limit?: unknown
   maxDepth?: unknown
   hidden?: unknown
   respectGitignore?: unknown
   followSymlinks?: unknown
   outputMode?: unknown
+  output_mode?: unknown
   pathStyle?: unknown
+  multiline?: unknown
 }): SshGrepOptions {
   const pattern = String(args.pattern ?? '')
   const smartCase = normalizeSshBoolean(args.smartCase, false)
@@ -536,13 +551,18 @@ function normalizeSshGrepOptions(args: {
       ? /[A-Z]/.test(pattern)
       : false
   const context = clampSshContext(args.context)
-  const include = typeof args.include === 'string' ? args.include.trim() : undefined
+  const includePatterns = [
+    ...parseSshGlobPatterns(args.include),
+    ...parseSshGlobPatterns(args.glob)
+  ]
+  const include = includePatterns.join(',') || undefined
   const exclude = typeof args.exclude === 'string' ? args.exclude.trim() : undefined
 
   return {
     pattern,
     include: include || undefined,
     exclude: exclude || undefined,
+    typeFilters: parseSshGlobPatterns(args.type).map((item) => item.replace(/^--?type=/, '')),
     caseSensitive,
     smartCase,
     literal: normalizeSshBoolean(args.literal, false),
@@ -551,13 +571,17 @@ function normalizeSshGrepOptions(args: {
     invertMatch: normalizeSshBoolean(args.invertMatch, false),
     beforeContext: args.beforeContext === undefined ? context : clampSshContext(args.beforeContext),
     afterContext: args.afterContext === undefined ? context : clampSshContext(args.afterContext),
-    maxResults: clampSshSearchLimit(args.maxResults ?? args.limit, DEFAULT_SSH_GREP_LIMIT),
+    maxResults: clampSshSearchLimit(
+      args.head_limit ?? args.headLimit ?? args.maxResults ?? args.limit,
+      DEFAULT_SSH_GREP_LIMIT
+    ),
     maxDepth: clampSshOptionalNumber(args.maxDepth, MAX_SSH_GREP_DEPTH),
     hidden: normalizeSshBoolean(args.hidden, true),
     respectGitignore: normalizeSshBoolean(args.respectGitignore, true),
     followSymlinks: normalizeSshBoolean(args.followSymlinks, false),
-    outputMode: normalizeSshOutputMode(args.outputMode),
-    pathStyle: normalizeSshPathStyle(args.pathStyle)
+    outputMode: normalizeSshOutputMode(args.output_mode ?? args.outputMode),
+    pathStyle: normalizeSshPathStyle(args.pathStyle),
+    multiline: normalizeSshBoolean(args.multiline, false)
   }
 }
 
@@ -3387,6 +3411,28 @@ export function registerSshHandlers(): void {
   // ── SFTP: Write file ──
 
   ipcMain.handle(
+    'ssh:fs:stat-path',
+    async (_event, args: { connectionId: string; path: string }) => {
+      try {
+        return await withFileSession(args.connectionId, async (session) => {
+          const sftp = await getSftp(session)
+          const resolvedPath = await resolveSftpPath(session, args.path)
+          const stat = await sftpStat(sftp, resolvedPath)
+          if (!stat) return { exists: false, type: null, size: null, mtimeMs: null }
+          return {
+            exists: true,
+            type: stat.isFile() ? 'file' : stat.isDirectory() ? 'directory' : 'other',
+            size: stat.size,
+            mtimeMs: stat.mtime ? stat.mtime * 1000 : null
+          }
+        })
+      } catch (err) {
+        return { error: String(err) }
+      }
+    }
+  )
+
+  ipcMain.handle(
     'ssh:fs:write-file',
     async (
       _event,
@@ -3403,10 +3449,15 @@ export function registerSshHandlers(): void {
         await withFileSession(args.connectionId, async (session) => {
           const sftp = await getSftp(session)
           const resolvedPath = await resolveSftpPath(session, args.path)
-          const before =
-            typeof args.beforeContent === 'string'
-              ? buildFileSnapshot(true, args.beforeContent)
-              : await readSshTextSnapshot(args.connectionId, resolvedPath)
+          const before = await readSshTextSnapshot(args.connectionId, resolvedPath)
+          if (
+            typeof args.beforeContent === 'string' &&
+            before.hash !== buildFileSnapshot(true, args.beforeContent).hash
+          ) {
+            throw new Error(
+              'File changed since it was read. Read the file again before editing or writing.'
+            )
+          }
           op = before.exists ? 'modify' : 'create'
 
           // Ensure parent directory exists
@@ -3884,6 +3935,8 @@ export function registerSshHandlers(): void {
       args: {
         connectionId: string
         pattern: string
+        glob?: unknown
+        type?: unknown
         path?: string
         include?: string
         exclude?: string
@@ -3897,13 +3950,17 @@ export function registerSshHandlers(): void {
         beforeContext?: number
         afterContext?: number
         maxResults?: number
+        head_limit?: number
+        headLimit?: number
         limit?: number
         maxDepth?: number
         hidden?: boolean
         respectGitignore?: boolean
         followSymlinks?: boolean
         outputMode?: GrepOutputMode
+        output_mode?: string
         pathStyle?: GrepPathStyle
+        multiline?: boolean
       }
     ) => {
       try {

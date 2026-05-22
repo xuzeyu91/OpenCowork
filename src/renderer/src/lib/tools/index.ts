@@ -16,6 +16,7 @@ import { registerNotifyTool } from './notify-tool'
 import { registerGoalTools } from './goal-tool'
 import { updateWikiToolRegistration } from './wiki-tool'
 import { refreshDynamicToolCatalog } from './dynamic-tool-catalog'
+import { registerCodeCompatibleTools } from './code-compatible-tool'
 
 let _allToolsRegistered = false
 
@@ -39,6 +40,10 @@ export async function registerAllTools(): Promise<void> {
   // Skills and SubAgents are user-editable catalogs; load them once here and
   // refresh them again before every request via ensureRequestToolCatalogFresh().
   await refreshDynamicToolCatalog()
+
+  // Code-agent-compatible aliases and tool shells layer over the existing
+  // OpenCowork implementations.
+  registerCodeCompatibleTools()
 
   // Agent Team tools
   registerTeamTools()

@@ -7,6 +7,7 @@ export const DEFAULT_COMMAND_TIMEOUT_MS = 600_000
 export interface CommandExecutionInput {
   command: string
   timeout?: number
+  cwd?: string
 }
 
 export interface CommandExecutionResult {
@@ -36,7 +37,7 @@ export function createSshCommandExecutor(ctx: ToolContext): CommandExecutor | nu
     executeForeground: async (input) => {
       const result = (await ctx.ipc.invoke(IPC.SSH_EXEC, {
         connectionId,
-        command: withRemoteWorkingDirectory(input.command, ctx.workingFolder),
+        command: withRemoteWorkingDirectory(input.command, input.cwd ?? ctx.workingFolder),
         timeout: input.timeout ?? DEFAULT_COMMAND_TIMEOUT_MS
       })) as { exitCode?: number; stdout?: string; stderr?: string; error?: string }
 

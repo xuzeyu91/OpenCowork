@@ -8,7 +8,7 @@ interface ReadTextFileResult {
 
 export const PROJECT_MEMORY_DIRNAME = '.agents'
 
-export type SessionMemoryScope = 'main' | 'shared'
+export type SessionMemoryScope = 'main' | 'shared' | 'channel'
 export type ProjectMemoryPathSource = 'agents-dir' | 'workspace-root'
 
 export interface GlobalMemorySnapshot {
@@ -66,6 +66,7 @@ let cachedLayeredSnapshot: LayeredMemorySnapshot = {
 let cachedLayerSshConnectionId: string | undefined
 let watchedLayerPath: string | undefined
 let watchedLayerPathKey: string | undefined
+let cachedLayerScope: SessionMemoryScope = 'main'
 let layeredMemoryWatchCleanup: (() => void) | null = null
 let layeredMemoryVersion = 0
 let layeredMemoryUpdatedAt: number | undefined
@@ -425,10 +426,10 @@ async function buildLayeredMemorySnapshot(
           'AGENTS.md'
         )
       : Promise.resolve(undefined),
-    scope === 'main' && globalSoulPath
+    scope !== 'shared' && globalSoulPath
       ? loadOptionalMemoryFile(ipc, globalSoulPath)
       : Promise.resolve(undefined),
-    scope === 'main' && projectRootPath
+    scope !== 'shared' && projectRootPath
       ? resolveProjectMemoryTextFileForTarget(
           ipc,
           projectRootPath,
@@ -524,17 +525,7 @@ async function ensurePrimaryMemoryWatcher(
     void loadLayeredMemorySnapshot(ipc, {
       workingFolder: cachedLayeredSnapshot.projectRootPath,
       sshConnectionId: cachedLayerSshConnectionId,
-      scope:
-        cachedLayeredSnapshot.globalSoul ||
-        cachedLayeredSnapshot.globalUser ||
-        cachedLayeredSnapshot.globalMemory ||
-        cachedLayeredSnapshot.projectSoul ||
-        cachedLayeredSnapshot.projectUser ||
-        cachedLayeredSnapshot.projectMemory ||
-        cachedLayeredSnapshot.globalDailyMemory.length > 0 ||
-        cachedLayeredSnapshot.projectDailyMemory.length > 0
-          ? 'main'
-          : 'shared'
+      scope: cachedLayerScope
     })
   })
 }
@@ -550,6 +541,7 @@ export async function loadLayeredMemorySnapshot(
   const nextSnapshot = await buildLayeredMemorySnapshot(ipc, options)
   const previousSnapshot = cachedLayeredSnapshot
   cachedLayerSshConnectionId = options.sshConnectionId?.trim() || undefined
+  cachedLayerScope = options.scope ?? 'main'
 
   const materializedSnapshot: LayeredMemorySnapshot = {
     ...nextSnapshot,

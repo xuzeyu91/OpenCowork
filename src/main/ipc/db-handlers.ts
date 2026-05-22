@@ -305,75 +305,57 @@ export function registerDbHandlers(options: RegisterDbHandlersOptions = {}): voi
     }
   )
 
-  ipcMain.handle(
-    'db:messages:add',
-    (
-      _event,
-      msg: {
-        id: string
-        sessionId: string
-        role: string
-        content: string
-        meta?: string | null
-        createdAt: number
-        usage?: string | null
-        sortOrder: number
-      }
-    ) => {
-      // Ensure session exists to avoid FK constraint failure (race with fire-and-forget IPC)
-      const existing = sessionsDao.getSession(msg.sessionId)
+  ipcMain.handle('db:messages:add', (_event, msg: messagesDao.MessageInput) => {
+    // Ensure session exists to avoid FK constraint failure (race with fire-and-forget IPC)
+    const existing = sessionsDao.getSession(msg.sessionId)
+    if (!existing) {
+      sessionsDao.createSession({
+        id: msg.sessionId,
+        title: 'New Conversation',
+        mode: 'chat',
+        createdAt: msg.createdAt,
+        updatedAt: msg.createdAt
+      })
+    }
+    messagesDao.addMessage(msg)
+    emitSessionUpdated(msg.sessionId, existing ? 'message-added' : 'session-created-with-message')
+    return { success: true }
+  })
+
+  ipcMain.handle('db:messages:add-batch', (_event, msgs: messagesDao.MessageInput[]) => {
+    if (!Array.isArray(msgs) || msgs.length === 0) return { success: true }
+    const sessionIds = new Set(msgs.map((m) => m.sessionId))
+    for (const sessionId of sessionIds) {
+      const existing = sessionsDao.getSession(sessionId)
       if (!existing) {
+        const earliest = msgs.filter((m) => m.sessionId === sessionId)[0]
         sessionsDao.createSession({
-          id: msg.sessionId,
+          id: sessionId,
           title: 'New Conversation',
           mode: 'chat',
-          createdAt: msg.createdAt,
-          updatedAt: msg.createdAt
+          createdAt: earliest.createdAt,
+          updatedAt: earliest.createdAt
         })
       }
-      messagesDao.addMessage(msg)
-      emitSessionUpdated(msg.sessionId, existing ? 'message-added' : 'session-created-with-message')
-      return { success: true }
     }
-  )
+    messagesDao.addMessages(msgs)
+    for (const sessionId of sessionIds) {
+      emitSessionUpdated(sessionId, 'message-added')
+    }
+    return { success: true }
+  })
 
-  ipcMain.handle(
-    'db:messages:add-batch',
-    (
-      _event,
-      msgs: Array<{
-        id: string
-        sessionId: string
-        role: string
-        content: string
-        meta?: string | null
-        createdAt: number
-        usage?: string | null
-        sortOrder: number
-      }>
-    ) => {
-      if (!Array.isArray(msgs) || msgs.length === 0) return { success: true }
-      const sessionIds = new Set(msgs.map((m) => m.sessionId))
-      for (const sessionId of sessionIds) {
-        const existing = sessionsDao.getSession(sessionId)
-        if (!existing) {
-          const earliest = msgs.filter((m) => m.sessionId === sessionId)[0]
-          sessionsDao.createSession({
-            id: sessionId,
-            title: 'New Conversation',
-            mode: 'chat',
-            createdAt: earliest.createdAt,
-            updatedAt: earliest.createdAt
-          })
-        }
-      }
-      messagesDao.addMessages(msgs)
-      for (const sessionId of sessionIds) {
-        emitSessionUpdated(sessionId, 'message-added')
-      }
-      return { success: true }
+  ipcMain.handle('db:messages:upsert', (_event, msg: messagesDao.MessageInput) => {
+    // Upsert is used by streaming/final persistence. It is intentionally silent:
+    // the renderer already has the live state, and emitting structural updates here
+    // can trigger DB reloads that race against in-memory streaming.
+    const existing = sessionsDao.getSession(msg.sessionId)
+    if (!existing) {
+      return { success: false, error: 'session-not-found' }
     }
-  )
+    messagesDao.upsertMessage(msg)
+    return { success: true }
+  })
 
   ipcMain.handle(
     'db:messages:update',

@@ -1,69 +1,74 @@
 ---
-title: 欢迎使用 OpenCowork
-description: OpenCowork 是一个 local-first 的桌面 AI Agent 工作台，围绕多 Agent 协作、工具调用、本地持久化和外部集成构建。
+title: OpenCowork
+description: Local-first desktop workspace for multi-agent AI collaboration, local tools, and workplace messaging.
 ---
 
-# 欢迎使用 OpenCowork
+# OpenCowork
 
-OpenCowork 是一个基于 **Electron 36 + React 19 + TypeScript strict** 构建的桌面 AI Agent 工作台。它把聊天、规划、子代理、团队协作、MCP、Cron、消息平台接入、文件预览、SSH 和本地数据库统一放在一个本地优先的应用里。
+OpenCowork 是一个 **local-first 桌面 AI Agent 工作站**。它把聊天、工具调用、文件读写、Shell、MCP、子代理、Agent 团队、Cron 任务和工作消息平台接入放在同一个本地应用里。
 
-OpenCowork is a local-first desktop AI agent workbench. It keeps the execution runtime on your machine and uses a narrow preload bridge plus SQLite persistence to coordinate tools, agents, and integrations.
+<SignalGrid>
+  <Signal title="runtime" value="Electron + local tools">
+    main process 持有文件、Shell、SQLite、MCP、SSH、Cron 和 channel 权限。
+  </Signal>
+  <Signal title="agents" value="Sub-agents + teams">
+    会话可以调用工具、压缩上下文、拆分子代理，并在团队模式中协作。
+  </Signal>
+  <Signal title="channels" value="Workplace messaging">
+    支持飞书、钉钉、Discord、Telegram、QQ、微信、企业微信和 WhatsApp。
+  </Signal>
+</SignalGrid>
 
-## 当前实现快照 / What ships today
+<DocCards>
+  <DocCard title="Get started" href="/docs/start" description="安装、配置，并跑通第一条本地 Agent 会话。" eyebrow="first path" />
+  <DocCard title="Channels" href="/docs/channels" description="把 OpenCowork 接入工作消息平台和社区聊天工具。" />
+  <DocCard title="Agents" href="/docs/agents" description="理解 agent loop、会话、上下文压缩、子代理和团队协作。" />
+</DocCards>
 
-| 领域 | 当前实现 |
+## Documentation index
+
+完整页面索引可以从 [`/llms.txt`](/llms.txt) 获取，完整 Markdown 语料可以从 [`/llms-full.txt`](/llms-full.txt) 获取。它们用于让 AI 助手先发现页面，再深入阅读具体主题。
+
+<CommandGroup title="LLM-friendly entrypoints" description="给 AI 助手或外部索引器使用。">
+  <CommandItem label="Page list" command="/llms.txt" />
+  <CommandItem label="Full corpus" command="/llms-full.txt" />
+  <CommandItem label="Single page" command="/docs/agents/agent-loop.mdx" />
+</CommandGroup>
+
+## What ships today
+
+| Area | Current implementation |
 | --- | --- |
-| 运行时 | 4 层架构：Main / Preload / Renderer / Shared |
-| 模型适配 | 5 个运行时 API adapter：Anthropic、OpenAI Chat、OpenAI Responses、OpenAI Images、Gemini |
-| 预置提供商 | 24 个内置 provider preset，覆盖 OpenAI-compatible、Anthropic、Google、Ollama、Qwen、Moonshot、MiniMax、Baidu、SiliconFlow、Azure OpenAI、Copilot、Codex 等 |
-| 工具系统 | 文件、搜索、Shell、计划、任务、Cron、Goal、Web、Browser、Desktop、MCP、Team、Notify、AskUserQuestion、Widget |
-| 消息平台 | 8 个渠道：飞书、钉钉、企业微信、QQ、微信、Telegram、Discord、WhatsApp |
-| 应用插件 | 3 个内置 app plugin：Image、Browser、Desktop Control |
-| 子代理 | 15 个内置 agent 定义，保存在 `resources/agents/`，首次运行后同步到 `~/.open-cowork/agents/` |
-| 技能 | 11 个内置 skill，保存在 `resources/skills/`，首次运行后同步到 `~/.agents/skills/` |
-| 命令 | 6 个内置 slash command，保存在 `resources/commands/` |
-| 数据持久化 | SQLite (`~/.open-cowork/data.db`) + JSON 配置文件 + 文件系统目录 |
+| Desktop runtime | Electron 36, React 19, TypeScript strict, Tailwind CSS v4 |
+| Local system access | Main process owns file I/O, shell, database, MCP, SSH, Cron, channels |
+| Agent runtime | Renderer-driven loop with tool phases, sub-agents, teams, plans, and goals |
+| Messaging channels | Feishu, DingTalk, WeCom, QQ, Weixin, Telegram, Discord, WhatsApp |
+| Model providers | OpenAI, Anthropic, DeepSeek, Google, Ollama, Qwen, Moonshot, MiniMax, Baidu, Azure OpenAI, Copilot, Codex, and compatible endpoints |
+| Persistence | SQLite under `~/.open-cowork/`, plus JSON config and local agent/skill files |
 
-## 系统分层 / Layers
+## Start here
 
-| 层 | 作用 | 关键目录 |
-| --- | --- | --- |
-| Main | 系统能力、IPC、数据库、MCP、Cron、SSH、消息平台、更新、崩溃日志 | `src/main/` |
-| Preload | 安全桥接，只暴露最小必要 API | `src/preload/` |
-| Renderer | React UI、Agent Loop、Tool Registry、Stores、Preview、Team Runtime | `src/renderer/src/` |
-| Shared | 事件协议、Team Runtime 类型、消息/模型/工具契约 | `src/shared/` |
+<DocCards>
+  <DocCard title="Install" href="/docs/install" description="下载桌面应用，或从源码启动文档和应用。" />
+  <DocCard title="Capabilities" href="/docs/capabilities" description="查看工具系统、MCP、计划模式、文件预览和插件能力。" />
+  <DocCard title="Models" href="/docs/models" description="配置 provider、模型预设、本地模型和兼容 API。" />
+  <DocCard title="Ops" href="/docs/ops" description="配置、定时任务、SQLite 数据和运行时维护。" />
+  <DocCard title="Reference" href="/docs/reference" description="进程模型、IPC、状态管理、构建和贡献指南。" />
+  <DocCard title="Help" href="/docs/help" description="排障、FAQ 和社区支持入口。" />
+</DocCards>
 
-## 适合什么场景 / Why it exists
+## Local-first shape
 
-- 你想在本地安全地跑 AI Agent，而不是把所有上下文都交给云端。
-- 你希望 Agent 不只是聊天，而是能读写文件、跑命令、调用 MCP、发消息、创建计划、排定 Cron。
-- 你需要多人协作式的多 Agent 编排，而不是单一“回答器”。
-- 你希望把 OpenCowork 接到飞书、钉钉、企业微信、Telegram、Discord、WhatsApp、QQ 或微信里。
+```txt
+Main process     system tools, SQLite, channels, MCP, SSH, Cron
+Preload bridge   narrow, typed IPC surface
+Renderer UI      React workspace, chat, previews, stores, agent loop
+Shared types     stream protocol, tool contracts, team runtime events
+```
 
-## 推荐阅读顺序 / Suggested reading order
-
-1. [项目介绍](/docs/getting-started/introduction)
-2. [安装指南](/docs/getting-started/installation)
-3. [快速上手](/docs/getting-started/quick-start)
-4. [架构总览](/docs/architecture/overview)
-5. [Agent 循环](/docs/core-concepts/agent-loop)
-6. [工具系统](/docs/core-concepts/tool-system)
-7. [计划模式](/docs/features/plan-mode)
-8. [插件系统概述](/docs/plugins/overview)
-9. [提供商概述](/docs/providers/overview)
-
-## 你可以从哪里开始 / Start here
-
-- 如果你要做代码改动：先看 [开发环境搭建](/docs/development/setup)
-- 如果你要接入模型：先看 [提供商概述](/docs/providers/overview)
-- 如果你要接入消息平台：先看 [插件系统概述](/docs/plugins/overview)
-- 如果你要理解系统结构：先看 [架构总览](/docs/architecture/overview)
-
-## 社区 / Community
+## Community
 
 <figure>
-  <img src="/fieshu.png" alt="OpenCowork 飞书交流群二维码" width="360" />
+  <img src="/fieshu.png" alt="OpenCowork 飞书交流群二维码" width="300" />
   <figcaption>扫码进入飞书群，获取更新与支持 / Scan the QR code to join the Feishu group.</figcaption>
 </figure>
-
-> 如果你在使用中发现文档与源码不一致，请优先以源码为准；本文档会尽量保持和当前实现同步。
