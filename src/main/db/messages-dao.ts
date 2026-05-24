@@ -22,24 +22,91 @@ export interface MessageInput {
   sortOrder: number
 }
 
+interface MessageOrderRow {
+  id: string
+  role: string
+  created_at: number
+  sort_order: number
+}
+
+const ROLE_ORDER: Record<string, number> = {
+  user: 0,
+  assistant: 1,
+  system: 2
+}
+
+function hasSortOrderAnomaly(rows: MessageOrderRow[]): boolean {
+  if (rows.length === 0) return false
+
+  const seen = new Set<number>()
+  for (let index = 0; index < rows.length; index += 1) {
+    const sortOrder = rows[index].sort_order
+    if (sortOrder !== index || seen.has(sortOrder)) return true
+    seen.add(sortOrder)
+  }
+
+  return false
+}
+
+function normalizeSessionMessageSortOrders(sessionId: string): void {
+  const db = getDb()
+  const rows = db
+    .prepare(
+      `SELECT id, role, created_at, sort_order
+         FROM messages
+        WHERE session_id = ?
+        ORDER BY sort_order ASC, created_at ASC`
+    )
+    .all(sessionId) as MessageOrderRow[]
+
+  if (!hasSortOrderAnomaly(rows)) return
+
+  const ordered = [...rows].sort((left, right) => {
+    const createdAtDelta = left.created_at - right.created_at
+    if (createdAtDelta !== 0) return createdAtDelta
+
+    const roleDelta = (ROLE_ORDER[left.role] ?? 10) - (ROLE_ORDER[right.role] ?? 10)
+    if (roleDelta !== 0) return roleDelta
+
+    return left.sort_order - right.sort_order
+  })
+
+  const update = db.prepare('UPDATE messages SET sort_order = ? WHERE id = ?')
+  const tx = db.transaction(() => {
+    ordered.forEach((row, index) => {
+      if (row.sort_order !== index) {
+        update.run(index, row.id)
+      }
+    })
+  })
+  tx()
+}
+
 export function getMessages(sessionId: string): MessageRow[] {
   const db = getDb()
+  normalizeSessionMessageSortOrders(sessionId)
   return db
-    .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY sort_order ASC')
+    .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY sort_order ASC, created_at ASC')
     .all(sessionId) as MessageRow[]
 }
 
 export function getUserMessages(sessionId: string): MessageRow[] {
   const db = getDb()
+  normalizeSessionMessageSortOrders(sessionId)
   return db
-    .prepare('SELECT * FROM messages WHERE session_id = ? AND role = ? ORDER BY sort_order ASC')
+    .prepare(
+      'SELECT * FROM messages WHERE session_id = ? AND role = ? ORDER BY sort_order ASC, created_at ASC'
+    )
     .all(sessionId, 'user') as MessageRow[]
 }
 
 export function getMessagesPage(sessionId: string, limit: number, offset: number): MessageRow[] {
   const db = getDb()
+  normalizeSessionMessageSortOrders(sessionId)
   return db
-    .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY sort_order ASC LIMIT ? OFFSET ?')
+    .prepare(
+      'SELECT * FROM messages WHERE session_id = ? ORDER BY sort_order ASC, created_at ASC LIMIT ? OFFSET ?'
+    )
     .all(sessionId, limit, offset) as MessageRow[]
 }
 
@@ -119,9 +186,7 @@ export function upsertMessage(msg: MessageInput): void {
          role = excluded.role,
          content = excluded.content,
          meta = excluded.meta,
-         created_at = excluded.created_at,
-         usage = excluded.usage,
-         sort_order = excluded.sort_order`
+         usage = excluded.usage`
     ).run(
       msg.id,
       msg.sessionId,
