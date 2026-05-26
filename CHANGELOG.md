@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108] - 2026-05-25
+
+### Added
+
+- Added Soul marketplace page for discovering and browsing community souls.
+- Finalized marketplace install flow with end-to-end soul installation from marketplace.
+
+### Changed
+
+- Refactored working directory selector dialog with improved UX and streamlined layout.
+- Unified file and tool icon styles across chat cards and session panels for visual consistency.
+
+### Fixed
+
+- Added `Stage1BuildResult` wrapper in memory pipeline to preserve filter reasons and original content, ensuring filtered entries are recorded with accurate metadata instead of fallback values.
+
+### Removed
+
+- Removed WeChat UI send skill and its automation scripts.
+
 ## [0.9.107] - 2026-05-24
 
 ### Added
