@@ -214,6 +214,14 @@ We welcome contributions! Please see our [Development Guide](docs/development.md
 - [caomaohanfengZT](https://github.com/caomaohanfengZT)
 - [struggle3](https://github.com/struggle3)
 
+<div>
+    <div align="left">
+      <h1>GeneralUpdate</h1>
+       <img width="154" height="151" src="./imgs/LOGO白2.png"/>
+    </div>
+[GeneralUpdate](https://github.com/GeneralLibrary/GeneralUpdate) is a cross-platform application auto-upgrade component based on .NET Standard 2.0, released under the Apache 2.0 license. It provides a comprehensive upgrade solution supporting full updates, incremental binary differential updates, and in-place updates across Windows, macOS, and Linux — completely independent of any UI framework. Trusted by dozens of enterprises worldwide, GeneralUpdate eliminates the complexity of building and maintaining custom upgrade pipelines, enabling developers to integrate automatic upgrade capabilities into their applications with a single click.
+</div>
+
 ## 📜 License
 
 Licensed under the [Apache License 2.0](LICENSE).
