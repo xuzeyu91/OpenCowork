@@ -32,7 +32,11 @@ function mimeType(filePath: string): string {
   return MIME_TYPES[extension(filePath)] ?? 'audio/mpeg'
 }
 
-export function AudioViewer({ filePath, sshConnectionId }: ViewerProps): React.JSX.Element {
+export function AudioViewer({
+  filePath,
+  sshConnectionId,
+  fileVersion
+}: ViewerProps): React.JSX.Element {
   const [src, setSrc] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -70,7 +74,7 @@ export function AudioViewer({ filePath, sshConnectionId }: ViewerProps): React.J
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [filePath, sshConnectionId])
+  }, [filePath, fileVersion, sshConnectionId])
 
   if (error) {
     return (

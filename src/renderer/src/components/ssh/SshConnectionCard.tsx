@@ -66,13 +66,13 @@ export function SshConnectionCard({
               <Server className="size-4 text-muted-foreground" />
             </div>
             {isConnected && (
-              <div className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-emerald-500" />
+              <div className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-[var(--ssh-success)]" />
             )}
             {isConnecting && (
-              <div className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full border-2 border-background bg-amber-500" />
+              <div className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full border-2 border-background bg-[var(--ssh-warning)]" />
             )}
             {isReachable && (
-              <div className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-emerald-400" />
+              <div className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-[var(--ssh-success)]" />
             )}
             {isUnreachable && (
               <div className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-destructive" />
@@ -114,18 +114,18 @@ export function SshConnectionCard({
       <div className="mt-3 flex items-center justify-between">
         <div>
           {isConnected ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-500">
-              <div className="size-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ssh-success)]">
+              <div className="size-1.5 rounded-full bg-current" />
               {t('list.online')}
             </span>
           ) : isConnecting ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-amber-500">
+            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ssh-warning)]">
               <Loader2 className="size-3 animate-spin" />
               {t('connecting')}
             </span>
           ) : isReachable ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-500">
-              <div className="size-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ssh-success)]">
+              <div className="size-1.5 rounded-full bg-current" />
               {t('list.reachable')}
             </span>
           ) : isUnreachable ? (

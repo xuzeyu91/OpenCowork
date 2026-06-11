@@ -269,8 +269,8 @@ export function SshImportDialog({
                 preview.connections.some(
                   (item) => item.hasKnownHost || item.needsPrivateKeyReview
                 )) && (
-                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
-                  <div className="flex items-center gap-1.5 font-medium text-amber-300">
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5 font-medium text-primary">
                     <AlertTriangle className="size-3.5" />
                     {t('migration.previewNotes')}
                   </div>
@@ -346,7 +346,7 @@ export function SshImportDialog({
                             )}
                           </div>
                           {item.warnings.length > 0 && (
-                            <div className="mt-1 space-y-1 text-[11px] text-amber-300/80">
+                            <div className="mt-1 space-y-1 text-[11px] text-primary/80">
                               {item.warnings.map((warning, index) => (
                                 <div key={`${warning}-${index}`}>{warning}</div>
                               ))}
@@ -366,7 +366,7 @@ export function SshImportDialog({
                               </div>
                             </>
                           ) : (
-                            <div className="font-medium text-emerald-400">
+                            <div className="font-medium text-primary">
                               {t('migration.noConflict')}
                             </div>
                           )}

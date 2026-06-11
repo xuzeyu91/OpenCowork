@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
@@ -69,6 +69,9 @@ const TasksPage = lazy(async () => {
   return { default: mod.TasksPage }
 })
 
+const MIN_MAIN_WORKSPACE_WIDTH_WITH_SIDEBAR = 720
+const MULTI_RIGHT_PANEL_COLLAPSE_VIEWPORT = 1600
+
 function LazyPageFallback(): React.JSX.Element {
   return (
     <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
@@ -93,6 +96,12 @@ export function Layout({ updateInfo, onOpenUpdateDialog }: LayoutProps): React.J
   const mode = useUIStore((s) => s.mode)
   const setMode = useUIStore((s) => s.setMode)
   const leftSidebarOpen = useUIStore((s) => s.leftSidebarOpen)
+  const leftSidebarWidth = useUIStore((s) => s.leftSidebarWidth)
+  const setLeftSidebarOpen = useUIStore((s) => s.setLeftSidebarOpen)
+  const rightPanelOpen = useUIStore((s) => s.rightPanelOpen)
+  const rightPanelWidth = useUIStore((s) => s.rightPanelWidth)
+  const workingFolderSheetOpen = useUIStore((s) => s.workingFolderSheetOpen)
+  const workingFolderPanelWidth = useUIStore((s) => s.workingFolderPanelWidth)
   const subAgentExecutionDetailOpen = useUIStore((s) => s.subAgentExecutionDetailOpen)
   const subAgentExecutionDetailToolUseId = useUIStore((s) => s.subAgentExecutionDetailToolUseId)
   const subAgentExecutionDetailInlineText = useUIStore((s) => s.subAgentExecutionDetailInlineText)
@@ -138,6 +147,10 @@ export function Layout({ updateInfo, onOpenUpdateDialog }: LayoutProps): React.J
 
   const { resolvedTheme, setTheme: ntSetTheme } = useTheme()
   const { stopStreaming } = useChatActions()
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window === 'undefined' ? 1440 : window.innerWidth
+  )
+  const autoCollapsedSidebarForCrowdingRef = useRef(false)
 
   const runningSubAgentNamesSig = useAgentStore((s) => s.runningSubAgentNamesSig)
   const runningSubAgentCount = runningSubAgentNamesSig
@@ -170,6 +183,52 @@ export function Layout({ updateInfo, onOpenUpdateDialog }: LayoutProps): React.J
   useEffect(() => {
     void initBackgroundProcessTracking()
   }, [initBackgroundProcessTracking])
+
+  useEffect(() => {
+    const handleResize = (): void => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', handleResize)
+    handleResize()
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
+    const openRightSidePanelCount = Number(rightPanelOpen) + Number(workingFolderSheetOpen)
+    const rightSideWidth =
+      (rightPanelOpen ? rightPanelWidth : 0) +
+      (workingFolderSheetOpen ? workingFolderPanelWidth : 0)
+    const widthLeftForMainWorkspace =
+      viewportWidth - rightSideWidth - (leftSidebarOpen ? leftSidebarWidth : 0)
+    const rightSidePanelsNeedSpace =
+      openRightSidePanelCount >= 2 && viewportWidth < MULTI_RIGHT_PANEL_COLLAPSE_VIEWPORT
+    const mainWorkspaceTooNarrow =
+      openRightSidePanelCount > 0 &&
+      widthLeftForMainWorkspace < MIN_MAIN_WORKSPACE_WIDTH_WITH_SIDEBAR
+    const shouldCollapseSidebar =
+      chatView === 'session' &&
+      leftSidebarOpen &&
+      (rightSidePanelsNeedSpace || mainWorkspaceTooNarrow)
+
+    if (!shouldCollapseSidebar) {
+      if (openRightSidePanelCount === 0 || viewportWidth >= MULTI_RIGHT_PANEL_COLLAPSE_VIEWPORT) {
+        autoCollapsedSidebarForCrowdingRef.current = false
+      }
+      return
+    }
+
+    if (autoCollapsedSidebarForCrowdingRef.current) return
+    autoCollapsedSidebarForCrowdingRef.current = true
+    setLeftSidebarOpen(false)
+  }, [
+    chatView,
+    leftSidebarOpen,
+    leftSidebarWidth,
+    rightPanelOpen,
+    rightPanelWidth,
+    setLeftSidebarOpen,
+    viewportWidth,
+    workingFolderPanelWidth,
+    workingFolderSheetOpen
+  ])
 
   // Update window title (show pending approvals + streaming state + SubAgent)
   useEffect(() => {
@@ -231,7 +290,7 @@ export function Layout({ updateInfo, onOpenUpdateDialog }: LayoutProps): React.J
   useEffect(() => {
     if (chatView === 'session') return
 
-    const nextMode = chatView === 'home' ? 'chat' : mode === 'chat' ? 'cowork' : null
+    const nextMode = chatView !== 'home' && mode === 'chat' ? 'cowork' : null
 
     if (nextMode && mode !== nextMode) {
       setMode(nextMode)
@@ -513,7 +572,7 @@ export function Layout({ updateInfo, onOpenUpdateDialog }: LayoutProps): React.J
         }
         const tabs = ui.rightPanelTabs
         if (tabs.length === 0) {
-          ui.openReviewTab()
+          ui.setRightPanelOpen(true)
           return
         }
         const idx = tabs.findIndex((tab) => tab.id === ui.rightPanelActiveTabId)

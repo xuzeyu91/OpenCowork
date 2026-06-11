@@ -57,7 +57,11 @@ function blobToBase64(blob: Blob): Promise<string> {
   })
 }
 
-export function ImageViewer({ filePath, sshConnectionId }: ViewerProps): React.JSX.Element {
+export function ImageViewer({
+  filePath,
+  sshConnectionId,
+  fileVersion
+}: ViewerProps): React.JSX.Element {
   const [scale, setScale] = React.useState(1)
   const [rotation, setRotation] = React.useState(0)
   const [offset, setOffset] = React.useState({ x: 0, y: 0 })
@@ -114,7 +118,7 @@ export function ImageViewer({ filePath, sshConnectionId }: ViewerProps): React.J
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [filePath, sshConnectionId])
+  }, [filePath, fileVersion, sshConnectionId])
 
   React.useEffect(() => {
     return () => {

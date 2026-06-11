@@ -42,6 +42,9 @@ export type LegacyRightPanelTab =
   | 'team'
   | 'acp'
 export type RightPanelSection = 'execution' | 'resources' | 'collaboration' | 'monitoring'
+export type AgentFilesSurface = 'sheet'
+export type AgentFilesTab = 'files' | 'changes'
+export type AgentFilesChangeSource = 'all' | 'agent' | 'git'
 export type RightPanelTabKind =
   | 'context'
   | 'review'
@@ -188,7 +191,6 @@ export type DetailPanelContent =
   | { type: 'document'; title: string; content: string }
   | { type: 'report'; title: string; data: unknown }
 
-const RIGHT_PANEL_REVIEW_TAB_ID = 'review'
 const RIGHT_PANEL_CONTEXT_TAB_ID = 'context'
 
 function createContextTab(): RightPanelTabInstance {
@@ -201,60 +203,27 @@ function createContextTab(): RightPanelTabInstance {
   }
 }
 
-function createReviewTab(initialChangeId?: string | null): RightPanelTabInstance {
-  return {
-    id: RIGHT_PANEL_REVIEW_TAB_ID,
-    kind: 'review',
-    title: 'Review',
-    closable: false,
-    initialChangeId: initialChangeId ?? null,
-    createdAt: 0
-  }
-}
-
-function ensureReviewTab(
-  tabs: RightPanelTabInstance[] | null | undefined,
-  initialChangeId?: string | null
+function ensureRightPanelTabs(
+  tabs: RightPanelTabInstance[] | null | undefined
 ): RightPanelTabInstance[] {
-  const safeTabs = tabs ?? []
+  const safeTabs = (tabs ?? []).filter((tab) => tab.kind !== 'review')
   const withContext = safeTabs.some((tab) => tab.id === RIGHT_PANEL_CONTEXT_TAB_ID)
     ? safeTabs
     : [createContextTab(), ...safeTabs]
-  const baseTabs = withContext.map((tab) =>
+  return withContext.map((tab) =>
     tab.id === RIGHT_PANEL_CONTEXT_TAB_ID ? { ...tab, closable: false } : tab
   )
-  const existing = baseTabs.find((tab) => tab.id === RIGHT_PANEL_REVIEW_TAB_ID)
-  if (existing) {
-    return baseTabs.map((tab) =>
-      tab.id === RIGHT_PANEL_REVIEW_TAB_ID
-        ? {
-            ...tab,
-            closable: false,
-            initialChangeId: initialChangeId !== undefined ? initialChangeId : tab.initialChangeId
-          }
-        : tab
-    )
-  }
-  const contextIndex = baseTabs.findIndex((tab) => tab.id === RIGHT_PANEL_CONTEXT_TAB_ID)
-  const reviewTab = createReviewTab(initialChangeId)
-  if (contextIndex >= 0) {
-    return [...baseTabs.slice(0, contextIndex + 1), reviewTab, ...baseTabs.slice(contextIndex + 1)]
-  }
-  return [createContextTab(), reviewTab, ...baseTabs]
 }
 
 function getDefaultRightPanelTabs(): RightPanelTabInstance[] {
-  return [createContextTab(), createReviewTab()]
+  return [createContextTab()]
 }
 
 function keepGlobalRightPanelTabs(
   tabs: RightPanelTabInstance[] | null | undefined
 ): RightPanelTabInstance[] {
-  return ensureReviewTab(
-    (tabs ?? []).filter(
-      (tab) => tab.kind === 'context' || tab.kind === 'review' || tab.kind === 'browser'
-    ),
-    null
+  return ensureRightPanelTabs(
+    (tabs ?? []).filter((tab) => tab.kind === 'context' || tab.kind === 'browser')
   )
 }
 
@@ -262,12 +231,24 @@ function nextRightPanelActiveTab(
   tabs: RightPanelTabInstance[] | null | undefined,
   closedTabId: string
 ): string {
-  const safeTabs = tabs ?? []
+  const safeTabs = ensureRightPanelTabs(tabs)
   const index = safeTabs.findIndex((tab) => tab.id === closedTabId)
   const nextTabs = safeTabs.filter((tab) => tab.id !== closedTabId)
   return (
-    nextTabs[Math.min(Math.max(index, 0), nextTabs.length - 1)]?.id ?? RIGHT_PANEL_REVIEW_TAB_ID
+    nextTabs[Math.min(Math.max(index, 0), nextTabs.length - 1)]?.id ?? RIGHT_PANEL_CONTEXT_TAB_ID
   )
+}
+
+function normalizeAgentChangeKey(initialChangeId?: string | null): string | null {
+  if (!initialChangeId) return null
+  return initialChangeId.includes(':') ? initialChangeId : `agent:${initialChangeId}`
+}
+
+function closeRightSidePanels(): { rightPanelOpen: false; workingFolderSheetOpen: false } {
+  return {
+    rightPanelOpen: false,
+    workingFolderSheetOpen: false
+  }
 }
 
 function rightPanelPreviewTabId(previewTabId: string): string {
@@ -320,6 +301,12 @@ interface UIStore {
   closeRightPanelTab: (tabId: string) => void
   rightPanelWidth: number
   setRightPanelWidth: (width: number) => void
+  agentFilesActiveTabBySurface: Partial<Record<AgentFilesSurface, AgentFilesTab>>
+  agentFilesSelectedChangeKey: string | null
+  agentFilesChangeSource: AgentFilesChangeSource
+  setAgentFilesActiveTab: (surface: AgentFilesSurface, tab: AgentFilesTab) => void
+  setAgentFilesSelectedChangeKey: (key: string | null) => void
+  setAgentFilesChangeSource: (source: AgentFilesChangeSource) => void
   isHoveringRightPanel: boolean
   setIsHoveringRightPanel: (hovering: boolean) => void
   runtimeStatusPanelTriggerHovered: boolean
@@ -845,32 +832,53 @@ export const useUIStore = create<UIStore>()(
       setMode: (mode) => set({ mode }),
       activeNavItem: 'chat',
       setActiveNavItem: (item) =>
-        set({ activeNavItem: item, leftSidebarOpen: true, rightPanelOpen: false }),
+        set({ activeNavItem: item, leftSidebarOpen: true, ...closeRightSidePanels() }),
       leftSidebarOpen: true,
       leftSidebarWidth: LEFT_SIDEBAR_DEFAULT_WIDTH,
-      toggleLeftSidebar: () => set((state) => ({ leftSidebarOpen: !state.leftSidebarOpen })),
-      setLeftSidebarOpen: (open) => set({ leftSidebarOpen: open }),
+      toggleLeftSidebar: () =>
+        set((state) => {
+          const leftSidebarOpen = !state.leftSidebarOpen
+          return {
+            leftSidebarOpen,
+            ...closeRightSidePanels()
+          }
+        }),
+      setLeftSidebarOpen: (open) =>
+        set({
+          leftSidebarOpen: open,
+          ...(open ? closeRightSidePanels() : {})
+        }),
       setLeftSidebarWidth: (width) => set({ leftSidebarWidth: clampLeftSidebarWidth(width) }),
       rightPanelOpen: false,
       toggleRightPanel: () =>
         set((state) => {
           const nextOpen = !state.rightPanelOpen
           if (!nextOpen) return { rightPanelOpen: false }
-          const rightPanelTabs = ensureReviewTab(state.rightPanelTabs, null)
+          const rightPanelTabs = ensureRightPanelTabs(state.rightPanelTabs)
+          const rightPanelActiveTabId = rightPanelTabs.some(
+            (tab) => tab.id === state.rightPanelActiveTabId
+          )
+            ? state.rightPanelActiveTabId
+            : RIGHT_PANEL_CONTEXT_TAB_ID
           return {
             rightPanelOpen: true,
             rightPanelTabs,
-            rightPanelActiveTabId: RIGHT_PANEL_REVIEW_TAB_ID
+            rightPanelActiveTabId
           }
         }),
       setRightPanelOpen: (open) =>
         set((state) => {
           if (!open) return { rightPanelOpen: false }
-          const rightPanelTabs = ensureReviewTab(state.rightPanelTabs, null)
+          const rightPanelTabs = ensureRightPanelTabs(state.rightPanelTabs)
+          const rightPanelActiveTabId = rightPanelTabs.some(
+            (tab) => tab.id === state.rightPanelActiveTabId
+          )
+            ? state.rightPanelActiveTabId
+            : RIGHT_PANEL_CONTEXT_TAB_ID
           return {
             rightPanelOpen: true,
             rightPanelTabs,
-            rightPanelActiveTabId: RIGHT_PANEL_REVIEW_TAB_ID
+            rightPanelActiveTabId
           }
         }),
       runtimeStatusPanelOpen: true,
@@ -912,10 +920,21 @@ export const useUIStore = create<UIStore>()(
         }
         if (tab === 'context') {
           set((state) => ({
-            rightPanelTabs: ensureReviewTab(state.rightPanelTabs),
+            rightPanelTabs: ensureRightPanelTabs(state.rightPanelTabs),
             rightPanelActiveTabId: RIGHT_PANEL_CONTEXT_TAB_ID,
             rightPanelTab: 'context',
             rightPanelOpen: true
+          }))
+          return
+        }
+        if (tab === 'files') {
+          set((state) => ({
+            workingFolderSheetOpen: true,
+            agentFilesActiveTabBySurface: {
+              ...state.agentFilesActiveTabBySurface,
+              sheet: 'files'
+            },
+            rightPanelTab: tab
           }))
           return
         }
@@ -927,21 +946,25 @@ export const useUIStore = create<UIStore>()(
           get().openOrchestrationPanel()
           return
         }
-        get().openReviewTab()
-        set({ rightPanelTab: tab })
+        set((state) => ({
+          rightPanelTabs: ensureRightPanelTabs(state.rightPanelTabs),
+          rightPanelActiveTabId: RIGHT_PANEL_CONTEXT_TAB_ID,
+          rightPanelTab: tab,
+          rightPanelOpen: true
+        }))
       },
       rightPanelSection: 'execution',
       setRightPanelSection: (section) => set({ rightPanelSection: section }),
       rightPanelTabs: getDefaultRightPanelTabs(),
-      rightPanelActiveTabId: RIGHT_PANEL_REVIEW_TAB_ID,
+      rightPanelActiveTabId: RIGHT_PANEL_CONTEXT_TAB_ID,
       setRightPanelActiveTab: (tabId) =>
         set((state) => {
-          const rightPanelTabs = ensureReviewTab(state.rightPanelTabs)
+          const rightPanelTabs = ensureRightPanelTabs(state.rightPanelTabs)
           const targetTab = rightPanelTabs.find((tab) => tab.id === tabId)
           if (!targetTab) {
             return {
               rightPanelTabs,
-              rightPanelActiveTabId: RIGHT_PANEL_REVIEW_TAB_ID,
+              rightPanelActiveTabId: RIGHT_PANEL_CONTEXT_TAB_ID,
               rightPanelOpen: true
             }
           }
@@ -965,10 +988,13 @@ export const useUIStore = create<UIStore>()(
         }),
       openReviewTab: (initialChangeId) =>
         set((state) => ({
-          rightPanelTabs: ensureReviewTab(state.rightPanelTabs, initialChangeId ?? null),
-          rightPanelActiveTabId: RIGHT_PANEL_REVIEW_TAB_ID,
-          rightPanelTab: 'preview',
-          rightPanelOpen: true
+          workingFolderSheetOpen: true,
+          agentFilesActiveTabBySurface: {
+            ...state.agentFilesActiveTabBySurface,
+            sheet: 'changes'
+          },
+          agentFilesSelectedChangeKey:
+            normalizeAgentChangeKey(initialChangeId) ?? state.agentFilesSelectedChangeKey
         })),
       ensureBrowserTab: (url, sessionId, projectId) =>
         set((state) => {
@@ -981,8 +1007,8 @@ export const useUIStore = create<UIStore>()(
             createdAt: Date.now()
           }
           const rightPanelTabs = existing
-            ? ensureReviewTab(state.rightPanelTabs)
-            : ensureReviewTab([...state.rightPanelTabs, tab])
+            ? ensureRightPanelTabs(state.rightPanelTabs)
+            : ensureRightPanelTabs([...state.rightPanelTabs, tab])
           return {
             rightPanelTabs,
             rightPanelActiveTabId: tab.id,
@@ -1025,7 +1051,7 @@ export const useUIStore = create<UIStore>()(
                 inlineText: inlineText?.trim() ? inlineText : null,
                 createdAt: Date.now()
               }
-          const rightPanelTabs = ensureReviewTab(
+          const rightPanelTabs = ensureRightPanelTabs(
             existing
               ? state.rightPanelTabs.map((item) => (item.id === tabId ? tab : item))
               : [...state.rightPanelTabs, tab]
@@ -1063,7 +1089,7 @@ export const useUIStore = create<UIStore>()(
                 processId,
                 createdAt: Date.now()
               }
-          const rightPanelTabs = ensureReviewTab(
+          const rightPanelTabs = ensureRightPanelTabs(
             existing
               ? state.rightPanelTabs.map((item) => (item.id === tabId ? tab : item))
               : [...state.rightPanelTabs, tab]
@@ -1077,19 +1103,20 @@ export const useUIStore = create<UIStore>()(
         }),
       closeRightPanelTab: (tabId) =>
         set((state) => {
-          if (tabId === RIGHT_PANEL_REVIEW_TAB_ID) return {}
           const target = state.rightPanelTabs.find((tab) => tab.id === tabId)
           const nextPreviewTabs =
             target?.kind === 'preview' && target.previewTabId
               ? state.previewPanelTabs.filter((tab) => tab.id !== target.previewTabId)
               : state.previewPanelTabs
-          const nextRightPanelTabs = ensureReviewTab(
+          const nextRightPanelTabs = ensureRightPanelTabs(
             state.rightPanelTabs.filter((tab) => tab.id !== tabId)
           )
           const rightPanelActiveTabId =
             state.rightPanelActiveTabId === tabId
               ? nextRightPanelActiveTab(state.rightPanelTabs, tabId)
-              : state.rightPanelActiveTabId
+              : nextRightPanelTabs.some((tab) => tab.id === state.rightPanelActiveTabId)
+                ? state.rightPanelActiveTabId
+                : RIGHT_PANEL_CONTEXT_TAB_ID
           const nextActiveRightPanelTab = nextRightPanelTabs.find(
             (tab) => tab.id === rightPanelActiveTabId
           )
@@ -1120,7 +1147,19 @@ export const useUIStore = create<UIStore>()(
           }
         }),
       rightPanelWidth: 384,
-      setRightPanelWidth: (width) => set({ rightPanelWidth: width }),
+      setRightPanelWidth: (width) => set({ rightPanelWidth: clampRightPanelWidth(width) }),
+      agentFilesActiveTabBySurface: {},
+      agentFilesSelectedChangeKey: null,
+      agentFilesChangeSource: 'all',
+      setAgentFilesActiveTab: (surface, tab) =>
+        set((state) => ({
+          agentFilesActiveTabBySurface: {
+            ...state.agentFilesActiveTabBySurface,
+            [surface]: tab
+          }
+        })),
+      setAgentFilesSelectedChangeKey: (key) => set({ agentFilesSelectedChangeKey: key }),
+      setAgentFilesChangeSource: (source) => set({ agentFilesChangeSource: source }),
       isHoveringRightPanel: false,
       setIsHoveringRightPanel: (hovering) => set({ isHoveringRightPanel: hovering }),
       runtimeStatusPanelTriggerHovered: false,
@@ -1140,7 +1179,8 @@ export const useUIStore = create<UIStore>()(
           resourcesPageOpen: false,
           translatePageOpen: false,
           drawPageOpen: false,
-          tasksPageOpen: false
+          tasksPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeSettingsPage: () => set({ settingsPageOpen: false }),
       setSettingsTab: (tab) => set({ settingsTab: tab }),
@@ -1155,7 +1195,8 @@ export const useUIStore = create<UIStore>()(
           resourcesPageOpen: false,
           translatePageOpen: false,
           drawPageOpen: false,
-          tasksPageOpen: false
+          tasksPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeSkillsPage: () => set({ skillsPageOpen: false }),
       soulsPageOpen: false,
@@ -1169,7 +1210,8 @@ export const useUIStore = create<UIStore>()(
           resourcesPageOpen: false,
           translatePageOpen: false,
           drawPageOpen: false,
-          tasksPageOpen: false
+          tasksPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeSoulsPage: () => set({ soulsPageOpen: false }),
       syncPageOpen: false,
@@ -1183,7 +1225,8 @@ export const useUIStore = create<UIStore>()(
           resourcesPageOpen: false,
           translatePageOpen: false,
           drawPageOpen: false,
-          tasksPageOpen: false
+          tasksPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeSyncPage: () => set({ syncPageOpen: false }),
       resourcesPageOpen: false,
@@ -1197,7 +1240,8 @@ export const useUIStore = create<UIStore>()(
           syncPageOpen: false,
           translatePageOpen: false,
           drawPageOpen: false,
-          tasksPageOpen: false
+          tasksPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeResourcesPage: () => set({ resourcesPageOpen: false }),
       translatePageOpen: false,
@@ -1211,7 +1255,8 @@ export const useUIStore = create<UIStore>()(
           syncPageOpen: false,
           resourcesPageOpen: false,
           drawPageOpen: false,
-          tasksPageOpen: false
+          tasksPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeTranslatePage: () => set({ translatePageOpen: false }),
       drawPageOpen: false,
@@ -1225,7 +1270,8 @@ export const useUIStore = create<UIStore>()(
           syncPageOpen: false,
           resourcesPageOpen: false,
           translatePageOpen: false,
-          tasksPageOpen: false
+          tasksPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeDrawPage: () => set({ drawPageOpen: false }),
       tasksPageOpen: false,
@@ -1239,7 +1285,8 @@ export const useUIStore = create<UIStore>()(
           syncPageOpen: false,
           resourcesPageOpen: false,
           translatePageOpen: false,
-          drawPageOpen: false
+          drawPageOpen: false,
+          ...closeRightSidePanels()
         }),
       closeTasksPage: () => set({ tasksPageOpen: false }),
       shortcutsOpen: false,
@@ -1321,7 +1368,7 @@ export const useUIStore = create<UIStore>()(
             previewTabId: nextTab.id,
             modified: existing?.modified ?? nextTab.modified ?? false
           }
-          const rightPanelTabs = ensureReviewTab(
+          const rightPanelTabs = ensureRightPanelTabs(
             existingRightPanelTab
               ? state.rightPanelTabs.map((tab) =>
                   tab.id === previewRightPanelTabId ? rightPanelTab : tab
@@ -1346,7 +1393,7 @@ export const useUIStore = create<UIStore>()(
           if (index < 0) return {}
           const nextTabs = state.previewPanelTabs.filter((tab) => tab.id !== tabId)
           const rightPanelTabId = rightPanelPreviewTabId(tabId)
-          const nextRightPanelTabs = ensureReviewTab(
+          const nextRightPanelTabs = ensureRightPanelTabs(
             state.rightPanelTabs.filter((tab) => tab.id !== rightPanelTabId)
           )
           const nextActiveId =
@@ -1363,7 +1410,7 @@ export const useUIStore = create<UIStore>()(
               state.rightPanelActiveTabId === rightPanelTabId
                 ? (nextRightPanelTabs.find(
                     (tab) => tab.id === rightPanelPreviewTabId(nextActiveId ?? '')
-                  )?.id ?? RIGHT_PANEL_REVIEW_TAB_ID)
+                  )?.id ?? RIGHT_PANEL_CONTEXT_TAB_ID)
                 : state.rightPanelActiveTabId
           }
         }),
@@ -1469,7 +1516,7 @@ export const useUIStore = create<UIStore>()(
           const scopedPanelState = scopeChanged
             ? {
                 rightPanelTabs: keepGlobalRightPanelTabs(state.rightPanelTabs),
-                rightPanelActiveTabId: RIGHT_PANEL_REVIEW_TAB_ID,
+                rightPanelActiveTabId: RIGHT_PANEL_CONTEXT_TAB_ID,
                 previewPanelOpen: false,
                 previewPanelState: null,
                 activePreviewPanelTabId: null,
@@ -1808,6 +1855,8 @@ export const useUIStore = create<UIStore>()(
         rightPanelWidth: clampRightPanelWidth(state.rightPanelWidth),
         workingFolderSheetOpen: state.workingFolderSheetOpen,
         workingFolderPanelWidth: clampWorkingFolderPanelWidth(state.workingFolderPanelWidth),
+        agentFilesActiveTabBySurface: state.agentFilesActiveTabBySurface,
+        agentFilesChangeSource: state.agentFilesChangeSource,
         bottomTerminalDockOpenByProjectId: state.bottomTerminalDockOpenByProjectId,
         bottomTerminalDockHeight: clampBottomTerminalDockHeight(state.bottomTerminalDockHeight)
       }),
@@ -1830,9 +1879,14 @@ export const useUIStore = create<UIStore>()(
               ? state.runtimeStatusPanelOpen
               : current.runtimeStatusPanelOpen,
           rightPanelTabs: getDefaultRightPanelTabs(),
-          rightPanelActiveTabId: RIGHT_PANEL_REVIEW_TAB_ID,
+          rightPanelActiveTabId: RIGHT_PANEL_CONTEXT_TAB_ID,
           rightPanelTab: 'preview',
           rightPanelSection: 'execution',
+          agentFilesActiveTabBySurface:
+            state.agentFilesActiveTabBySurface ?? current.agentFilesActiveTabBySurface ?? {},
+          agentFilesSelectedChangeKey: null,
+          agentFilesChangeSource:
+            state.agentFilesChangeSource ?? current.agentFilesChangeSource ?? 'all',
           browserStatesBySession:
             state.browserStatesBySession ?? current.browserStatesBySession ?? {},
           browserWebviewRefsBySession: current.browserWebviewRefsBySession ?? {},

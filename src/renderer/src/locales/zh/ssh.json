@@ -237,6 +237,9 @@
     },
     "controlCenter": "控制中心",
     "comingSoon": "即将支持",
+    "groupRailTitle": "分组",
+    "quickConnect": "快速连接",
+    "quickConnectAgent": "SSH Agent",
     "newHost": "新建主机",
     "serial": "序列",
     "searchHosts": "查找主机或 ssh user@hostname...",
@@ -365,6 +368,7 @@
     },
     "nav": {
       "hosts": "主机",
+      "sftp": "SFTP",
       "keychain": "密钥管理",
       "forwarding": "端口转发",
       "snippets": "代码片段",

@@ -18,7 +18,11 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\/\S+/i.test(value)
 }
 
-export function PdfViewer({ filePath, sshConnectionId }: ViewerProps): React.JSX.Element {
+export function PdfViewer({
+  filePath,
+  sshConnectionId,
+  fileVersion
+}: ViewerProps): React.JSX.Element {
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +68,7 @@ export function PdfViewer({ filePath, sshConnectionId }: ViewerProps): React.JSX
     return () => {
       cancelled = true
     }
-  }, [filePath, sshConnectionId])
+  }, [filePath, fileVersion, sshConnectionId])
 
   if (isHttpUrl(filePath)) {
     return <iframe className="size-full border-0 bg-white" src={filePath} title="PDF Preview" />

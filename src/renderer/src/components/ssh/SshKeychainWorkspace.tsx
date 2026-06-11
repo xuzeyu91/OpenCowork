@@ -450,7 +450,7 @@ export function SshKeychainWorkspace(): React.JSX.Element {
                       </div>
                     </div>
                     {record.publicKey ? (
-                      <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <CheckCircle2 className="size-4 shrink-0 text-[var(--ssh-success)]" />
                     ) : null}
                   </button>
                 )

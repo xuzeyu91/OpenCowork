@@ -5,7 +5,7 @@ export const LEFT_SIDEBAR_MIN_WIDTH = 272
 export const LEFT_SIDEBAR_MAX_WIDTH = 420
 
 export const RIGHT_PANEL_DEFAULT_WIDTH = 384
-export const RIGHT_PANEL_MIN_WIDTH = 320
+export const RIGHT_PANEL_MIN_WIDTH = 280
 export const RIGHT_PANEL_MAX_WIDTH = Number.POSITIVE_INFINITY
 export const RIGHT_PANEL_MAX_WIDTH_RATIO = 0.5
 export const RIGHT_PANEL_RAIL_WIDTH = 48
@@ -19,7 +19,6 @@ export const BOTTOM_TERMINAL_DOCK_MAX_HEIGHT = 560
 
 export const RIGHT_PANEL_TAB_ORDER: RightPanelTabKind[] = [
   'context',
-  'review',
   'preview',
   'browser',
   'subagent',

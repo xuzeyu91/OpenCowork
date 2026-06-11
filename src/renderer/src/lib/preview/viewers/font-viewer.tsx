@@ -31,7 +31,11 @@ function cssFontFamily(filePath: string): string {
   return `preview-${fileName(filePath).replace(/[^a-z0-9_-]/gi, '-')}`
 }
 
-export function FontViewer({ filePath, sshConnectionId }: ViewerProps): React.JSX.Element {
+export function FontViewer({
+  filePath,
+  sshConnectionId,
+  fileVersion
+}: ViewerProps): React.JSX.Element {
   const [src, setSrc] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const ext = extension(filePath)
@@ -71,7 +75,7 @@ export function FontViewer({ filePath, sshConnectionId }: ViewerProps): React.JS
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [ext, filePath, sshConnectionId])
+  }, [ext, filePath, fileVersion, sshConnectionId])
 
   if (error) {
     return (

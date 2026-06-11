@@ -61,6 +61,11 @@ interface TreeNode extends FileEntry {
   expanded?: boolean
 }
 
+export interface AgentFileTreeCommand {
+  id: number
+  type: 'new-file' | 'new-folder' | 'refresh' | 'collapse-all'
+}
+
 interface FileSearchItem {
   name: string
   path: string
@@ -299,7 +304,8 @@ function TreeItem({
   activePath,
   onToggle,
   editState,
-  actions
+  actions,
+  agentSurface = false
 }: {
   node: TreeNode
   depth: number
@@ -307,6 +313,7 @@ function TreeItem({
   onToggle: (path: string) => void
   editState: TreeEditState
   actions: TreeActions
+  agentSurface?: boolean
 }): React.JSX.Element {
   const { t } = useTranslation('cowork')
   const [copied, setCopied] = useState(false)
@@ -333,8 +340,11 @@ function TreeItem({
   const rowContent = (
     <div
       className={cn(
-        'workspace-filetree-row group relative flex items-center gap-2 rounded-xl px-2 py-1.5 text-[12px] transition-all',
+        'workspace-filetree-row group relative flex items-center text-[12px] transition-all',
         'cursor-pointer',
+        agentSurface
+          ? 'workspace-filetree-row--agent gap-0 rounded-none px-0 py-0'
+          : 'gap-2 rounded-xl px-2 py-1.5',
         isActive
           ? 'workspace-filetree-row--active text-foreground'
           : isDir && node.expanded
@@ -342,13 +352,13 @@ function TreeItem({
             : 'workspace-filetree-row--interactive',
         isIgnored && 'opacity-40'
       )}
-      style={{ paddingLeft: `${depth * 14 + 6}px` }}
+      style={{ paddingLeft: `${depth * 14 + (agentSurface ? 4 : 6)}px` }}
       onClick={() => (isDir && !isIgnored ? onToggle(node.path) : actions.onPreview(node.path))}
       onContextMenu={(event) => event.stopPropagation()}
       title={node.path}
     >
-      <DepthGuides depth={depth} />
-      {depth > 0 && (
+      {!agentSurface ? <DepthGuides depth={depth} /> : null}
+      {depth > 0 && !agentSurface && (
         <span
           className="workspace-filetree-guide absolute top-1/2 h-px w-2 pointer-events-none"
           style={{ left: `${(depth - 1) * 14 + 9}px` }}
@@ -357,19 +367,43 @@ function TreeItem({
 
       {isDir ? (
         node.expanded ? (
-          <ChevronDown className="size-3 shrink-0 text-muted-foreground/60" />
+          <ChevronDown
+            className={cn(
+              'shrink-0',
+              agentSurface
+                ? 'workspace-filetree-chevron size-4 text-agent-files-icon'
+                : 'size-3 text-muted-foreground/60'
+            )}
+          />
         ) : (
-          <ChevronRight className="size-3 shrink-0 text-muted-foreground/60" />
+          <ChevronRight
+            className={cn(
+              'shrink-0',
+              agentSurface
+                ? 'workspace-filetree-chevron size-4 text-agent-files-icon'
+                : 'size-3 text-muted-foreground/60'
+            )}
+          />
         )
       ) : (
-        <span className="size-3 shrink-0" />
+        <span className={cn('shrink-0', agentSurface ? 'size-4' : 'size-3')} />
       )}
 
       {isDir ? (
         node.expanded ? (
-          <FolderOpen className="size-3.5 shrink-0 text-amber-400" />
+          <FolderOpen
+            className={cn(
+              'shrink-0',
+              agentSurface ? 'size-4 text-[#dcb67a]' : 'size-3.5 text-amber-400'
+            )}
+          />
         ) : (
-          <Folder className="size-3.5 shrink-0 text-amber-400/80" />
+          <Folder
+            className={cn(
+              'shrink-0',
+              agentSurface ? 'size-4 text-[#dcb67a]' : 'size-3.5 text-amber-400/80'
+            )}
+          />
         )
       ) : (
         fileIcon(node.name)
@@ -400,7 +434,11 @@ function TreeItem({
           <span
             className={cn(
               'truncate',
-              isDir ? 'font-medium text-foreground/85' : 'text-foreground/80'
+              agentSurface
+                ? 'font-normal text-agent-files-fg'
+                : isDir
+                  ? 'font-medium text-foreground/85'
+                  : 'text-foreground/80'
             )}
           >
             {node.name}
@@ -408,7 +446,7 @@ function TreeItem({
         </div>
       )}
 
-      {!isDir && !isRenaming && (
+      {!agentSurface && !isDir && !isRenaming && (
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-all group-hover:opacity-100">
           <button
             className="workspace-filetree-action rounded-md p-1"
@@ -567,6 +605,7 @@ function TreeItem({
                   onToggle={onToggle}
                   editState={editState}
                   actions={actions}
+                  agentSurface={agentSurface}
                 />
               ))
             ) : (
@@ -589,12 +628,16 @@ function TreeItem({
 
 interface FileTreePanelProps {
   sessionId?: string | null
-  surface?: 'card' | 'sheet'
+  surface?: 'card' | 'sheet' | 'agent'
+  agentSearchOpen?: boolean
+  agentCommand?: AgentFileTreeCommand | null
 }
 
 export function FileTreePanel({
   sessionId = null,
-  surface = 'card'
+  surface = 'card',
+  agentSearchOpen = false,
+  agentCommand = null
 }: FileTreePanelProps): React.JSX.Element {
   const { t } = useTranslation('cowork')
   const sessionView = useChatStore(
@@ -627,6 +670,8 @@ export function FileTreePanel({
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<FileSearchItem[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const [agentRootExpanded, setAgentRootExpanded] = useState(true)
+  const lastAgentCommandIdRef = useRef(0)
 
   // --- Edit state for context menu actions ---
   const [renamingPath, setRenamingPath] = useState<string | null>(null)
@@ -1224,12 +1269,58 @@ export function FileTreePanel({
   const handleCollapseAll = useCallback(() => {
     setTree((current) => collapseTree(current))
   }, [])
-  const compactSheetSurface = surface === 'sheet'
+  const compactSheetSurface = surface === 'sheet' || surface === 'agent'
+  const agentSurface = surface === 'agent'
+  const showSearchInput = !agentSurface || agentSearchOpen
+
+  useEffect(() => {
+    if (!agentSurface || agentSearchOpen) return
+    setSearchQuery('')
+  }, [agentSearchOpen, agentSurface])
+
+  useEffect(() => {
+    if (
+      !agentSurface ||
+      !workingFolder ||
+      !agentCommand ||
+      lastAgentCommandIdRef.current === agentCommand.id
+    )
+      return
+    lastAgentCommandIdRef.current = agentCommand.id
+
+    if (agentCommand.type === 'new-file') {
+      setAgentRootExpanded(true)
+      void handleNewFile(workingFolder)
+      return
+    }
+    if (agentCommand.type === 'new-folder') {
+      setAgentRootExpanded(true)
+      void handleNewFolder(workingFolder)
+      return
+    }
+    if (agentCommand.type === 'refresh') {
+      void refreshTree()
+      return
+    }
+    if (agentCommand.type === 'collapse-all') {
+      setAgentRootExpanded(true)
+      handleCollapseAll()
+    }
+  }, [
+    agentCommand,
+    agentSurface,
+    handleCollapseAll,
+    handleNewFile,
+    handleNewFolder,
+    refreshTree,
+    workingFolder
+  ])
+
   const rootNewItemInput =
     newItemParent === workingFolder ? (
       <InlineInput
         defaultValue={newItemType === 'file' ? 'untitled' : 'new-folder'}
-        depth={0}
+        depth={agentSurface ? 1 : 0}
         icon={
           newItemType === 'file' ? (
             <File className="size-3.5 text-muted-foreground/60" />
@@ -1256,15 +1347,17 @@ export function FileTreePanel({
       <div
         className={cn(
           'workspace-filetree-surface flex min-h-0 flex-1 flex-col overflow-hidden',
-          compactSheetSurface
-            ? 'workspace-filetree-surface--sheet'
-            : 'workspace-filetree-surface--card rounded-[20px]'
+          agentSurface
+            ? 'workspace-filetree-surface--agent'
+            : compactSheetSurface
+              ? 'workspace-filetree-surface--sheet'
+              : 'workspace-filetree-surface--card rounded-[20px]'
         )}
       >
         <div
           className={cn(
             'workspace-filetree-header',
-            compactSheetSurface ? 'px-3 py-3' : 'px-3 py-3'
+            agentSurface ? 'workspace-filetree-header--agent px-0 py-0' : 'px-3 py-3'
           )}
         >
           {!compactSheetSurface && (
@@ -1351,7 +1444,7 @@ export function FileTreePanel({
             </>
           )}
 
-          {compactSheetSurface && (
+          {compactSheetSurface && !agentSurface && (
             <div className="mb-3 flex items-center gap-2">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
                 <FolderOpen className="size-3.5 text-amber-400" />
@@ -1399,26 +1492,45 @@ export function FileTreePanel({
             </div>
           )}
 
-          <div className={cn('relative', !compactSheetSurface && 'mt-3')}>
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/70" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={t('fileTree.searchPlaceholder', {
-                defaultValue: 'Search file name or path'
-              })}
-              className="workspace-filetree-input h-9 rounded-xl pl-9 pr-9 text-sm"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="workspace-filetree-action absolute right-2 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md transition-colors"
-                onClick={() => setSearchQuery('')}
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
+          {showSearchInput ? (
+            <div
+              className={cn(
+                'relative',
+                !compactSheetSurface && 'mt-3',
+                agentSurface && 'px-2 py-1'
+              )}
+            >
+              <Search
+                className={cn(
+                  'pointer-events-none absolute top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/70',
+                  agentSurface ? 'left-5' : 'left-3'
+                )}
+              />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={t('fileTree.searchPlaceholder', {
+                  defaultValue: 'Search file name or path'
+                })}
+                className={cn(
+                  'workspace-filetree-input rounded-xl pl-9 pr-9 text-sm',
+                  agentSurface ? 'h-6 rounded-[2px] text-xs' : 'h-9'
+                )}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className={cn(
+                    'workspace-filetree-action absolute top-1/2 inline-flex -translate-y-1/2 items-center justify-center transition-colors',
+                    agentSurface ? 'right-3 size-5 rounded-[2px]' : 'right-2 size-6 rounded-md'
+                  )}
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+          ) : null}
         </div>
 
         {error && (
@@ -1433,7 +1545,7 @@ export function FileTreePanel({
             <div
               className={cn(
                 'min-h-0 flex-1 overflow-y-auto text-[12px]',
-                compactSheetSurface ? 'px-3 py-3' : 'px-2 py-2'
+                agentSurface ? 'px-0 py-1' : compactSheetSurface ? 'px-3 py-3' : 'px-2 py-2'
               )}
             >
               {loading && tree.length === 0 ? (
@@ -1462,7 +1574,10 @@ export function FileTreePanel({
                         <div
                           key={file.path}
                           className={cn(
-                            'workspace-filetree-row group flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left transition-all',
+                            'workspace-filetree-row group flex w-full items-center text-left transition-all',
+                            agentSurface
+                              ? 'workspace-filetree-row--agent h-[22px] gap-1 rounded-none px-1 py-0'
+                              : 'gap-2 rounded-xl px-2.5 py-2',
                             isActive
                               ? 'workspace-filetree-row--active'
                               : 'workspace-filetree-row--interactive'
@@ -1472,14 +1587,28 @@ export function FileTreePanel({
                         >
                           {fileIcon(file.name)}
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium text-foreground/90">
+                            <div
+                              className={cn(
+                                'truncate',
+                                agentSurface
+                                  ? 'text-[12px] font-normal text-agent-files-fg'
+                                  : 'text-sm font-medium text-foreground/90'
+                              )}
+                            >
                               {file.name}
                             </div>
-                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                              {relativePath}
-                            </div>
+                            {!agentSurface ? (
+                              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                {relativePath}
+                              </div>
+                            ) : null}
                           </div>
-                          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-all group-hover:opacity-100">
+                          <div
+                            className={cn(
+                              'flex shrink-0 items-center gap-0.5 opacity-0 transition-all group-hover:opacity-100',
+                              agentSurface && 'hidden'
+                            )}
+                          >
                             <button
                               className="workspace-filetree-action rounded-md p-1"
                               onClick={(event) => {
@@ -1514,19 +1643,58 @@ export function FileTreePanel({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {rootNewItemInput}
-                  {tree.map((node) => (
-                    <TreeItem
-                      key={node.path}
-                      node={node}
-                      depth={0}
-                      activePath={activePath}
-                      onToggle={handleToggle}
-                      editState={editState}
-                      actions={treeActions}
-                    />
-                  ))}
+                <div className={agentSurface ? 'space-y-0' : 'space-y-1'}>
+                  {agentSurface ? (
+                    <>
+                      <div
+                        className="workspace-filetree-row workspace-filetree-row--agent workspace-filetree-row--interactive group flex h-[22px] cursor-pointer items-center gap-0 px-0 py-0 text-[12px]"
+                        style={{ paddingLeft: 4 }}
+                        onClick={() => setAgentRootExpanded((value) => !value)}
+                        title={workingFolder}
+                      >
+                        {agentRootExpanded ? (
+                          <ChevronDown className="workspace-filetree-chevron size-4 shrink-0 text-agent-files-icon" />
+                        ) : (
+                          <ChevronRight className="workspace-filetree-chevron size-4 shrink-0 text-agent-files-icon" />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-agent-files-fg">
+                          {workingFolder.split(/[\\/]/).pop()}
+                        </span>
+                      </div>
+                      {agentRootExpanded ? (
+                        <>
+                          {rootNewItemInput}
+                          {tree.map((node) => (
+                            <TreeItem
+                              key={node.path}
+                              node={node}
+                              depth={1}
+                              activePath={activePath}
+                              onToggle={handleToggle}
+                              editState={editState}
+                              actions={treeActions}
+                              agentSurface
+                            />
+                          ))}
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {rootNewItemInput}
+                      {tree.map((node) => (
+                        <TreeItem
+                          key={node.path}
+                          node={node}
+                          depth={0}
+                          activePath={activePath}
+                          onToggle={handleToggle}
+                          editState={editState}
+                          actions={treeActions}
+                        />
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>

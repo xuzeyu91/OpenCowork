@@ -343,8 +343,8 @@ export function WorkingFolderSelectorDialog({
               <button
                 key={directory.path}
                 className={cn(
-                  'inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors',
-                  createMode ? 'justify-start' : '',
+                  'inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors',
+                  createMode ? 'w-full justify-start' : '',
                   selected
                     ? 'border-primary/60 bg-primary/10 text-primary'
                     : 'border-border/70 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
@@ -353,7 +353,7 @@ export function WorkingFolderSelectorDialog({
                 title={directory.path}
               >
                 <FolderOpen className="size-3 shrink-0" />
-                <span className="truncate">{directory.name}</span>
+                <span className="min-w-0 flex-1 truncate">{directory.name}</span>
               </button>
             )
           })
@@ -399,7 +399,7 @@ export function WorkingFolderSelectorDialog({
               <div
                 key={conn.id}
                 className={cn(
-                  'flex flex-col gap-2 rounded-md border px-2 py-2 transition-colors sm:flex-row sm:items-center',
+                  'flex min-w-0 flex-col gap-2 rounded-md border px-2 py-2 transition-colors sm:flex-row sm:items-center',
                   isSelected
                     ? 'border-primary/60 bg-primary/10'
                     : 'border-border/70 bg-muted/20 hover:bg-muted/50'
@@ -414,7 +414,7 @@ export function WorkingFolderSelectorDialog({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 sm:w-64">
+                <div className="flex min-w-0 items-center gap-1.5 sm:w-64 sm:shrink-0">
                   <Input
                     aria-label={t('input.sshDirectory')}
                     value={dirValue}
@@ -457,22 +457,22 @@ export function WorkingFolderSelectorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-4 sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="min-w-0 overflow-x-hidden p-4 sm:max-w-xl">
+        <DialogHeader className="min-w-0">
           <DialogTitle className="text-sm">
             {createMode ? t('input.createProject') : t('input.selectFolder')}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="-mt-1 rounded-xl border bg-background/60 p-3">
+        <div className="-mt-1 min-w-0 overflow-hidden rounded-xl border bg-background/60 p-3">
           {createMode ? (
             <>
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-[10px] text-muted-foreground/70">{t('input.projectName')}</p>
-                  <div className="mt-1 flex items-center gap-1.5 text-[13px] font-medium text-foreground">
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-foreground">
                     <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{displayedProjectName}</span>
+                    <span className="min-w-0 flex-1 truncate">{displayedProjectName}</span>
                   </div>
                   <p className="mt-1 text-[10px] text-muted-foreground/60">
                     {t('input.createProjectSubtitle', {
@@ -527,9 +527,9 @@ export function WorkingFolderSelectorDialog({
               <p className="text-[10px] text-muted-foreground/70">
                 {t('input.currentWorkingFolder')}
               </p>
-              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                 <FolderOpen className="size-3 shrink-0" />
-                <span className="truncate">
+                <span className="min-w-0 flex-1 truncate">
                   {workingFolder ?? t('input.noWorkingFolderSelected')}
                 </span>
               </div>
@@ -563,13 +563,13 @@ export function WorkingFolderSelectorDialog({
                     defaultValue: 'Selected working folder'
                   })}
                 </p>
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                   {pendingSelection?.kind === 'ssh' ? (
                     <Server className="size-3 shrink-0" />
                   ) : (
                     <FolderOpen className="size-3 shrink-0" />
                   )}
-                  <span className="truncate">
+                  <span className="min-w-0 flex-1 truncate">
                     {pendingSelection?.folderPath || t('input.noWorkingFolderSelected')}
                   </span>
                 </div>

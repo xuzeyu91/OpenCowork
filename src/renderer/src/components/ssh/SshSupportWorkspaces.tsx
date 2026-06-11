@@ -918,11 +918,11 @@ export function SshSnippetsWorkspace(): React.JSX.Element {
                     className={cn(
                       'flex w-full items-center gap-4 rounded-[22px] border bg-card px-4 py-4 text-left transition-all',
                       active
-                        ? 'border-primary shadow-[0_18px_40px_rgba(47,140,243,0.16)]'
-                        : 'border-border shadow-[0_18px_44px_rgba(98,116,146,0.08)] hover:border-primary/30'
+                        ? 'border-primary shadow-[0_18px_40px_-24px_color-mix(in_srgb,var(--primary)_28%,transparent)]'
+                        : 'border-border shadow-[0_18px_44px_-30px_color-mix(in_srgb,var(--foreground)_18%,transparent)] hover:border-primary/30'
                     )}
                   >
-                    <div className="flex size-12 shrink-0 items-center justify-center rounded-[16px] bg-primary text-primary-foreground shadow-[0_16px_30px_rgba(10,93,150,0.25)]">
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-[16px] bg-primary text-primary-foreground shadow-[0_16px_30px_-18px_color-mix(in_srgb,var(--primary)_32%,transparent)]">
                       <Terminal className="size-5" />
                     </div>
                     <div className="min-w-0 flex-1">

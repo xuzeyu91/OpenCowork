@@ -121,7 +121,8 @@ export function SpreadsheetViewer({
   filePath,
   content,
   onContentChange,
-  sshConnectionId
+  sshConnectionId,
+  fileVersion
 }: ViewerProps): React.JSX.Element {
   const ext = getExt(filePath)
   const isWorkbook = ['.xlsx', '.xls', '.xlsm', '.xlsb', '.ods'].includes(ext)
@@ -175,7 +176,7 @@ export function SpreadsheetViewer({
     return () => {
       cancelled = true
     }
-  }, [filePath, isWorkbook, sshConnectionId])
+  }, [filePath, fileVersion, isWorkbook, sshConnectionId])
 
   // CSV: sync from content prop
   useEffect(() => {

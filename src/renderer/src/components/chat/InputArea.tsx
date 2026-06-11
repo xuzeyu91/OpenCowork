@@ -1887,10 +1887,8 @@ export function InputArea({
           void useGoalStore
             .getState()
             .loadGoalForSession(draftSessionId, true)
-            .then(async () => {
-              return await useGoalStore.getState().updateGoal(draftSessionId, { status: 'paused' })
-            })
-            .then(async (result) => {
+            .then(() => useGoalStore.getState().updateGoal(draftSessionId, { status: 'paused' }))
+            .then((result) => {
               if (!result.success) {
                 toast.error(t('goal.toasts.updateFailed'), { description: result.error })
               }
@@ -2751,7 +2749,7 @@ export function InputArea({
           <span>
             {t('input.pendingGoalBanner', {
               defaultValue:
-                'Goal is ready: your next text message will be sent normally and set as the session goal.'
+                'Goal pursuit is ready. Your next text message will be used as the goal and sent normally.'
             })}
           </span>
         </div>
@@ -2992,7 +2990,7 @@ export function InputArea({
                       })
                     : hasPendingGoalMode
                       ? t('input.placeholderPendingGoal', {
-                          defaultValue: 'Enter the goal and send it as a normal message...'
+                          defaultValue: 'Describe the goal to pursue...'
                         })
                       : (effectivePlaceholder ??
                         (shouldRecommendInit

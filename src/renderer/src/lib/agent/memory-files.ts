@@ -544,7 +544,7 @@ async function ensurePrimaryMemoryWatcher(
   watchedLayerPathKey = normalizedPath
   await ipc.invoke(IPC.FS_WATCH_FILE, { path: filePath }).catch(() => {})
   layeredMemoryWatchCleanup = ipc.on(IPC.FS_FILE_CHANGED, (...args: unknown[]) => {
-    const data = args[1] as { path?: string } | undefined
+    const data = args[0] as { path?: string } | undefined
     if (!data?.path) return
     if (normalizeWatchPath(data.path) !== normalizedPath) return
     void loadLayeredMemorySnapshot(ipc, {

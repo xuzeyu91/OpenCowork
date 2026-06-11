@@ -9,6 +9,22 @@ import { useChatStore } from '@renderer/stores/chat-store'
 import { useChatActions, type SendMessageOptions } from '@renderer/hooks/use-chat-actions'
 import type { ImageAttachment } from '@renderer/lib/image-attachments'
 import { ensureDefaultChatWorkingFolder } from '@renderer/lib/chat-working-folder'
+import { NewSessionProjectSelector } from './NewSessionProjectSelector'
+
+function sanitizeProjectName(rawName: string, fallbackName: string): string {
+  const cleaned = rawName
+    .replace(/[<>:"/\\|?*]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned || fallbackName
+}
+
+function deriveProjectNameFromFolder(folderPath: string, fallbackName: string): string {
+  const normalized = folderPath.trim().replace(/[\\/]+$/, '')
+  const parts = normalized.split(/[\\/]/).filter(Boolean)
+  const name = parts[parts.length - 1]
+  return name ? sanitizeProjectName(name, fallbackName) : fallbackName
+}
 
 function applySuggestedPrompt(prompt: string): void {
   const textarea = document.querySelector('textarea')
@@ -35,7 +51,7 @@ export function ChatHomePage(): React.JSX.Element {
   const { t } = useTranslation('chat')
   const mode = useUIStore((s) => s.mode)
   const activeProjectId = useChatStore((s) => s.activeProjectId)
-  const { activeProject, workingFolder, sshConnectionId } = useChatStore(
+  const { projects, activeProject, workingFolder, sshConnectionId } = useChatStore(
     useShallow((s) => {
       const project =
         s.projects.find((item) => item.id === s.activeProjectId) ??
@@ -43,17 +59,77 @@ export function ChatHomePage(): React.JSX.Element {
         s.projects[0] ??
         null
       return {
+        projects: s.projects,
         activeProject: project,
         workingFolder: project?.workingFolder,
         sshConnectionId: project?.sshConnectionId ?? null
       }
     })
   )
+  const selectableProjects = React.useMemo(
+    () => projects.filter((project) => !project.pluginId),
+    [projects]
+  )
+  const defaultSelectedProjectId = activeProjectId ?? selectableProjects[0]?.id ?? null
+  const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(null)
+  const projectSelectionTouchedRef = React.useRef(false)
+  const selectedProject =
+    selectableProjects.find((project) => project.id === selectedProjectId) ?? null
+  const homeProject = selectedProject ?? activeProject
+  const homeWorkingFolder =
+    selectedProject?.workingFolder ?? (mode === 'chat' ? undefined : workingFolder)
+  const homeSshConnectionId =
+    selectedProject?.sshConnectionId ?? (mode === 'chat' ? null : sshConnectionId)
+  const terminalProjectId = homeProject?.id ?? null
   const terminalDockOpen = useUIStore((s) =>
-    activeProject?.id ? Boolean(s.bottomTerminalDockOpenByProjectId[activeProject.id]) : false
+    terminalProjectId ? Boolean(s.bottomTerminalDockOpenByProjectId[terminalProjectId]) : false
   )
   const { sendMessage } = useChatActions()
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false)
+  const [createProjectDialogOpen, setCreateProjectDialogOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    if (projectSelectionTouchedRef.current) return
+    setSelectedProjectId(defaultSelectedProjectId)
+  }, [defaultSelectedProjectId])
+
+  React.useEffect(() => {
+    if (!selectedProjectId) return
+    if (selectableProjects.some((project) => project.id === selectedProjectId)) return
+    setSelectedProjectId(selectableProjects[0]?.id ?? null)
+  }, [selectableProjects, selectedProjectId])
+
+  React.useEffect(() => {
+    if (mode === 'chat' || selectedProjectId || selectableProjects.length === 0) return
+    const nextProjectId = activeProjectId ?? selectableProjects[0].id
+    setSelectedProjectId(nextProjectId)
+    useChatStore.getState().setActiveProject(nextProjectId)
+  }, [activeProjectId, mode, selectableProjects, selectedProjectId])
+
+  const handleSelectHomeProject = React.useCallback((projectId: string | null): void => {
+    projectSelectionTouchedRef.current = true
+    setSelectedProjectId(projectId)
+    useChatStore.getState().setActiveProject(projectId)
+  }, [])
+
+  const handleCreateProjectWithDirectory = React.useCallback(
+    async (folderPath: string, connectionId: string | null): Promise<void> => {
+      const chatStore = useChatStore.getState()
+      const projectId = await chatStore.createProject({
+        name: deriveProjectNameFromFolder(
+          folderPath,
+          t('input.newProject', { defaultValue: 'New project' })
+        ),
+        workingFolder: folderPath,
+        sshConnectionId: connectionId ?? undefined
+      })
+      projectSelectionTouchedRef.current = true
+      setSelectedProjectId(projectId)
+      chatStore.setActiveProject(projectId)
+      setCreateProjectDialogOpen(false)
+    },
+    [t]
+  )
 
   const handleSend = React.useCallback(
     (text: string, images?: ImageAttachment[], options?: SendMessageOptions): void => {
@@ -61,13 +137,18 @@ export function ChatHomePage(): React.JSX.Element {
         const chatStore = useChatStore.getState()
         const chatWorkingFolder =
           mode === 'chat' ? await ensureDefaultChatWorkingFolder() : undefined
+        const projectIdForSession =
+          selectedProjectId &&
+          chatStore.projects.some((project) => project.id === selectedProjectId)
+            ? selectedProjectId
+            : null
         const sessionId =
-          mode === 'chat'
+          mode === 'chat' && !projectIdForSession
             ? chatStore.createSession(mode, null, {
                 preserveProjectless: true,
                 workingFolder: chatWorkingFolder
               })
-            : chatStore.createSession(mode, activeProject?.id ?? undefined)
+            : chatStore.createSession(mode, projectIdForSession ?? activeProject?.id ?? undefined)
         useUIStore.getState().navigateToSession(sessionId)
         void sendMessage(text, images, undefined, sessionId, undefined, undefined, {
           ...options,
@@ -75,28 +156,30 @@ export function ChatHomePage(): React.JSX.Element {
         })
       })()
     },
-    [activeProject?.id, mode, sendMessage]
+    [activeProject?.id, mode, selectedProjectId, sendMessage]
   )
 
   const updateHomeProjectDirectory = React.useCallback(
     async (patch: { workingFolder: string; sshConnectionId: string | null }): Promise<void> => {
       const chatStore = useChatStore.getState()
-      let projectId: string | null = activeProject?.id ?? activeProjectId ?? null
+      let projectId: string | null =
+        selectedProject?.id ?? activeProject?.id ?? activeProjectId ?? null
       if (!projectId) {
         const ensured = await chatStore.ensureDefaultProject()
         projectId = ensured?.id ?? null
       }
       if (!projectId) return
       chatStore.setActiveProject(projectId)
+      setSelectedProjectId(projectId)
       chatStore.updateProjectDirectory(projectId, patch)
     },
-    [activeProject?.id, activeProjectId]
+    [activeProject?.id, activeProjectId, selectedProject?.id]
   )
 
   const quickPrompts =
     mode === 'chat'
       ? [t('messageList.explainAsync'), t('messageList.compareRest'), t('messageList.writeRegex')]
-      : workingFolder
+      : homeWorkingFolder
         ? [
             t('messageList.summarizeProject'),
             t('messageList.findBugs'),
@@ -111,16 +194,16 @@ export function ChatHomePage(): React.JSX.Element {
   const title =
     mode === 'chat'
       ? t('messageList.homeTitleChatQuestion')
-      : workingFolder
+      : homeWorkingFolder
         ? t('messageList.homeTitleBuildQuestion', {
-            name: activeProject?.name ?? t('messageList.thisWorkspace')
+            name: homeProject?.name ?? t('messageList.thisWorkspace')
           })
         : t('messageList.startCoding')
 
   const description =
     mode === 'chat'
       ? t('messageList.startConversationDesc')
-      : workingFolder
+      : homeWorkingFolder
         ? t('messageList.startCodingDesc')
         : t('input.noWorkingFolder', { mode })
 
@@ -137,15 +220,15 @@ export function ChatHomePage(): React.JSX.Element {
                 {description}
               </p>
 
-              {mode !== 'chat' && activeProject ? (
+              {mode !== 'chat' && homeProject ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <span className="truncate text-foreground/88">{activeProject.name}</span>
-                  {workingFolder ? (
+                  <span className="truncate text-foreground/88">{homeProject.name}</span>
+                  {homeWorkingFolder ? (
                     <span className="max-w-[320px] truncate text-[11px] text-muted-foreground">
-                      {workingFolder}
+                      {homeWorkingFolder}
                     </span>
                   ) : null}
-                  {sshConnectionId ? (
+                  {homeSshConnectionId ? (
                     <span className="rounded-md border border-border/60 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground">
                       SSH
                     </span>
@@ -158,9 +241,17 @@ export function ChatHomePage(): React.JSX.Element {
               sessionId={null}
               onSend={handleSend}
               onSelectFolder={mode !== 'chat' ? () => setFolderDialogOpen(true) : undefined}
-              workingFolder={workingFolder}
+              workingFolder={homeWorkingFolder}
               hideWorkingFolderIndicator
               isStreaming={false}
+            />
+
+            <NewSessionProjectSelector
+              projects={selectableProjects}
+              selectedProjectId={selectedProjectId}
+              allowNoProject={mode === 'chat'}
+              onSelectProject={handleSelectHomeProject}
+              onCreateProject={() => setCreateProjectDialogOpen(true)}
             />
 
             <div className="mt-4 flex flex-wrap gap-2 sm:mt-5">
@@ -179,12 +270,12 @@ export function ChatHomePage(): React.JSX.Element {
         </div>
       </div>
 
-      {activeProject?.id && terminalDockOpen && (workingFolder || sshConnectionId) && (
+      {homeProject?.id && terminalDockOpen && (homeWorkingFolder || homeSshConnectionId) && (
         <ProjectTerminalDock
-          projectId={activeProject.id}
-          projectName={activeProject.name}
-          workingFolder={workingFolder ?? null}
-          sshConnectionId={sshConnectionId}
+          projectId={homeProject.id}
+          projectName={homeProject.name}
+          workingFolder={homeWorkingFolder ?? null}
+          sshConnectionId={homeSshConnectionId}
         />
       )}
 
@@ -192,8 +283,8 @@ export function ChatHomePage(): React.JSX.Element {
         <WorkingFolderSelectorDialog
           open={folderDialogOpen}
           onOpenChange={setFolderDialogOpen}
-          workingFolder={workingFolder}
-          sshConnectionId={sshConnectionId}
+          workingFolder={homeWorkingFolder}
+          sshConnectionId={homeSshConnectionId}
           onSelectLocalFolder={(folderPath) =>
             updateHomeProjectDirectory({
               workingFolder: folderPath,
@@ -208,6 +299,17 @@ export function ChatHomePage(): React.JSX.Element {
           }
         />
       )}
+
+      <WorkingFolderSelectorDialog
+        open={createProjectDialogOpen}
+        onOpenChange={setCreateProjectDialogOpen}
+        createMode
+        projectName={t('input.newProject', { defaultValue: 'New project' })}
+        onSelectLocalFolder={(folderPath) => handleCreateProjectWithDirectory(folderPath, null)}
+        onSelectSshFolder={(folderPath, connectionId) =>
+          handleCreateProjectWithDirectory(folderPath, connectionId)
+        }
+      />
     </div>
   )
 }

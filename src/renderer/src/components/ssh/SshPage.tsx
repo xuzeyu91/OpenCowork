@@ -128,6 +128,68 @@ function getToneBorderColor(tone: ShellTone, palette: SshChromePalette): string 
   return palette.libraryBorder
 }
 
+type SshWorkspaceStyle = React.CSSProperties & Record<`--${string}`, string>
+
+function createSshWorkspaceStyle(
+  palette: SshChromePalette,
+  shellTone: ShellTone
+): SshWorkspaceStyle {
+  const rootBackground = shellTone === 'terminal' ? palette.terminalCanvas : palette.canvas
+
+  return {
+    background: rootBackground,
+    '--background': palette.canvas,
+    '--foreground': palette.text,
+    '--card': palette.surface,
+    '--card-foreground': palette.text,
+    '--popover': palette.surface,
+    '--popover-foreground': palette.text,
+    '--primary': palette.accent,
+    '--primary-foreground': palette.accentContrast,
+    '--secondary': palette.accentSoft,
+    '--secondary-foreground': palette.text,
+    '--muted': palette.canvasSubtle,
+    '--muted-foreground': palette.muted,
+    '--accent': palette.accentSoft,
+    '--accent-foreground': palette.text,
+    '--border': palette.libraryBorder,
+    '--input': palette.libraryBorder,
+    '--ring': palette.accent,
+    '--sidebar': palette.panel,
+    '--sidebar-foreground': palette.terminalText,
+    '--sidebar-accent': palette.terminalPill,
+    '--sidebar-accent-foreground': palette.terminalText,
+    '--sidebar-border': palette.panelBorder,
+    '--ssh-canvas': palette.canvas,
+    '--ssh-canvas-subtle': palette.canvasSubtle,
+    '--ssh-surface': palette.surface,
+    '--ssh-surface-strong': palette.surfaceStrong,
+    '--ssh-border': palette.libraryBorder,
+    '--ssh-border-strong': palette.panelBorder,
+    '--ssh-text': palette.text,
+    '--ssh-muted': palette.muted,
+    '--ssh-accent': palette.accent,
+    '--ssh-accent-soft': palette.accentSoft,
+    '--ssh-accent-contrast': palette.accentContrast,
+    '--ssh-success': palette.success,
+    '--ssh-success-soft': palette.successSoft,
+    '--ssh-warning': palette.warning,
+    '--ssh-warning-soft': palette.warningSoft,
+    '--ssh-danger': palette.danger,
+    '--ssh-danger-soft': palette.dangerSoft,
+    '--ssh-panel': palette.panel,
+    '--ssh-panel-strong': palette.panelStrong,
+    '--ssh-panel-border': palette.panelBorder,
+    '--ssh-panel-text': palette.terminalText,
+    '--ssh-panel-muted': palette.terminalPillText,
+    '--ssh-panel-hover': palette.terminalPill,
+    '--ssh-pill': palette.libraryPill,
+    '--ssh-pill-active': palette.libraryPillActive,
+    '--ssh-pill-text': palette.libraryPillText,
+    '--ssh-pill-active-text': palette.libraryPillActiveText
+  }
+}
+
 function ChromePill({
   active,
   tone,
@@ -208,8 +270,8 @@ function ConnectionStage({
         <div className="mx-auto flex max-w-[380px] items-start justify-between gap-6">
           <div className="flex items-start gap-4">
             <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-[14px] text-white shadow-[0_14px_30px_rgba(15,138,166,0.22)]"
-              style={{ background: palette.accent }}
+              className="flex size-10 shrink-0 items-center justify-center rounded-[14px] shadow-[0_14px_30px_-18px_color-mix(in_srgb,var(--ssh-accent)_50%,transparent)]"
+              style={{ background: palette.accent, color: palette.accentContrast }}
             >
               <Terminal className="size-5" />
             </div>
@@ -242,8 +304,11 @@ function ConnectionStage({
           {steps.map((step, index) => (
             <div key={step.key} className="flex flex-1 items-center gap-3">
               <div
-                className="flex size-6 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold text-white"
-                style={{ background: step.done ? palette.accent : palette.muted }}
+                className="flex size-6 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold"
+                style={{
+                  background: step.done ? palette.accent : palette.muted,
+                  color: step.done ? palette.accentContrast : palette.canvas
+                }}
               >
                 {index + 1}
               </div>
@@ -323,7 +388,7 @@ function ConnectionStage({
             </Button>
             <Button
               size="sm"
-              className="h-11 rounded-2xl px-5 text-[0.9rem] font-semibold text-white hover:opacity-90"
+              className="h-11 rounded-2xl px-5 text-[0.9rem] font-semibold hover:opacity-90"
               style={{ background: palette.accent, color: palette.accentContrast }}
               onClick={onRetry}
             >
@@ -335,7 +400,7 @@ function ConnectionStage({
 
           {showLogs ? (
             <div
-              className="mt-8 rounded-[24px] border p-5 shadow-[0_18px_42px_rgba(111,133,165,0.12)]"
+              className="mt-8 rounded-[24px] border p-5 shadow-[0_18px_42px_-30px_color-mix(in_srgb,var(--ssh-text)_18%,transparent)]"
               style={{ borderColor: palette.panelBorder, background: palette.surface }}
             >
               <div
@@ -545,6 +610,10 @@ export function SshPage(): React.JSX.Element {
     () => getSshChromePalette(activeChromePreset, resolvedThemeMode),
     [activeChromePreset, resolvedThemeMode]
   )
+  const sshWorkspaceStyle = useMemo(
+    () => createSshWorkspaceStyle(shellPalette, shellTone),
+    [shellPalette, shellTone]
+  )
   const stageStatus =
     activeSession?.status === 'connecting' ||
     activeSession?.status === 'error' ||
@@ -644,7 +713,10 @@ export function SshPage(): React.JSX.Element {
               ) : tab.sessionId ? (
                 <SshTerminal sessionId={tab.sessionId} connectionName={tab.connectionName} />
               ) : (
-                <div className="flex h-full items-center justify-center text-white/70">
+                <div
+                  className="flex h-full items-center justify-center"
+                  style={{ color: shellPalette.terminalText }}
+                >
                   <Loader2 className="size-5 animate-spin" />
                 </div>
               )}
@@ -681,12 +753,7 @@ export function SshPage(): React.JSX.Element {
   ])
 
   return (
-    <div
-      className="flex h-full flex-col overflow-hidden"
-      style={{
-        background: shellTone === 'terminal' ? shellPalette.terminalCanvas : shellPalette.canvas
-      }}
-    >
+    <div className="flex h-full flex-col overflow-hidden" style={sshWorkspaceStyle}>
       <div
         className={cn(
           'titlebar-drag relative flex h-[52px] shrink-0 items-center gap-3 border-b px-3',
@@ -847,8 +914,11 @@ export function SshPage(): React.JSX.Element {
                 <Upload className="size-4" />
                 {activeUploadCount > 0 ? (
                   <span
-                    className="rounded-full px-1.5 py-0.5 text-[0.68rem] font-semibold text-white"
-                    style={{ background: shellPalette.badge }}
+                    className="rounded-full px-1.5 py-0.5 text-[0.68rem] font-semibold"
+                    style={{
+                      background: shellPalette.badge,
+                      color: shellPalette.accentContrast
+                    }}
                   >
                     {activeUploadCount}
                   </span>

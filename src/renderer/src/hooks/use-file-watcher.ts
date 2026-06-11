@@ -1,6 +1,18 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { IPC } from '@renderer/lib/ipc/channels'
+
+interface UseFileWatcherOptions {
+  readContent?: boolean
+}
+
+interface UseFileWatcherResult {
+  content: string
+  setContent: Dispatch<SetStateAction<string>>
+  loading: boolean
+  reload: () => Promise<void>
+  version: number
+}
 
 function getReadError(result: unknown): string | null {
   if (result && typeof result === 'object' && 'error' in result) {
@@ -18,13 +30,48 @@ function getReadError(result: unknown): string | null {
   }
 }
 
-export function useFileWatcher(filePath: string | null, sshConnectionId?: string) {
+function getChangedPath(args: unknown[]): string | null {
+  const payload = args[0]
+  if (!payload || typeof payload !== 'object' || !('path' in payload)) return null
+
+  const path = (payload as { path?: unknown }).path
+  return typeof path === 'string' && path.length > 0 ? path : null
+}
+
+function normalizeWatchPath(value: string): string {
+  const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[a-z]:\//i.test(normalized) ? normalized.toLowerCase() : normalized
+}
+
+function getResolvedWatchPath(result: unknown): string | null {
+  if (!result || typeof result !== 'object' || !('path' in result)) return null
+
+  const path = (result as { path?: unknown }).path
+  return typeof path === 'string' && path.length > 0 ? path : null
+}
+
+export function useFileWatcher(
+  filePath: string | null,
+  sshConnectionId?: string,
+  options: UseFileWatcherOptions = {}
+): UseFileWatcherResult {
+  const readContent = options.readContent ?? true
   const [content, setContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [version, setVersion] = useState(0)
+  const requestIdRef = useRef(0)
+  const watchedPathRef = useRef<string | null>(null)
 
   const loadContent = useCallback(async () => {
+    const requestId = ++requestIdRef.current
     if (!filePath) {
       setContent('')
+      setLoading(false)
+      return
+    }
+    if (!readContent) {
+      setContent('')
+      setLoading(false)
       return
     }
     setLoading(true)
@@ -38,14 +85,19 @@ export function useFileWatcher(filePath: string | null, sshConnectionId?: string
       if (readError) {
         throw new Error(readError)
       }
-      setContent(String(result))
+      if (requestId === requestIdRef.current) setContent(String(result))
     } catch (err) {
       console.error('[useFileWatcher] Failed to read file:', err)
-      setContent('')
+      if (requestId === requestIdRef.current) setContent('')
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
-  }, [filePath, sshConnectionId])
+  }, [filePath, readContent, sshConnectionId])
+
+  const reload = useCallback(async () => {
+    setVersion((current) => current + 1)
+    await loadContent()
+  }, [loadContent])
 
   // Initial load
   useEffect(() => {
@@ -56,21 +108,37 @@ export function useFileWatcher(filePath: string | null, sshConnectionId?: string
   useEffect(() => {
     if (!filePath || sshConnectionId) return
 
-    ipcClient.invoke(IPC.FS_WATCH_FILE, { path: filePath }).catch(() => {})
+    let disposed = false
+    const requestedWatchPath = normalizeWatchPath(filePath)
+    watchedPathRef.current = requestedWatchPath
 
-    const handler = (...args: unknown[]) => {
-      const data = args[1] as { path: string } | undefined
-      if (data?.path === filePath) {
-        loadContent()
-      }
+    ipcClient
+      .invoke(IPC.FS_WATCH_FILE, { path: filePath })
+      .then((result) => {
+        if (disposed) return
+        const resolvedWatchPath = getResolvedWatchPath(result)
+        watchedPathRef.current = resolvedWatchPath
+          ? normalizeWatchPath(resolvedWatchPath)
+          : requestedWatchPath
+      })
+      .catch(() => {})
+
+    const handler = (...args: unknown[]): void => {
+      const changedPath = getChangedPath(args)
+      const watchedPath = watchedPathRef.current ?? requestedWatchPath
+      if (!changedPath || normalizeWatchPath(changedPath) !== watchedPath) return
+
+      setVersion((current) => current + 1)
+      if (readContent) void loadContent()
     }
     const cleanup = ipcClient.on(IPC.FS_FILE_CHANGED, handler)
 
     return () => {
+      disposed = true
       cleanup()
       ipcClient.invoke(IPC.FS_UNWATCH_FILE, { path: filePath }).catch(() => {})
     }
-  }, [filePath, loadContent, sshConnectionId])
+  }, [filePath, loadContent, readContent, sshConnectionId])
 
-  return { content, setContent, loading, reload: loadContent }
+  return { content, setContent, loading, reload, version }
 }

@@ -46,8 +46,8 @@ export function SshConnectionDetail({
           <Server className="size-4 text-primary shrink-0" />
           <span className="text-sm font-medium truncate">{connection.name}</span>
           {isConnected ? (
-            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500 shrink-0">
-              <div className="size-1.5 rounded-full bg-emerald-500" />
+            <span className="inline-flex items-center gap-1 text-[10px] text-[var(--ssh-success)] shrink-0">
+              <div className="size-1.5 rounded-full bg-current" />
               {t('list.online')}
             </span>
           ) : (

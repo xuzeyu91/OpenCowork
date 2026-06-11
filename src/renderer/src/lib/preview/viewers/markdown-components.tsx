@@ -356,7 +356,11 @@ export function createMarkdownComponents(filePath?: string): Components {
             </button>
           )
         }
-        return <code className="rounded bg-muted px-1 py-0.5 text-xs">{children}</code>
+        return (
+          <code className="not-prose rounded bg-muted px-1 py-0.5 text-xs text-foreground">
+            {children}
+          </code>
+        )
       }
 
       if (language === 'mermaid') {
@@ -364,8 +368,10 @@ export function createMarkdownComponents(filePath?: string): Components {
       }
 
       return (
-        <pre className="my-3 overflow-x-auto rounded-md bg-muted/60 p-3 text-xs">
-          <code className={className}>{children}</code>
+        <pre className="not-prose my-3 overflow-x-auto rounded-md border border-border/50 bg-muted/60 p-3 text-xs leading-relaxed text-foreground">
+          <code className={[className, 'font-mono text-inherit'].filter(Boolean).join(' ')}>
+            {children}
+          </code>
         </pre>
       )
     }

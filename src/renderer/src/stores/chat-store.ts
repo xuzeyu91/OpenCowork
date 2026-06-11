@@ -677,6 +677,7 @@ interface ChatStore {
       requestContextMaxMessages?: number | null
     }
   ) => Promise<UnifiedMessage[]>
+  getFullSessionMessagesForMutation: (sessionId: string) => Promise<UnifiedMessage[]>
   ensureDefaultProject: () => Promise<Project | null>
 
   // Project CRUD
@@ -2208,6 +2209,12 @@ export const useChatStore = create<ChatStore>()(
       })
 
       return messages
+    },
+
+    getFullSessionMessagesForMutation: async (sessionId) => {
+      const session = get().sessions.find((s) => s.id === sessionId)
+      if (!session) return []
+      return loadRequestContextMessages(session, null)
     },
 
     loadFromDb: async () => {

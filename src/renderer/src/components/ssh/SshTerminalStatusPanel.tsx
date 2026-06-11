@@ -420,13 +420,13 @@ export function SshTerminalStatusPanel({
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_rgba(5,8,18,0.34)]"
+          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
           style={{ borderColor: palette.panelBorder, background: palette.panel }}
         >
           <div className="flex items-start gap-3">
             <div
-              className="flex size-11 shrink-0 items-center justify-center rounded-[16px] text-white shadow-[0_14px_30px_rgba(17,109,187,0.22)]"
-              style={{ background: palette.accent }}
+              className="flex size-11 shrink-0 items-center justify-center rounded-[16px] shadow-[0_14px_30px_-18px_color-mix(in_srgb,var(--ssh-accent)_40%,transparent)]"
+              style={{ background: palette.accent, color: palette.accentContrast }}
             >
               <Server className="size-5" />
             </div>
@@ -532,7 +532,7 @@ export function SshTerminalStatusPanel({
         </section>
 
         <section
-          className="space-y-3 rounded-[24px] border p-4 shadow-[0_20px_40px_rgba(5,8,18,0.34)]"
+          className="space-y-3 rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
           style={{ borderColor: palette.panelBorder, background: palette.panel }}
         >
           <div
@@ -574,7 +574,7 @@ export function SshTerminalStatusPanel({
         </section>
 
         <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_rgba(5,8,18,0.34)]"
+          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
           style={{ borderColor: palette.panelBorder, background: palette.panel }}
         >
           <div
@@ -589,8 +589,8 @@ export function SshTerminalStatusPanel({
             style={{ borderColor: palette.panelBorder }}
           >
             <div
-              className="grid grid-cols-[72px_66px_1fr] gap-2 px-3 py-2 text-[0.72rem] font-semibold text-white"
-              style={{ background: palette.accent }}
+              className="grid grid-cols-[72px_66px_1fr] gap-2 px-3 py-2 text-[0.72rem] font-semibold"
+              style={{ background: palette.accent, color: palette.accentContrast }}
             >
               <span>{t('workspace.terminalStatus.memory', { defaultValue: 'Memory' })}</span>
               <span>CPU</span>
@@ -613,7 +613,7 @@ export function SshTerminalStatusPanel({
         </section>
 
         <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_rgba(5,8,18,0.34)]"
+          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
           style={{ borderColor: palette.panelBorder, background: palette.panel }}
         >
           <div className="flex items-center justify-between gap-3">
@@ -639,7 +639,7 @@ export function SshTerminalStatusPanel({
         </section>
 
         <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_rgba(5,8,18,0.34)]"
+          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
           style={{ borderColor: palette.panelBorder, background: palette.panel }}
         >
           <div

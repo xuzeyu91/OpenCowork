@@ -39,6 +39,16 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-agent-files-panel: var(--agent-files-panel);
+  --color-agent-files-fg: var(--agent-files-fg);
+  --color-agent-files-muted: var(--agent-files-muted);
+  --color-agent-files-border: var(--agent-files-border);
+  --color-agent-files-hover: var(--agent-files-hover);
+  --color-agent-files-icon: var(--agent-files-icon);
+  --color-agent-files-added: var(--agent-files-added);
+  --color-agent-files-deleted: var(--agent-files-deleted);
+  --color-agent-files-modified: var(--agent-files-modified);
+  --color-agent-files-conflict: var(--agent-files-conflict);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -347,6 +357,20 @@
   );
   --workspace-filetree-empty-bg: color-mix(in srgb, var(--muted) 38%, transparent);
   --workspace-filetree-guide: color-mix(in srgb, var(--border) 72%, transparent);
+  --agent-files-panel: #f8f8f8;
+  --agent-files-fg: #1f1f1f;
+  --agent-files-muted: #6f6f6f;
+  --agent-files-border: #d7d7d7;
+  --agent-files-hover: #e8e8e8;
+  --agent-files-selected: #dbeafe;
+  --agent-files-selected-fg: #0f172a;
+  --agent-files-button: #0e639c;
+  --agent-files-button-hover: #1177bb;
+  --agent-files-icon: #5f6a72;
+  --agent-files-added: #16825d;
+  --agent-files-deleted: #c62828;
+  --agent-files-modified: #1677a8;
+  --agent-files-conflict: #b45309;
   --workspace-terminal-bg: var(--background);
   --workspace-terminal-border: color-mix(in srgb, var(--border) 90%, transparent);
   --workspace-terminal-divider: color-mix(in srgb, var(--border) 80%, transparent);
@@ -485,6 +509,20 @@
   );
   --workspace-filetree-empty-bg: color-mix(in srgb, var(--muted) 42%, transparent);
   --workspace-filetree-guide: color-mix(in srgb, var(--border) 68%, black 32%);
+  --agent-files-panel: #181818;
+  --agent-files-fg: #cccccc;
+  --agent-files-muted: #8f8f8f;
+  --agent-files-border: #2b2b2b;
+  --agent-files-hover: #2a2d2e;
+  --agent-files-selected: #04395e;
+  --agent-files-selected-fg: #ffffff;
+  --agent-files-button: #0e639c;
+  --agent-files-button-hover: #1177bb;
+  --agent-files-icon: #9da3a6;
+  --agent-files-added: #6a9955;
+  --agent-files-deleted: #f14c4c;
+  --agent-files-modified: #4fc1ff;
+  --agent-files-conflict: #cca700;
   --workspace-terminal-bg: var(--background);
   --workspace-terminal-border: color-mix(in srgb, var(--border) 82%, black 18%);
   --workspace-terminal-divider: color-mix(in srgb, var(--border) 74%, black 26%);
@@ -1211,6 +1249,195 @@
   .workspace-filetree-action:hover {
     background: var(--workspace-filetree-row-hover-bg);
     color: var(--foreground);
+  }
+
+  .agent-files-panel {
+    background: var(--agent-files-panel);
+    color: var(--agent-files-fg);
+    font-size: 12px;
+  }
+
+  .agent-files-tab {
+    position: relative;
+    display: inline-flex;
+    height: 100%;
+    align-items: center;
+    border: 0;
+    padding: 0 8px;
+    color: var(--agent-files-muted);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 34px;
+  }
+
+  .agent-files-tab:hover {
+    color: var(--agent-files-fg);
+    background: transparent;
+  }
+
+  .agent-files-tab--active,
+  .agent-files-tab--active:hover {
+    color: var(--agent-files-fg);
+  }
+
+  .agent-files-tab--active::after {
+    position: absolute;
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    height: 1px;
+    background: var(--agent-files-button);
+    content: '';
+  }
+
+  .agent-files-primary-button {
+    background: var(--agent-files-button);
+    border-radius: 2px;
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .agent-files-primary-button:hover {
+    background: var(--agent-files-button-hover);
+    color: white;
+  }
+
+  .agent-files-toolbar-button,
+  .agent-files-icon-button,
+  .agent-files-row-action {
+    border-radius: 2px;
+    color: var(--agent-files-muted);
+  }
+
+  .agent-files-toolbar-button:hover,
+  .agent-files-icon-button:hover,
+  .agent-files-row-action:hover {
+    background: var(--agent-files-hover);
+    color: var(--agent-files-fg);
+  }
+
+  .agent-files-icon-button {
+    width: 22px;
+    height: 22px;
+  }
+
+  .agent-files-icon-button--active {
+    background: var(--agent-files-hover);
+    color: var(--agent-files-fg);
+  }
+
+  .agent-files-branch-filter {
+    height: 22px;
+    max-width: 11rem;
+    color: var(--agent-files-fg);
+    font-size: 12px;
+  }
+
+  .agent-files-count-badge {
+    min-width: 16px;
+    border-radius: 999px;
+    background: var(--agent-files-hover);
+    color: var(--agent-files-muted);
+    padding: 0 5px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 16px;
+  }
+
+  .agent-files-change-row {
+    height: 22px;
+    color: var(--agent-files-fg);
+    line-height: 22px;
+  }
+
+  .agent-files-change-row:hover {
+    background: var(--agent-files-hover);
+  }
+
+  .agent-files-change-row--selected {
+    background: var(--agent-files-selected);
+    color: var(--agent-files-selected-fg);
+  }
+
+  .agent-files-change-row--selected .text-agent-files-muted,
+  .agent-files-change-row--selected .text-agent-files-icon {
+    color: color-mix(in srgb, var(--agent-files-selected-fg) 72%, transparent);
+  }
+
+  .agent-files-diff-dialog {
+    border-color: var(--agent-files-border);
+    background: var(--agent-files-panel);
+    color: var(--agent-files-fg);
+  }
+
+  .workspace-filetree-surface--agent {
+    background: var(--agent-files-panel);
+    box-shadow: none;
+  }
+
+  .agent-files-panel .workspace-filetree-header {
+    border-bottom: 0;
+    background: var(--agent-files-panel);
+  }
+
+  .agent-files-panel .workspace-filetree-header:not(.workspace-filetree-header--agent),
+  .agent-files-panel .workspace-filetree-footer {
+    border-color: var(--agent-files-border);
+  }
+
+  .agent-files-panel .workspace-filetree-input {
+    border-color: var(--agent-files-border);
+    background: color-mix(in srgb, var(--agent-files-panel) 88%, var(--agent-files-hover) 12%);
+    color: var(--agent-files-fg);
+  }
+
+  .agent-files-panel .workspace-filetree-row {
+    min-height: 22px;
+    border: 0;
+    border-radius: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    box-shadow: none;
+  }
+
+  .agent-files-panel .workspace-filetree-row--agent {
+    height: 22px;
+    min-height: 22px;
+    color: var(--agent-files-fg);
+    line-height: 22px;
+  }
+
+  .agent-files-panel .workspace-filetree-row--agent svg {
+    flex-shrink: 0;
+  }
+
+  .agent-files-panel .workspace-filetree-row--agent .workspace-filetree-chevron {
+    margin-right: 0;
+  }
+
+  .agent-files-panel .workspace-filetree-row--interactive:hover,
+  .agent-files-panel .workspace-filetree-row--expanded {
+    background: var(--agent-files-hover);
+  }
+
+  .agent-files-panel .workspace-filetree-row--active {
+    background: var(--agent-files-selected);
+    color: var(--agent-files-selected-fg);
+  }
+
+  .agent-files-panel .workspace-filetree-row--active span,
+  .agent-files-panel .workspace-filetree-row--active svg {
+    color: var(--agent-files-selected-fg);
+  }
+
+  .agent-files-panel .workspace-filetree-empty {
+    border-color: var(--agent-files-border);
+    background: color-mix(in srgb, var(--agent-files-panel) 82%, var(--agent-files-hover) 18%);
+  }
+
+  .agent-files-explorer-title {
+    color: var(--agent-files-muted);
   }
 
   .workspace-terminal-dock {

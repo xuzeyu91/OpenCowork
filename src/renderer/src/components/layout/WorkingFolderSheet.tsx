@@ -1,85 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { FolderTree, Loader2 } from 'lucide-react'
+import { FolderTree } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
-import { FileTreePanel } from '@renderer/components/cowork/FileTreePanel'
-import { Button } from '@renderer/components/ui/button'
-import { SshFileExplorer } from '@renderer/components/ssh/SshFileExplorer'
 import { useChatStore } from '@renderer/stores/chat-store'
-import { useSshStore } from '@renderer/stores/ssh-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 import { clampWorkingFolderPanelWidth } from './right-panel-defs'
-
-function SshFilesPanel({
-  connectionId,
-  rootPath
-}: {
-  connectionId: string
-  rootPath: string
-}): React.JSX.Element {
-  const { t } = useTranslation('ssh')
-  const sessions = useSshStore((s) => s.sessions)
-  const connect = useSshStore((s) => s.connect)
-
-  const connectedSession = Object.values(sessions).find(
-    (session) => session.connectionId === connectionId && session.status === 'connected'
-  )
-  const connectingSession = Object.values(sessions).find(
-    (session) => session.connectionId === connectionId && session.status === 'connecting'
-  )
-  const errorSession = Object.values(sessions).find(
-    (session) => session.connectionId === connectionId && session.status === 'error'
-  )
-  const error = errorSession?.error ?? null
-
-  useEffect(() => {
-    if (connectedSession || connectingSession || errorSession) return
-    void connect(connectionId)
-  }, [connectedSession, connectingSession, errorSession, connect, connectionId])
-
-  if (connectedSession) {
-    return (
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <SshFileExplorer
-          sessionId={connectedSession.id}
-          connectionId={connectionId}
-          rootPath={rootPath}
-        />
-      </div>
-    )
-  }
-
-  if (connectingSession) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-        <Loader2 className="mr-2 size-4 animate-spin text-amber-500" />
-        {t('connecting')}
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-xs text-muted-foreground">{error}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8"
-          onClick={() => void connect(connectionId)}
-        >
-          {t('terminal.reconnect')}
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-      {t('connecting')}
-    </div>
-  )
-}
+import { AgentFilesPanel } from './AgentFilesPanel'
 
 interface WorkingFolderSheetProps {
   sessionId?: string | null
@@ -166,14 +92,7 @@ export function WorkingFolderSheet({
       >
         <div className="min-h-0 flex-1">
           {sessionView.workingFolder ? (
-            sessionView.sshConnectionId ? (
-              <SshFilesPanel
-                connectionId={sessionView.sshConnectionId}
-                rootPath={sessionView.workingFolder}
-              />
-            ) : (
-              <FileTreePanel sessionId={sessionView.sessionId} surface="sheet" />
-            )
+            <AgentFilesPanel sessionId={sessionView.sessionId} surface="sheet" />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
               <div className="workspace-filetree-empty flex size-12 items-center justify-center rounded-2xl">

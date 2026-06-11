@@ -37,7 +37,7 @@ export function SshDashboardStats({
       label: t('dashboard.onlineServers'),
       value: onlineCount,
       icon: Wifi,
-      accent: onlineCount > 0 ? 'text-emerald-500' : ''
+      accent: onlineCount > 0 ? 'text-[var(--ssh-success)]' : ''
     },
     {
       label: t('dashboard.totalGroups'),
@@ -49,7 +49,7 @@ export function SshDashboardStats({
       label: t('dashboard.activeUploads'),
       value: activeUploadCount,
       icon: Upload,
-      accent: activeUploadCount > 0 ? 'text-amber-500' : ''
+      accent: activeUploadCount > 0 ? 'text-[var(--ssh-warning)]' : ''
     }
   ]
 

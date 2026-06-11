@@ -159,17 +159,32 @@ function getEntryIcon(entry: SshFileEntry): typeof Folder {
 }
 
 function PaneStatus({ status }: { status?: SftpConnectionState['status'] }): React.JSX.Element {
-  const statusClass =
+  const statusStyle: React.CSSProperties =
     status === 'connected'
-      ? 'bg-green-500/12 text-green-600 dark:text-green-400'
+      ? {
+          background: 'color-mix(in srgb, var(--ssh-success) 14%, transparent)',
+          color: 'var(--ssh-success)'
+        }
       : status === 'connecting'
-        ? 'bg-amber-500/12 text-amber-600 dark:text-amber-400'
+        ? {
+            background: 'color-mix(in srgb, var(--ssh-warning) 16%, transparent)',
+            color: 'var(--ssh-warning)'
+          }
         : status === 'error'
-          ? 'bg-red-500/12 text-red-600 dark:text-red-400'
-          : 'bg-secondary text-secondary-foreground'
+          ? {
+              background: 'color-mix(in srgb, var(--destructive) 14%, transparent)',
+              color: 'var(--destructive)'
+            }
+          : {}
 
   return (
-    <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-semibold', statusClass)}>
+    <span
+      className={cn(
+        'rounded-full px-2.5 py-1 text-[11px] font-semibold',
+        !status && 'bg-secondary text-secondary-foreground'
+      )}
+      style={statusStyle}
+    >
       {status ?? 'idle'}
     </span>
   )
@@ -260,7 +275,9 @@ function LegacySshFileExplorer({
                     <Icon
                       className={cn(
                         'size-4 shrink-0',
-                        entry.type === 'directory' ? 'text-amber-400' : 'text-muted-foreground'
+                        entry.type === 'directory'
+                          ? 'text-[var(--ssh-warning)]'
+                          : 'text-muted-foreground'
                       )}
                     />
                     <span className="truncate text-[13px] font-medium text-foreground">
@@ -609,7 +626,9 @@ function ModernSshFileExplorer({
                       <Icon
                         className={cn(
                           'size-4 shrink-0',
-                          entry.type === 'directory' ? 'text-amber-500' : 'text-muted-foreground'
+                          entry.type === 'directory'
+                            ? 'text-[var(--ssh-warning)]'
+                            : 'text-muted-foreground'
                         )}
                       />
                       <div className="min-w-0 truncate font-medium">{entry.name}</div>
@@ -638,7 +657,7 @@ function ModernSshFileExplorer({
                       </button>
                       <button
                         type="button"
-                        className="rounded p-1 text-muted-foreground hover:bg-background hover:text-red-500"
+                        className="rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
                         onClick={(event) => {
                           event.stopPropagation()
                           onDeleteEntry(entry)

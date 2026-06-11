@@ -85,7 +85,7 @@ export function NavRail(): React.JSX.Element {
     if (ui.translatePageOpen) ui.closeTranslatePage()
     if (ui.tasksPageOpen) ui.closeTasksPage()
     if (activeNavItem === item && leftSidebarOpen) {
-      useUIStore.getState().setLeftSidebarOpen(false)
+      ui.toggleLeftSidebar()
     } else {
       setActiveNavItem(item)
       // Open sidebar if it's closed

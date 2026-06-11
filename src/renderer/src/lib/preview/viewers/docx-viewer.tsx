@@ -12,7 +12,11 @@ async function convertDocxToHtml(base64: string): Promise<string> {
   return result.value
 }
 
-export function DocxViewer({ filePath, sshConnectionId }: ViewerProps): React.JSX.Element {
+export function DocxViewer({
+  filePath,
+  sshConnectionId,
+  fileVersion
+}: ViewerProps): React.JSX.Element {
   const { t } = useTranslation('layout')
   const [html, setHtml] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -48,7 +52,7 @@ export function DocxViewer({ filePath, sshConnectionId }: ViewerProps): React.JS
     return () => {
       cancelled = true
     }
-  }, [filePath, sshConnectionId])
+  }, [filePath, fileVersion, sshConnectionId])
 
   if (loading) {
     return (

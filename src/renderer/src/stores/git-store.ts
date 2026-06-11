@@ -178,6 +178,16 @@ function ensureRepoDetails(
   return repoDetailsByPath[repoPath] ?? createEmptyRepoDetails()
 }
 
+const pendingFileDiffRequests = new Map<string, Promise<void>>()
+
+function fileDiffCacheKey(filePath: string, staged = false): string {
+  return `${staged ? 'staged' : 'unstaged'}:${filePath}`
+}
+
+function fileDiffRequestKey(repoPath: string, filePath: string, staged = false): string {
+  return `${repoPath}:${fileDiffCacheKey(filePath, staged)}`
+}
+
 export const useGitStore = create<GitStore>((set, get) => ({
   repositories: [],
   selectedRepoPath: null,
@@ -332,25 +342,47 @@ export const useGitStore = create<GitStore>((set, get) => ({
   },
 
   loadFileDiff: async (repoPath, filePath, staged = false) => {
-    const result = await invokeGit<GitResultBase & { diff?: string }>(IPC.GIT_GET_FILE_DIFF, {
-      ...getGitTarget(repoPath),
-      filePath,
-      staged
-    })
-    if (!result.success) return
-    const key = `${staged ? 'staged' : 'unstaged'}:${filePath}`
-    set((state) => ({
-      repoDetailsByPath: {
-        ...state.repoDetailsByPath,
-        [repoPath]: {
-          ...ensureRepoDetails(state.repoDetailsByPath, repoPath),
-          diffByKey: {
-            ...ensureRepoDetails(state.repoDetailsByPath, repoPath).diffByKey,
-            [key]: result.diff ?? ''
+    const requestKey = fileDiffRequestKey(repoPath, filePath, staged)
+    const pending = pendingFileDiffRequests.get(requestKey)
+    if (pending) return pending
+
+    const request = (async () => {
+      const result = await invokeGit<GitResultBase & { diff?: string }>(IPC.GIT_GET_FILE_DIFF, {
+        ...getGitTarget(repoPath),
+        filePath,
+        staged
+      })
+      if (!result.success) return
+
+      const key = fileDiffCacheKey(filePath, staged)
+      const diff = result.diff ?? ''
+      set((state) => {
+        const details = ensureRepoDetails(state.repoDetailsByPath, repoPath)
+        if (details.diffByKey[key] === diff) return state
+
+        return {
+          repoDetailsByPath: {
+            ...state.repoDetailsByPath,
+            [repoPath]: {
+              ...details,
+              diffByKey: {
+                ...details.diffByKey,
+                [key]: diff
+              }
+            }
           }
         }
+      })
+    })()
+
+    pendingFileDiffRequests.set(requestKey, request)
+    try {
+      await request
+    } finally {
+      if (pendingFileDiffRequests.get(requestKey) === request) {
+        pendingFileDiffRequests.delete(requestKey)
       }
-    }))
+    }
   },
 
   loadHistoryFileDiff: async (repoPath, filePath, commitHash) => {

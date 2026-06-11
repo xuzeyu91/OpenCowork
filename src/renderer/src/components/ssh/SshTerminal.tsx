@@ -317,7 +317,11 @@ export function SshTerminal({ sessionId }: SshTerminalProps): React.JSX.Element 
                 ? t('terminal.errorMessage')
                 : t('terminal.disconnectedMessage')}
             </Badge>
-            {session.error && <p className="max-w-xs text-[10px] text-white/70">{session.error}</p>}
+            {session.error ? (
+              <p className="max-w-xs text-[10px]" style={{ color: terminalTheme.foreground }}>
+                {session.error}
+              </p>
+            ) : null}
             <Button
               variant="outline"
               size="sm"

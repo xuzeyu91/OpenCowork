@@ -139,7 +139,7 @@ export function SshFileEditor({
   if (loading) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-background text-muted-foreground text-sm">
-        <Loader2 className="size-4 animate-spin text-amber-500" />
+        <Loader2 className="size-4 animate-spin text-[var(--ssh-warning)]" />
       </div>
     )
   }
@@ -158,7 +158,7 @@ export function SshFileEditor({
         <span className="truncate" title={filePath}>
           {fileName}
         </span>
-        {modified && <span className="text-amber-500">●</span>}
+        {modified && <span className="text-[var(--ssh-warning)]">●</span>}
         <div className="flex-1" />
         <Button
           variant="ghost"

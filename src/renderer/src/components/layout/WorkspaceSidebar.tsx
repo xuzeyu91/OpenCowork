@@ -104,8 +104,6 @@ const SIDEBAR_TREE_ROW_CLASS = 'workspace-sidebar-row min-h-8 rounded-md border 
 const SIDEBAR_TREE_ACTIVE_CLASS = 'workspace-sidebar-row--active text-foreground'
 const SIDEBAR_TREE_HOVER_CLASS =
   'workspace-sidebar-row--hover text-foreground/90 hover:text-foreground'
-const SIDEBAR_TREE_SUBITEM_HOVER_CLASS =
-  'workspace-sidebar-row--hover text-foreground/82 hover:text-foreground'
 const SIDEBAR_TREE_ACTION_BUTTON_CLASS = 'workspace-sidebar-row-action size-6 rounded-md'
 const SIDEBAR_TREE_LABEL_CLASS = 'text-[13px] leading-5'
 const SIDEBAR_TREE_META_CLASS = 'text-[10px]'
@@ -426,8 +424,12 @@ export function WorkspaceSidebar(): React.JSX.Element {
   } | null>(null)
   const [autoRenamingSessionId, setAutoRenamingSessionId] = useState<string | null>(null)
   const [folderPickerTarget, setFolderPickerTarget] = useState<FolderPickerTarget | null>(null)
+  const [featureMenuOpen, setFeatureMenuOpen] = useState(false)
+  const [projectsSectionCollapsed, setProjectsSectionCollapsed] = useState(false)
+  const [chatsSectionCollapsed, setChatsSectionCollapsed] = useState(false)
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set())
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => new Set())
+  const featureMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const runningSubAgentSessionIds = useMemo(
     () => new Set(runningSubAgentSessionIdsSig ? runningSubAgentSessionIdsSig.split('\u0000') : []),
     [runningSubAgentSessionIdsSig]
@@ -1146,6 +1148,32 @@ export function WorkspaceSidebar(): React.JSX.Element {
     [t]
   )
 
+  const clearFeatureMenuCloseTimer = useCallback(() => {
+    if (!featureMenuCloseTimerRef.current) return
+    clearTimeout(featureMenuCloseTimerRef.current)
+    featureMenuCloseTimerRef.current = null
+  }, [])
+
+  const openFeatureMenu = useCallback(() => {
+    clearFeatureMenuCloseTimer()
+    setFeatureMenuOpen(true)
+  }, [clearFeatureMenuCloseTimer])
+
+  const closeFeatureMenu = useCallback(() => {
+    clearFeatureMenuCloseTimer()
+    setFeatureMenuOpen(false)
+  }, [clearFeatureMenuCloseTimer])
+
+  const scheduleFeatureMenuClose = useCallback(() => {
+    clearFeatureMenuCloseTimer()
+    featureMenuCloseTimerRef.current = setTimeout(() => {
+      setFeatureMenuOpen(false)
+      featureMenuCloseTimerRef.current = null
+    }, 120)
+  }, [clearFeatureMenuCloseTimer])
+
+  useEffect(() => clearFeatureMenuCloseTimer, [clearFeatureMenuCloseTimer])
+
   return (
     <>
       <aside
@@ -1176,127 +1204,113 @@ export function WorkspaceSidebar(): React.JSX.Element {
           <div className="space-y-1 px-2 py-1.5">
             {navItems.slice(0, 3).map(renderNavItem)}
 
-            <div className="group/resources-menu space-y-1">
-              <button
-                type="button"
-                className={cn(
-                  'flex h-8 w-full items-center gap-2 px-2 text-[13px] font-medium transition-colors',
-                  SIDEBAR_TREE_ROW_CLASS,
-                  featureMenuActive ? SIDEBAR_TREE_ACTIVE_CLASS : SIDEBAR_TREE_HOVER_CLASS
-                )}
-              >
-                <FolderOpen className="size-4 shrink-0" />
-                <span className="truncate">{t('sidebar.extensionsLabel')}</span>
-                <ChevronRight
+            <DropdownMenu
+              open={featureMenuOpen}
+              onOpenChange={(open) => {
+                if (open) {
+                  openFeatureMenu()
+                } else {
+                  closeFeatureMenu()
+                }
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  onMouseEnter={openFeatureMenu}
+                  onMouseLeave={scheduleFeatureMenuClose}
                   className={cn(
-                    'ml-auto size-3.5 shrink-0 transition-transform',
-                    featureMenuActive ? 'rotate-90' : 'group-hover/resources-menu:rotate-90'
+                    'flex h-8 w-full items-center gap-2 px-2 text-[13px] font-medium transition-colors',
+                    SIDEBAR_TREE_ROW_CLASS,
+                    featureMenuActive || featureMenuOpen
+                      ? SIDEBAR_TREE_ACTIVE_CLASS
+                      : SIDEBAR_TREE_HOVER_CLASS
                   )}
-                />
-              </button>
-
-              <div
-                className={cn(
-                  'grid overflow-hidden pl-6 transition-all duration-150',
-                  featureMenuActive
-                    ? 'grid-rows-[1fr] opacity-100'
-                    : 'grid-rows-[0fr] opacity-0 group-hover/resources-menu:grid-rows-[1fr] group-hover/resources-menu:opacity-100'
-                )}
+                >
+                  <FolderOpen className="size-4 shrink-0" />
+                  <span className="truncate">{t('sidebar.extensionsLabel')}</span>
+                  <ChevronRight className="ml-auto size-3.5 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="right"
+                align="start"
+                sideOffset={6}
+                className="w-40"
+                onMouseEnter={openFeatureMenu}
+                onMouseLeave={scheduleFeatureMenuClose}
               >
-                <div className="space-y-1 overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => useUIStore.getState().openResourcesPage()}
-                    className={cn(
-                      'flex h-7 w-full items-center gap-2 px-2 text-[12px] font-medium transition-colors',
-                      SIDEBAR_TREE_ROW_CLASS,
-                      resourcesPageOpen
-                        ? SIDEBAR_TREE_ACTIVE_CLASS
-                        : SIDEBAR_TREE_SUBITEM_HOVER_CLASS
-                    )}
-                  >
-                    <FolderOpen className="size-3.5 shrink-0" />
-                    <span className="truncate">{t('navRail.resources')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => useUIStore.getState().openDrawPage()}
-                    className={cn(
-                      'flex h-7 w-full items-center gap-2 px-2 text-[12px] font-medium transition-colors',
-                      SIDEBAR_TREE_ROW_CLASS,
-                      drawPageOpen ? SIDEBAR_TREE_ACTIVE_CLASS : SIDEBAR_TREE_SUBITEM_HOVER_CLASS
-                    )}
-                  >
-                    <Image className="size-3.5 shrink-0" />
-                    <span className="truncate">{t('navRail.draw')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => useUIStore.getState().openSkillsPage()}
-                    className={cn(
-                      'flex h-7 w-full items-center gap-2 px-2 text-[12px] font-medium transition-colors',
-                      SIDEBAR_TREE_ROW_CLASS,
-                      skillsPageOpen ? SIDEBAR_TREE_ACTIVE_CLASS : SIDEBAR_TREE_SUBITEM_HOVER_CLASS
-                    )}
-                  >
-                    <Wand2 className="size-3.5 shrink-0" />
-                    <span className="truncate">{t('navRail.skills')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => useUIStore.getState().openSoulsPage()}
-                    className={cn(
-                      'flex h-7 w-full items-center gap-2 px-2 text-[12px] font-medium transition-colors',
-                      SIDEBAR_TREE_ROW_CLASS,
-                      soulsPageOpen ? SIDEBAR_TREE_ACTIVE_CLASS : SIDEBAR_TREE_SUBITEM_HOVER_CLASS
-                    )}
-                  >
-                    <Sparkles className="size-3.5 shrink-0" />
-                    <span className="truncate">{t('navRail.souls')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => useUIStore.getState().openSyncPage()}
-                    className={cn(
-                      'flex h-7 w-full items-center gap-2 px-2 text-[12px] font-medium transition-colors',
-                      SIDEBAR_TREE_ROW_CLASS,
-                      syncPageOpen ? SIDEBAR_TREE_ACTIVE_CLASS : SIDEBAR_TREE_SUBITEM_HOVER_CLASS
-                    )}
-                  >
-                    <CloudSync className="size-3.5 shrink-0" />
-                    <span className="truncate">{t('navRail.sync')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void ipcClient.invoke(IPC.SSH_WINDOW_OPEN)
-                    }}
-                    className={cn(
-                      'flex h-7 w-full items-center gap-2 px-2 text-[12px] font-medium transition-colors',
-                      SIDEBAR_TREE_ROW_CLASS,
-                      SIDEBAR_TREE_SUBITEM_HOVER_CLASS
-                    )}
-                  >
-                    <Monitor className="size-3.5 shrink-0" />
-                    <span className="truncate">{t('navRail.ssh')}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+                <DropdownMenuItem
+                  onSelect={() => useUIStore.getState().openResourcesPage()}
+                  className={cn(resourcesPageOpen && 'bg-accent text-accent-foreground')}
+                >
+                  <FolderOpen className="size-4" />
+                  <span>{t('navRail.resources')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => useUIStore.getState().openDrawPage()}
+                  className={cn(drawPageOpen && 'bg-accent text-accent-foreground')}
+                >
+                  <Image className="size-4" />
+                  <span>{t('navRail.draw')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => useUIStore.getState().openSkillsPage()}
+                  className={cn(skillsPageOpen && 'bg-accent text-accent-foreground')}
+                >
+                  <Wand2 className="size-4" />
+                  <span>{t('navRail.skills')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => useUIStore.getState().openSoulsPage()}
+                  className={cn(soulsPageOpen && 'bg-accent text-accent-foreground')}
+                >
+                  <Sparkles className="size-4" />
+                  <span>{t('navRail.souls')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => useUIStore.getState().openSyncPage()}
+                  className={cn(syncPageOpen && 'bg-accent text-accent-foreground')}
+                >
+                  <CloudSync className="size-4" />
+                  <span>{t('navRail.sync')}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void ipcClient.invoke(IPC.SSH_WINDOW_OPEN)
+                  }}
+                >
+                  <Monitor className="size-4" />
+                  <span>{t('navRail.ssh')}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {navItems.slice(3).map(renderNavItem)}
           </div>
 
           <div ref={treeScrollRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
             <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                aria-expanded={!projectsSectionCollapsed}
+                className="flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-accent/70 hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                onClick={() => setProjectsSectionCollapsed((collapsed) => !collapsed)}
+                title={projectsSectionCollapsed ? t('rightPanel.expand') : t('rightPanel.collapse')}
+              >
+                {projectsSectionCollapsed ? (
+                  <ChevronRight className="size-3 text-muted-foreground/80" />
+                ) : (
+                  <ChevronDown className="size-3 text-muted-foreground/80" />
+                )}
                 <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/80">
                   {t('sidebar.projects')}
                 </span>
                 <span className="rounded-full border border-border/60 bg-muted/45 px-1 py-0.5 text-[9px] text-muted-foreground">
                   {projectGroups.length}
                 </span>
-              </div>
+              </button>
               <div className="flex items-center gap-0.5">
                 <Button
                   variant="ghost"
@@ -1325,445 +1339,474 @@ export function WorkspaceSidebar(): React.JSX.Element {
               </div>
             </div>
 
-            {projectGroups.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/60 px-3.5 py-5 text-center text-[12px] text-muted-foreground">
-                {t('sidebar.noProjects')}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {projectGroups.map((group) => {
-                  const project = group.project
-                  const isCollapsed = collapsedProjectIds.has(project.id)
-                  const isProjectActive =
-                    chatSurfaceActive && currentProjectId === project.id && chatView !== 'home'
-                  const defaultVisibleSessions = group.sessions.filter(
-                    (session, index) =>
-                      index < DEFAULT_VISIBLE_SESSIONS_PER_PROJECT || session.id === activeSessionId
-                  )
-                  const displayedSessions = expandedProjectIds.has(project.id)
-                    ? group.sessions
-                    : defaultVisibleSessions
-                  const remainingSessions = Math.max(
-                    0,
-                    group.sessions.length - displayedSessions.length
-                  )
-                  const canToggleExpansion =
-                    group.sessions.length > DEFAULT_VISIBLE_SESSIONS_PER_PROJECT
-                  const runningProjectSessionCount = group.sessions.filter((session) =>
-                    isSessionRunning(session.id)
-                  ).length
-                  const clearableProjectSessionCount =
-                    group.sessions.length - runningProjectSessionCount
-                  const projectToggleTitle = isCollapsed
-                    ? t('rightPanel.expand')
-                    : t('rightPanel.collapse')
-                  const handleProjectRowKeyDown = (
-                    event: React.KeyboardEvent<HTMLDivElement>
-                  ): void => {
-                    if (event.target !== event.currentTarget) return
-                    if (event.key !== 'Enter' && event.key !== ' ') return
-                    event.preventDefault()
-                    toggleProjectCollapsed(project.id)
-                  }
+            <div
+              className={cn(
+                'grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
+                projectsSectionCollapsed
+                  ? 'grid-rows-[0fr] opacity-0'
+                  : 'grid-rows-[1fr] opacity-100'
+              )}
+            >
+              <div className="min-h-0 overflow-hidden">
+                {projectGroups.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/60 px-3.5 py-5 text-center text-[12px] text-muted-foreground">
+                    {t('sidebar.noProjects')}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {projectGroups.map((group) => {
+                      const project = group.project
+                      const isCollapsed = collapsedProjectIds.has(project.id)
+                      const isProjectActive =
+                        chatSurfaceActive && currentProjectId === project.id && chatView !== 'home'
+                      const defaultVisibleSessions = group.sessions.filter(
+                        (session, index) =>
+                          index < DEFAULT_VISIBLE_SESSIONS_PER_PROJECT ||
+                          session.id === activeSessionId
+                      )
+                      const displayedSessions = expandedProjectIds.has(project.id)
+                        ? group.sessions
+                        : defaultVisibleSessions
+                      const remainingSessions = Math.max(
+                        0,
+                        group.sessions.length - displayedSessions.length
+                      )
+                      const canToggleExpansion =
+                        group.sessions.length > DEFAULT_VISIBLE_SESSIONS_PER_PROJECT
+                      const runningProjectSessionCount = group.sessions.filter((session) =>
+                        isSessionRunning(session.id)
+                      ).length
+                      const clearableProjectSessionCount =
+                        group.sessions.length - runningProjectSessionCount
+                      const projectToggleTitle = isCollapsed
+                        ? t('rightPanel.expand')
+                        : t('rightPanel.collapse')
+                      const handleProjectRowKeyDown = (
+                        event: React.KeyboardEvent<HTMLDivElement>
+                      ): void => {
+                        if (event.target !== event.currentTarget) return
+                        if (event.key !== 'Enter' && event.key !== ' ') return
+                        event.preventDefault()
+                        toggleProjectCollapsed(project.id)
+                      }
 
-                  return (
-                    <div key={project.id} className="space-y-0.5">
-                      <ContextMenu>
-                        <ContextMenuTrigger asChild>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`${project.name} ${projectToggleTitle}`}
-                            className={cn(
-                              'group/project flex w-full items-center gap-1.5 px-1.5 py-1 transition-colors',
-                              SIDEBAR_TREE_ROW_CLASS,
-                              SIDEBAR_TREE_HOVER_CLASS,
-                              isProjectActive && 'text-foreground'
-                            )}
-                            onClick={() => toggleProjectCollapsed(project.id)}
-                            onKeyDown={handleProjectRowKeyDown}
-                            title={project.workingFolder ?? project.name}
-                          >
-                            <FolderOpen
-                              className={cn(
-                                'size-3.5 shrink-0',
-                                isProjectActive ? 'text-primary/80' : 'text-muted-foreground/80'
-                              )}
-                            />
-
-                            <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                              <span
-                                className={cn(
-                                  'truncate font-semibold text-foreground',
-                                  SIDEBAR_TREE_LABEL_CLASS
-                                )}
-                              >
-                                {project.name}
-                              </span>
-                              {project.sshConnectionId ? (
-                                <span
-                                  className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-500/30 bg-sky-500/10 px-1 py-px text-[9px] font-semibold leading-none text-sky-600 dark:text-sky-300"
-                                  title={t('sidebar.sshProject')}
-                                >
-                                  <Server className="size-2.5" />
-                                  {t('sidebar.sshLabel')}
-                                </span>
-                              ) : null}
-                            </div>
-
-                            <div className="relative flex h-6 w-[88px] shrink-0 items-center justify-end overflow-hidden">
+                      return (
+                        <div key={project.id} className="space-y-0.5">
+                          <ContextMenu>
+                            <ContextMenuTrigger asChild>
                               <div
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`${project.name} ${projectToggleTitle}`}
                                 className={cn(
-                                  'absolute inset-0 flex items-center justify-end gap-1 text-muted-foreground transition-opacity',
-                                  SIDEBAR_TREE_META_CLASS,
-                                  isProjectActive
-                                    ? 'pointer-events-none opacity-0'
-                                    : 'opacity-100 group-hover/project:opacity-0'
+                                  'group/project flex w-full items-center gap-1.5 px-1.5 py-1 transition-colors',
+                                  SIDEBAR_TREE_ROW_CLASS,
+                                  SIDEBAR_TREE_HOVER_CLASS,
+                                  isProjectActive && 'text-foreground'
                                 )}
+                                onClick={() => toggleProjectCollapsed(project.id)}
+                                onKeyDown={handleProjectRowKeyDown}
+                                title={project.workingFolder ?? project.name}
                               >
-                                {group.isRunning ? (
-                                  <Loader2 className="size-3.5 animate-spin text-primary" />
-                                ) : null}
-                                {project.pinned ? (
-                                  <Pin className="size-3.5 text-amber-500" />
-                                ) : null}
-                                <span className="text-muted-foreground/80">
-                                  {project.sshConnectionId
-                                    ? t('sidebar.sshLabel')
-                                    : t('sidebar.localLabel')}
-                                </span>
-                                <span>{group.sessions.length}</span>
-                                <ChevronRight
+                                <FolderOpen
                                   className={cn(
-                                    'size-3.5 transition-transform duration-200 ease-out',
-                                    !isCollapsed && 'rotate-90'
+                                    'size-3.5 shrink-0',
+                                    isProjectActive ? 'text-primary/80' : 'text-muted-foreground/80'
                                   )}
                                 />
-                              </div>
 
-                              <div
-                                className={cn(
-                                  'absolute inset-0 flex items-center justify-end gap-0.5 transition-opacity',
-                                  isProjectActive
-                                    ? 'opacity-100'
-                                    : 'pointer-events-none opacity-0 group-hover/project:pointer-events-auto group-hover/project:opacity-100'
-                                )}
-                              >
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={SIDEBAR_TREE_ACTION_BUTTON_CLASS}
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    handleCreateSession(project.id)
-                                  }}
-                                  title={t('sidebar.newChat')}
-                                >
-                                  <Plus className="size-3.5" />
-                                </Button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
+                                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                                  <span
+                                    className={cn(
+                                      'truncate font-semibold text-foreground',
+                                      SIDEBAR_TREE_LABEL_CLASS
+                                    )}
+                                  >
+                                    {project.name}
+                                  </span>
+                                  {project.sshConnectionId ? (
+                                    <span
+                                      className="inline-flex shrink-0 items-center gap-0.5 rounded border border-sky-500/30 bg-sky-500/10 px-1 py-px text-[9px] font-semibold leading-none text-sky-600 dark:text-sky-300"
+                                      title={t('sidebar.sshProject')}
+                                    >
+                                      <Server className="size-2.5" />
+                                      {t('sidebar.sshLabel')}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="relative flex h-6 w-[88px] shrink-0 items-center justify-end overflow-hidden">
+                                  <div
+                                    className={cn(
+                                      'absolute inset-0 flex items-center justify-end gap-1 text-muted-foreground transition-opacity',
+                                      SIDEBAR_TREE_META_CLASS,
+                                      isProjectActive
+                                        ? 'pointer-events-none opacity-0'
+                                        : 'opacity-100 group-hover/project:opacity-0'
+                                    )}
+                                  >
+                                    {group.isRunning ? (
+                                      <Loader2 className="size-3.5 animate-spin text-primary" />
+                                    ) : null}
+                                    {project.pinned ? (
+                                      <Pin className="size-3.5 text-amber-500" />
+                                    ) : null}
+                                    <span className="text-muted-foreground/80">
+                                      {project.sshConnectionId
+                                        ? t('sidebar.sshLabel')
+                                        : t('sidebar.localLabel')}
+                                    </span>
+                                    <span>{group.sessions.length}</span>
+                                    <ChevronRight
+                                      className={cn(
+                                        'size-3.5 transition-transform duration-200 ease-out',
+                                        !isCollapsed && 'rotate-90'
+                                      )}
+                                    />
+                                  </div>
+
+                                  <div
+                                    className={cn(
+                                      'absolute inset-0 flex items-center justify-end gap-0.5 transition-opacity',
+                                      isProjectActive
+                                        ? 'opacity-100'
+                                        : 'pointer-events-none opacity-0 group-hover/project:pointer-events-auto group-hover/project:opacity-100'
+                                    )}
+                                  >
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className={SIDEBAR_TREE_ACTION_BUTTON_CLASS}
-                                      onClick={(event) => event.stopPropagation()}
-                                      title={tCommon('action.more')}
-                                    >
-                                      <MoreHorizontal className="size-3.5" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-52">
-                                    <DropdownMenuItem
-                                      onClick={() => openProjectSession(project.id)}
-                                    >
-                                      <FolderOpen className="size-4" />
-                                      {t('sidebar.openProject')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onSelect={() =>
-                                        deferDropdownAction(() =>
-                                          startRename({
-                                            type: 'project',
-                                            id: project.id,
-                                            currentName: project.name
-                                          })
-                                        )
-                                      }
-                                    >
-                                      <Pencil className="size-4" />
-                                      {tCommon('action.rename')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onSelect={() =>
-                                        deferDropdownAction(() =>
-                                          setFolderPickerTarget({
-                                            type: 'project',
-                                            projectId: project.id
-                                          })
-                                        )
-                                      }
-                                    >
-                                      <FolderInput className="size-4" />
-                                      {t('sidebar.changeWorkingFolder')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => navigateProjectView(project.id, 'archive')}
-                                    >
-                                      <BookOpen className="size-4" />
-                                      {t('sidebar.projectArchive')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => navigateProjectView(project.id, 'channels')}
-                                    >
-                                      <MessageSquare className="size-4" />
-                                      {t('sidebar.projectChannels')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => navigateProjectView(project.id, 'git')}
-                                    >
-                                      <GitBranch className="size-4" />
-                                      {t('sidebar.projectGit')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      onClick={() => void handleExportProject(project)}
-                                    >
-                                      <Download className="size-4" />
-                                      {t('sidebar.exportProjectAsJson')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      variant="destructive"
-                                      disabled={clearableProjectSessionCount === 0}
-                                      onSelect={() =>
-                                        deferDropdownAction(() =>
-                                          setClearProjectSessionsTarget({
-                                            id: project.id,
-                                            name: project.name,
-                                            clearableCount: clearableProjectSessionCount,
-                                            runningCount: runningProjectSessionCount
-                                          })
-                                        )
-                                      }
-                                    >
-                                      <Eraser className="size-4" />
-                                      {t('sidebar.clearProjectSessions')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => {
-                                        togglePinProject(project.id)
-                                        toast.success(
-                                          project.pinned
-                                            ? t('sidebar_toast.projectUnpinned')
-                                            : t('sidebar_toast.projectPinned')
-                                        )
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        handleCreateSession(project.id)
                                       }}
+                                      title={t('sidebar.newChat')}
                                     >
-                                      {project.pinned ? (
-                                        <PinOff className="size-4" />
-                                      ) : (
-                                        <Pin className="size-4" />
-                                      )}
-                                      {project.pinned
-                                        ? tCommon('action.unpin')
-                                        : t('sidebar.pinToTop')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      variant="destructive"
-                                      onSelect={() =>
-                                        deferDropdownAction(() =>
-                                          setDeleteTarget({
-                                            type: 'project',
-                                            id: project.id,
-                                            name: project.name,
-                                            sessionCount: group.sessions.length
-                                          })
-                                        )
-                                      }
-                                    >
-                                      <Trash2 className="size-4" />
-                                      {tCommon('action.delete')}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                      <Plus className="size-3.5" />
+                                    </Button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className={SIDEBAR_TREE_ACTION_BUTTON_CLASS}
+                                          onClick={(event) => event.stopPropagation()}
+                                          title={tCommon('action.more')}
+                                        >
+                                          <MoreHorizontal className="size-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-52">
+                                        <DropdownMenuItem
+                                          onClick={() => openProjectSession(project.id)}
+                                        >
+                                          <FolderOpen className="size-4" />
+                                          {t('sidebar.openProject')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            deferDropdownAction(() =>
+                                              startRename({
+                                                type: 'project',
+                                                id: project.id,
+                                                currentName: project.name
+                                              })
+                                            )
+                                          }
+                                        >
+                                          <Pencil className="size-4" />
+                                          {tCommon('action.rename')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            deferDropdownAction(() =>
+                                              setFolderPickerTarget({
+                                                type: 'project',
+                                                projectId: project.id
+                                              })
+                                            )
+                                          }
+                                        >
+                                          <FolderInput className="size-4" />
+                                          {t('sidebar.changeWorkingFolder')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() => navigateProjectView(project.id, 'archive')}
+                                        >
+                                          <BookOpen className="size-4" />
+                                          {t('sidebar.projectArchive')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() =>
+                                            navigateProjectView(project.id, 'channels')
+                                          }
+                                        >
+                                          <MessageSquare className="size-4" />
+                                          {t('sidebar.projectChannels')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => navigateProjectView(project.id, 'git')}
+                                        >
+                                          <GitBranch className="size-4" />
+                                          {t('sidebar.projectGit')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() => void handleExportProject(project)}
+                                        >
+                                          <Download className="size-4" />
+                                          {t('sidebar.exportProjectAsJson')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          variant="destructive"
+                                          disabled={clearableProjectSessionCount === 0}
+                                          onSelect={() =>
+                                            deferDropdownAction(() =>
+                                              setClearProjectSessionsTarget({
+                                                id: project.id,
+                                                name: project.name,
+                                                clearableCount: clearableProjectSessionCount,
+                                                runningCount: runningProjectSessionCount
+                                              })
+                                            )
+                                          }
+                                        >
+                                          <Eraser className="size-4" />
+                                          {t('sidebar.clearProjectSessions')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            togglePinProject(project.id)
+                                            toast.success(
+                                              project.pinned
+                                                ? t('sidebar_toast.projectUnpinned')
+                                                : t('sidebar_toast.projectPinned')
+                                            )
+                                          }}
+                                        >
+                                          {project.pinned ? (
+                                            <PinOff className="size-4" />
+                                          ) : (
+                                            <Pin className="size-4" />
+                                          )}
+                                          {project.pinned
+                                            ? tCommon('action.unpin')
+                                            : t('sidebar.pinToTop')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          variant="destructive"
+                                          onSelect={() =>
+                                            deferDropdownAction(() =>
+                                              setDeleteTarget({
+                                                type: 'project',
+                                                id: project.id,
+                                                name: project.name,
+                                                sessionCount: group.sessions.length
+                                              })
+                                            )
+                                          }
+                                        >
+                                          <Trash2 className="size-4" />
+                                          {tCommon('action.delete')}
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </div>
                               </div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent className="w-52">
+                              <ContextMenuItem onClick={() => openProjectSession(project.id)}>
+                                <FolderOpen className="size-4" />
+                                {t('sidebar.openProject')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onSelect={() =>
+                                  deferDropdownAction(() =>
+                                    startRename({
+                                      type: 'project',
+                                      id: project.id,
+                                      currentName: project.name
+                                    })
+                                  )
+                                }
+                              >
+                                <Pencil className="size-4" />
+                                {tCommon('action.rename')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onSelect={() =>
+                                  deferDropdownAction(() =>
+                                    setFolderPickerTarget({
+                                      type: 'project',
+                                      projectId: project.id
+                                    })
+                                  )
+                                }
+                              >
+                                <FolderInput className="size-4" />
+                                {t('sidebar.changeWorkingFolder')}
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                onClick={() => navigateProjectView(project.id, 'archive')}
+                              >
+                                <BookOpen className="size-4" />
+                                {t('sidebar.projectArchive')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() => navigateProjectView(project.id, 'channels')}
+                              >
+                                <MessageSquare className="size-4" />
+                                {t('sidebar.projectChannels')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() => navigateProjectView(project.id, 'git')}
+                              >
+                                <GitBranch className="size-4" />
+                                {t('sidebar.projectGit')}
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem onClick={() => void handleExportProject(project)}>
+                                <Download className="size-4" />
+                                {t('sidebar.exportProjectAsJson')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                variant="destructive"
+                                disabled={clearableProjectSessionCount === 0}
+                                onSelect={() =>
+                                  deferDropdownAction(() =>
+                                    setClearProjectSessionsTarget({
+                                      id: project.id,
+                                      name: project.name,
+                                      clearableCount: clearableProjectSessionCount,
+                                      runningCount: runningProjectSessionCount
+                                    })
+                                  )
+                                }
+                              >
+                                <Eraser className="size-4" />
+                                {t('sidebar.clearProjectSessions')}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() => {
+                                  togglePinProject(project.id)
+                                  toast.success(
+                                    project.pinned
+                                      ? t('sidebar_toast.projectUnpinned')
+                                      : t('sidebar_toast.projectPinned')
+                                  )
+                                }}
+                              >
+                                {project.pinned ? (
+                                  <PinOff className="size-4" />
+                                ) : (
+                                  <Pin className="size-4" />
+                                )}
+                                {project.pinned ? tCommon('action.unpin') : t('sidebar.pinToTop')}
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                variant="destructive"
+                                onSelect={() =>
+                                  deferDropdownAction(() =>
+                                    setDeleteTarget({
+                                      type: 'project',
+                                      id: project.id,
+                                      name: project.name,
+                                      sessionCount: group.sessions.length
+                                    })
+                                  )
+                                }
+                              >
+                                <Trash2 className="size-4" />
+                                {tCommon('action.delete')}
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+
+                          <div
+                            className={cn(
+                              'grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
+                              isCollapsed
+                                ? 'grid-rows-[0fr] opacity-0'
+                                : 'grid-rows-[1fr] opacity-100'
+                            )}
+                          >
+                            <div
+                              className="min-h-0 space-y-0.5 overflow-hidden"
+                              title={project.workingFolder ?? project.name}
+                            >
+                              {displayedSessions.length > 0 ? (
+                                <>
+                                  {displayedSessions.map((session) =>
+                                    renderSessionItem(
+                                      session,
+                                      relativeTimeLocale,
+                                      chatSurfaceActive &&
+                                        chatView === 'session' &&
+                                        session.id === activeSessionId
+                                    )
+                                  )}
+                                  {canToggleExpansion ? (
+                                    <button
+                                      type="button"
+                                      className={cn(
+                                        'flex h-6 items-center gap-1 rounded-md border border-transparent px-1.5 text-[10px] text-muted-foreground transition-colors',
+                                        'hover:border-border/60 hover:bg-accent/80 hover:text-accent-foreground'
+                                      )}
+                                      onClick={() => toggleProjectExpansion(project.id)}
+                                    >
+                                      {expandedProjectIds.has(project.id) ? (
+                                        <ChevronDown className="size-3" />
+                                      ) : (
+                                        <ChevronRight className="size-3" />
+                                      )}
+                                      <span>
+                                        {expandedProjectIds.has(project.id)
+                                          ? t('sidebar.showLessSessions')
+                                          : t('sidebar.showMoreSessions', {
+                                              count: remainingSessions
+                                            })}
+                                      </span>
+                                    </button>
+                                  ) : null}
+                                </>
+                              ) : null}
                             </div>
                           </div>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent className="w-52">
-                          <ContextMenuItem onClick={() => openProjectSession(project.id)}>
-                            <FolderOpen className="size-4" />
-                            {t('sidebar.openProject')}
-                          </ContextMenuItem>
-                          <ContextMenuItem
-                            onSelect={() =>
-                              deferDropdownAction(() =>
-                                startRename({
-                                  type: 'project',
-                                  id: project.id,
-                                  currentName: project.name
-                                })
-                              )
-                            }
-                          >
-                            <Pencil className="size-4" />
-                            {tCommon('action.rename')}
-                          </ContextMenuItem>
-                          <ContextMenuItem
-                            onSelect={() =>
-                              deferDropdownAction(() =>
-                                setFolderPickerTarget({
-                                  type: 'project',
-                                  projectId: project.id
-                                })
-                              )
-                            }
-                          >
-                            <FolderInput className="size-4" />
-                            {t('sidebar.changeWorkingFolder')}
-                          </ContextMenuItem>
-                          <ContextMenuSeparator />
-                          <ContextMenuItem
-                            onClick={() => navigateProjectView(project.id, 'archive')}
-                          >
-                            <BookOpen className="size-4" />
-                            {t('sidebar.projectArchive')}
-                          </ContextMenuItem>
-                          <ContextMenuItem
-                            onClick={() => navigateProjectView(project.id, 'channels')}
-                          >
-                            <MessageSquare className="size-4" />
-                            {t('sidebar.projectChannels')}
-                          </ContextMenuItem>
-                          <ContextMenuItem onClick={() => navigateProjectView(project.id, 'git')}>
-                            <GitBranch className="size-4" />
-                            {t('sidebar.projectGit')}
-                          </ContextMenuItem>
-                          <ContextMenuSeparator />
-                          <ContextMenuItem onClick={() => void handleExportProject(project)}>
-                            <Download className="size-4" />
-                            {t('sidebar.exportProjectAsJson')}
-                          </ContextMenuItem>
-                          <ContextMenuItem
-                            variant="destructive"
-                            disabled={clearableProjectSessionCount === 0}
-                            onSelect={() =>
-                              deferDropdownAction(() =>
-                                setClearProjectSessionsTarget({
-                                  id: project.id,
-                                  name: project.name,
-                                  clearableCount: clearableProjectSessionCount,
-                                  runningCount: runningProjectSessionCount
-                                })
-                              )
-                            }
-                          >
-                            <Eraser className="size-4" />
-                            {t('sidebar.clearProjectSessions')}
-                          </ContextMenuItem>
-                          <ContextMenuItem
-                            onClick={() => {
-                              togglePinProject(project.id)
-                              toast.success(
-                                project.pinned
-                                  ? t('sidebar_toast.projectUnpinned')
-                                  : t('sidebar_toast.projectPinned')
-                              )
-                            }}
-                          >
-                            {project.pinned ? (
-                              <PinOff className="size-4" />
-                            ) : (
-                              <Pin className="size-4" />
-                            )}
-                            {project.pinned ? tCommon('action.unpin') : t('sidebar.pinToTop')}
-                          </ContextMenuItem>
-                          <ContextMenuSeparator />
-                          <ContextMenuItem
-                            variant="destructive"
-                            onSelect={() =>
-                              deferDropdownAction(() =>
-                                setDeleteTarget({
-                                  type: 'project',
-                                  id: project.id,
-                                  name: project.name,
-                                  sessionCount: group.sessions.length
-                                })
-                              )
-                            }
-                          >
-                            <Trash2 className="size-4" />
-                            {tCommon('action.delete')}
-                          </ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
-
-                      <div
-                        className={cn(
-                          'grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
-                          isCollapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
-                        )}
-                      >
-                        <div
-                          className="min-h-0 space-y-0.5 overflow-hidden"
-                          title={project.workingFolder ?? project.name}
-                        >
-                          {displayedSessions.length > 0 ? (
-                            <>
-                              {displayedSessions.map((session) =>
-                                renderSessionItem(
-                                  session,
-                                  relativeTimeLocale,
-                                  chatSurfaceActive &&
-                                    chatView === 'session' &&
-                                    session.id === activeSessionId
-                                )
-                              )}
-                              {canToggleExpansion ? (
-                                <button
-                                  type="button"
-                                  className={cn(
-                                    'flex h-6 items-center gap-1 rounded-md border border-transparent px-1.5 text-[10px] text-muted-foreground transition-colors',
-                                    'hover:border-border/60 hover:bg-accent/80 hover:text-accent-foreground'
-                                  )}
-                                  onClick={() => toggleProjectExpansion(project.id)}
-                                >
-                                  {expandedProjectIds.has(project.id) ? (
-                                    <ChevronDown className="size-3" />
-                                  ) : (
-                                    <ChevronRight className="size-3" />
-                                  )}
-                                  <span>
-                                    {expandedProjectIds.has(project.id)
-                                      ? t('sidebar.showLessSessions')
-                                      : t('sidebar.showMoreSessions', {
-                                          count: remainingSessions
-                                        })}
-                                  </span>
-                                </button>
-                              ) : null}
-                            </>
-                          ) : null}
                         </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
-            <div className="mt-4 border-t border-border/50 pt-3">
+            <div className="mt-2 pt-1">
               <div className="flex items-center justify-between gap-2 px-1">
-                <div className="flex min-w-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-expanded={!chatsSectionCollapsed}
+                  className="flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-accent/70 hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  onClick={() => setChatsSectionCollapsed((collapsed) => !collapsed)}
+                  title={chatsSectionCollapsed ? t('rightPanel.expand') : t('rightPanel.collapse')}
+                >
+                  {chatsSectionCollapsed ? (
+                    <ChevronRight className="size-3 text-muted-foreground/80" />
+                  ) : (
+                    <ChevronDown className="size-3 text-muted-foreground/80" />
+                  )}
                   <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/80">
                     {t('sidebar.chats')}
                   </span>
                   <span className="rounded-full border border-border/60 bg-muted/45 px-1 py-0.5 text-[9px] text-muted-foreground">
                     {chatSessions.length}
                   </span>
-                </div>
+                </button>
                 <div className="flex items-center gap-0.5">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1804,20 +1847,31 @@ export function WorkspaceSidebar(): React.JSX.Element {
                 </div>
               </div>
 
-              <div className="mt-2 space-y-0.5">
-                {chatSessions.length > 0 ? (
-                  chatSessions.map((session) =>
-                    renderSessionItem(
-                      session,
-                      relativeTimeLocale,
-                      chatSurfaceActive && chatView === 'session' && session.id === activeSessionId
-                    )
-                  )
-                ) : (
-                  <div className="px-1.5 py-1 text-[10px] text-muted-foreground">
-                    {t('sidebar.noChats')}
-                  </div>
+              <div
+                className={cn(
+                  'mt-2 grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
+                  chatsSectionCollapsed
+                    ? 'grid-rows-[0fr] opacity-0'
+                    : 'grid-rows-[1fr] opacity-100'
                 )}
+              >
+                <div className="min-h-0 space-y-0.5 overflow-hidden">
+                  {chatSessions.length > 0 ? (
+                    chatSessions.map((session) =>
+                      renderSessionItem(
+                        session,
+                        relativeTimeLocale,
+                        chatSurfaceActive &&
+                          chatView === 'session' &&
+                          session.id === activeSessionId
+                      )
+                    )
+                  ) : (
+                    <div className="px-1.5 py-1 text-[10px] text-muted-foreground">
+                      {t('sidebar.noChats')}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

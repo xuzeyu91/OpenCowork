@@ -12,6 +12,7 @@ export interface ViewerProps {
   initialLine?: number
   initialColumn?: number
   initialPositionKey?: number
+  fileVersion?: number
 }
 
 export interface ViewerDefinition {

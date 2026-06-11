@@ -40,6 +40,7 @@ interface SshConnectionInspectorProps {
   connection: SshConnection | null
   groups: SshGroup[]
   session: SshSession | undefined
+  showHeader?: boolean
   onConnect: (connectionId: string) => void
   onSaved: (connectionId: string) => void
   onDelete: (connection: SshConnection) => void
@@ -163,6 +164,7 @@ export function SshConnectionInspector({
   connection,
   groups,
   session,
+  showHeader = true,
   onConnect,
   onSaved,
   onDelete,
@@ -395,42 +397,44 @@ export function SshConnectionInspector({
   }
 
   return (
-    <div className="flex h-full flex-col bg-muted/35">
-      <div className="border-b border-border px-5 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-[1.1rem] font-semibold text-foreground">
-              {isEditing && connection
-                ? connection.name
-                : t('dashboard.serverDetails', { defaultValue: 'Host Details' })}
+    <div className="flex h-full flex-col bg-transparent">
+      {showHeader ? (
+        <div className="border-b border-border px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-[1.1rem] font-semibold text-foreground">
+                {isEditing && connection
+                  ? connection.name
+                  : t('dashboard.serverDetails', { defaultValue: 'Host Details' })}
+              </div>
+              <div className="mt-1 truncate text-[0.78rem] text-muted-foreground">
+                {isEditing && connectionAddress
+                  ? connectionAddress
+                  : t('workspace.newHostHint', { defaultValue: 'Create a new SSH host profile' })}
+              </div>
             </div>
-            <div className="mt-1 truncate text-[0.78rem] text-muted-foreground">
-              {isEditing && connectionAddress
-                ? connectionAddress
-                : t('workspace.newHostHint', { defaultValue: 'Create a new SSH host profile' })}
+            <div className="flex items-center gap-2">
+              {session?.status === 'connected' ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/12 px-2.5 py-1 text-[0.7rem] font-semibold text-primary">
+                  <CheckCircle2 className="size-3" />
+                  {t('list.online')}
+                </span>
+              ) : null}
+              {isEditing && connection ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+                  onClick={() => onDelete(connection)}
+                  title={t('deleteConnection')}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              ) : null}
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {session?.status === 'connected' ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2.5 py-1 text-[0.7rem] font-semibold text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="size-3" />
-                {t('list.online')}
-              </span>
-            ) : null}
-            {isEditing && connection ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
-                onClick={() => onDelete(connection)}
-                title={t('deleteConnection')}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            ) : null}
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         <SectionCard

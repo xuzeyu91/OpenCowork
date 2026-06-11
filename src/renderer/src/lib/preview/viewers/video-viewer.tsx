@@ -30,7 +30,11 @@ function getMimeType(filePath: string): string {
   return MIME_TYPES[getExtension(filePath)] ?? 'video/mp4'
 }
 
-export function VideoViewer({ filePath, sshConnectionId }: ViewerProps): React.JSX.Element {
+export function VideoViewer({
+  filePath,
+  sshConnectionId,
+  fileVersion
+}: ViewerProps): React.JSX.Element {
   const [src, setSrc] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -68,7 +72,7 @@ export function VideoViewer({ filePath, sshConnectionId }: ViewerProps): React.J
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [filePath, sshConnectionId])
+  }, [filePath, fileVersion, sshConnectionId])
 
   if (error) {
     return (

@@ -2416,6 +2416,8 @@ interface WatchedFileEntry {
   refCount: number
   windowRefs: Map<number, number>
   timer: NodeJS.Timeout | null
+  filePath: string
+  baseName: string
 }
 
 interface WatchedDirectoryEntry {
@@ -2477,6 +2479,32 @@ function sendToSubscribedWindows(
     }
     safeSendToWindow(win, channel, payload)
   }
+}
+
+function watchedFilenameMatches(
+  entry: WatchedFileEntry,
+  filename: string | Buffer | null
+): boolean {
+  if (!filename) return true
+
+  const changedName = Buffer.isBuffer(filename) ? filename.toString() : filename
+  if (!changedName) return true
+
+  const changedBaseName = path.basename(changedName)
+  if (process.platform === 'win32') {
+    return changedBaseName.toLowerCase() === entry.baseName.toLowerCase()
+  }
+
+  return changedBaseName === entry.baseName
+}
+
+function scheduleFileChanged(entry: WatchedFileEntry): void {
+  if (entry.timer) clearTimeout(entry.timer)
+
+  entry.timer = setTimeout(() => {
+    entry.timer = null
+    sendToSubscribedWindows(entry.windowRefs, 'fs:file-changed', { path: entry.filePath })
+  }, 300)
 }
 
 function directoryWatchKey(dirPath: string, recursive: boolean): string {
@@ -3386,26 +3414,24 @@ export function registerFsHandlers(): void {
     if (existing) {
       existing.refCount += 1
       addInvokeWindowSubscription(existing.windowRefs, event)
-      return { success: true }
+      return { success: true, path: filePath }
     }
 
     try {
       let watchEntry: WatchedFileEntry | null = null
-      const watcher = fs.watch(filePath, () => {
+      const watcher = fs.watch(path.dirname(filePath), (_eventType, filename) => {
         if (!watchEntry) return
-        if (watchEntry.timer) clearTimeout(watchEntry.timer)
-        watchEntry.timer = setTimeout(() => {
-          if (!watchEntry) return
-          watchEntry.timer = null
-          sendToSubscribedWindows(watchEntry.windowRefs, 'fs:file-changed', { path: filePath })
-        }, 300)
+        if (!watchedFilenameMatches(watchEntry, filename)) return
+        scheduleFileChanged(watchEntry)
       })
 
       const entry: WatchedFileEntry = {
         watcher,
         refCount: 1,
         windowRefs: new Map<number, number>(),
-        timer: null
+        timer: null,
+        filePath,
+        baseName: path.basename(filePath)
       }
       watchEntry = entry
       addInvokeWindowSubscription(entry.windowRefs, event)
@@ -3415,7 +3441,7 @@ export function registerFsHandlers(): void {
         fileWatchers.delete(filePath)
       })
       fileWatchers.set(filePath, entry)
-      return { success: true }
+      return { success: true, path: filePath }
     } catch (err) {
       return { error: String(err) }
     }

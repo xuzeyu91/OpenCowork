@@ -77,6 +77,10 @@ function fileExtension(filePath: string): string {
   return dot >= 0 ? filePath.slice(dot).toLowerCase() : ''
 }
 
+function isExternalUrl(value: string): boolean {
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(value)
+}
+
 function shouldReadPreviewText(tab: PreviewPanelTab | null): boolean {
   if (!tab || tab.source !== 'file') return false
   if (tab.viewerType === 'html' || tab.viewerType === 'svg' || tab.viewerType === 'markdown') {
@@ -136,14 +140,18 @@ export function PreviewPanel({
     return activeSession?.workingFolder ?? activeProject?.workingFolder ?? null
   })
 
-  const filePath =
-    activeTab?.source === 'file' && shouldReadPreviewText(activeTab) ? activeTab.filePath : null
+  const watchedFilePath =
+    activeTab?.source === 'file' && !isExternalUrl(activeTab.filePath) ? activeTab.filePath : null
+  const shouldReadActiveFileText = shouldReadPreviewText(activeTab)
   const {
     content: fileContent,
     setContent,
     loading: fileLoading,
-    reload
-  } = useFileWatcher(filePath, activeTab?.sshConnectionId)
+    reload,
+    version: fileVersion
+  } = useFileWatcher(watchedFilePath, activeTab?.sshConnectionId, {
+    readContent: shouldReadActiveFileText
+  })
   const content =
     activeTab?.modified && activeTab.draftContent !== undefined
       ? activeTab.draftContent
@@ -605,6 +613,7 @@ export function PreviewPanel({
               initialLine={activeTab.targetLine}
               initialColumn={activeTab.targetColumn}
               initialPositionKey={activeTab.targetPositionKey}
+              fileVersion={fileVersion}
             />
           </Suspense>
         ) : (

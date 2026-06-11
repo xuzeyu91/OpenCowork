@@ -237,6 +237,9 @@
     },
     "controlCenter": "Control Center",
     "comingSoon": "Coming soon",
+    "groupRailTitle": "Groups",
+    "quickConnect": "Quick connect",
+    "quickConnectAgent": "SSH Agent",
     "newHost": "NEW HOST",
     "serial": "SERIAL",
     "searchHosts": "Find a host or ssh user@hostname...",
@@ -365,6 +368,7 @@
     },
     "nav": {
       "hosts": "Hosts",
+      "sftp": "SFTP",
       "keychain": "Keychain",
       "forwarding": "Port Forwarding",
       "snippets": "Snippets",

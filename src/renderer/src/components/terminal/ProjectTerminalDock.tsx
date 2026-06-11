@@ -237,13 +237,22 @@ export function ProjectTerminalDock({
   useEffect(() => {
     if (sshConnectionId && !sshLoaded) return
     if (!sshConnectionId && !workingFolder) return
+    if (scopedLocalActiveTabId || scopedSshActiveTabId) return
 
     const contextKey = `${projectId}:${sshConnectionId ?? ''}:${workingFolder ?? ''}`
     if (ensureContextKeyRef.current === contextKey || hasManuallyCreatedTerminalRef.current) return
 
     ensureContextKeyRef.current = contextKey
     void focusContextTerminal()
-  }, [projectId, sshConnectionId, sshLoaded, workingFolder, focusContextTerminal])
+  }, [
+    projectId,
+    scopedLocalActiveTabId,
+    scopedSshActiveTabId,
+    sshConnectionId,
+    sshLoaded,
+    workingFolder,
+    focusContextTerminal
+  ])
 
   const contextLabel = sshConnectionId
     ? currentConnection?.name ||
