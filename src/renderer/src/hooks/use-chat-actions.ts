@@ -635,12 +635,14 @@ async function buildSelectedFileReadContext(args: {
 async function mergeCompressedMessagesIntoSession(args: {
   sessionId: string
   compressedMessages: UnifiedMessage[]
+  currentMessages?: UnifiedMessage[]
   insertAtEnd?: boolean
   insertBeforeIds?: readonly string[]
   fallbackInsertBeforeIds?: readonly string[]
 }): Promise<boolean> {
   const chatStore = useChatStore.getState()
-  const currentMessages = await chatStore.getFullSessionMessagesForMutation(args.sessionId)
+  const currentMessages =
+    args.currentMessages ?? (await chatStore.getFullSessionMessagesForMutation(args.sessionId))
   const merged = mergeCompressedMessagesKeepHistory(currentMessages, args.compressedMessages, {
     insertAtEnd: args.insertAtEnd,
     insertBeforeIds: args.insertBeforeIds,
@@ -650,6 +652,51 @@ async function mergeCompressedMessagesIntoSession(args: {
   if (!merged) return false
 
   useChatStore.getState().replaceSessionMessages(args.sessionId, merged)
+  return true
+}
+
+function hasMeaningfulAssistantContent(message: UnifiedMessage | undefined): boolean {
+  if (!message || message.role !== 'assistant') return false
+  if (typeof message.content === 'string') return message.content.trim().length > 0
+  if (!Array.isArray(message.content)) return false
+
+  return message.content.some((block) => {
+    switch (block.type) {
+      case 'text':
+        return block.text.trim().length > 0
+      case 'thinking':
+        return block.thinking.trim().length > 0 || !!block.encryptedContent
+      case 'tool_use':
+      case 'image':
+      case 'image_error':
+      case 'agent_error':
+        return true
+      default:
+        return false
+    }
+  })
+}
+
+function shouldInsertCompressedMessagesBeforeAssistant(
+  currentMessages: UnifiedMessage[],
+  assistantMsgId: string
+): boolean {
+  const assistantIndex = currentMessages.findIndex((message) => message.id === assistantMsgId)
+  if (assistantIndex < 0) return false
+
+  const assistantMessage = currentMessages[assistantIndex]
+  if (assistantMessage?.role !== 'assistant') return false
+  if (hasMeaningfulAssistantContent(assistantMessage)) return false
+
+  // During the first iteration the assistant message already exists as an empty
+  // placeholder. Anchor the compact summary ahead of that placeholder so it
+  // lands after the triggering turn instead of sticking to the visual bottom.
+  for (let index = assistantIndex + 1; index < currentMessages.length; index += 1) {
+    if (currentMessages[index]?.role !== 'system') {
+      return false
+    }
+  }
+
   return true
 }
 
@@ -5279,14 +5326,28 @@ export function useChatActions(): {
                       break
                     }
 
+                    const currentMessages = await useChatStore
+                      .getState()
+                      .getFullSessionMessagesForMutation(sessionId)
+                    const insertBeforeAssistant = shouldInsertCompressedMessagesBeforeAssistant(
+                      currentMessages,
+                      assistantMsgId
+                    )
+
                     // Display compression where it happened in wall-clock time.
-                    // Request reconstruction now uses compact metadata instead of
-                    // relying on the boundary living ahead of the preserved tail.
+                    // When this run is still streaming into an empty assistant
+                    // placeholder, anchor the summary before that placeholder so
+                    // it renders after the triggering turn instead of at the
+                    // transcript bottom. Once the assistant already has visible
+                    // content, we keep tail insertion because we cannot split a
+                    // single assistant bubble mid-message.
                     const merged = await mergeCompressedMessagesIntoSession({
                       sessionId,
                       compressedMessages,
-                      insertAtEnd: true,
-                      fallbackInsertBeforeIds: [assistantMsgId]
+                      currentMessages,
+                      ...(insertBeforeAssistant
+                        ? { insertBeforeIds: [assistantMsgId] }
+                        : { insertAtEnd: true })
                     })
                     if (!merged) {
                       console.warn('[Context Compression] Failed to merge compressed messages', {
