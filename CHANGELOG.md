@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.118] - 2026-06-17
+
+### Added
+
+- Added Code workspace mode with Explorer and Source Control sidebars, central preview/editor tabs, Monaco diff editing for Git and agent changes, and project terminal docking.
+- Added SCM diff plumbing for reading file content at Git refs, editable unstaged/untracked diffs, and split/inline diff mode switching in previews.
+- Added configurable concurrent sub-agent limits in Settings plus queued/dequeued stream events and clearer approval/retry status updates for teammates and Task runs.
+- Added automatic recent visual artifact reuse for image-to-code and other visual follow-up prompts, including image reference preservation for OpenAI-compatible backends.
+- Added the built-in `create-extension` skill and new provider presets for `glm-5.2` and `kimi-k2.7-code`.
+
+### Changed
+
+- Refreshed the chat tool-call rendering stack with inline context-compression summaries, completion metrics, richer compact headers, and improved image/tool cards.
+- Replaced the right-panel Context entry with a Review-first workflow and refreshed the Settings navigation layout.
+- Updated app-plugin resolution so project settings inherit global plugin defaults more consistently.
+- Switched Electron download mirrors to `npmmirror.com` and excluded `html-to-image` from renderer dependency prebundling.
+
+### Fixed
+
+- Fixed context compression so repeated summarizer failures now fall back to local truncation instead of letting context grow unbounded.
+- Fixed Git diff preload/cache behavior and preview save refresh flow for edited diffs in the workspace.
+- Fixed Windows native rebuild/package flow by skipping prebuilt module rebuilds in `postinstall` and disabling duplicate `electron-builder` rebuilds.
+
 ## [0.9.117] - 2026-06-16
 
 ### Added
