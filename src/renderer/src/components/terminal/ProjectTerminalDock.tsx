@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, MonitorSmartphone, Plus, SquareTerminal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@renderer/components/ui/button'
@@ -30,8 +30,13 @@ import {
 import { useSshStore } from '@renderer/stores/ssh-store'
 import { useTerminalStore } from '@renderer/stores/terminal-store'
 import { useUIStore } from '@renderer/stores/ui-store'
-import { LocalTerminal } from './LocalTerminal'
-import { SshTerminal } from '../ssh/SshTerminal'
+
+const LocalTerminal = lazy(() =>
+  import('./LocalTerminal').then((m) => ({ default: m.LocalTerminal }))
+)
+const SshTerminal = lazy(() =>
+  import('../ssh/SshTerminal').then((m) => ({ default: m.SshTerminal }))
+)
 
 function getViewportTerminalDockMaxHeight(): number {
   if (typeof window === 'undefined') return BOTTOM_TERMINAL_DOCK_MAX_HEIGHT
@@ -451,7 +456,9 @@ export function ProjectTerminalDock({
               >
                 {tab.type === 'local' ? (
                   tab.status === 'running' ? (
-                    <LocalTerminal terminalId={tab.localTabId} />
+                    <Suspense fallback={null}>
+                      <LocalTerminal terminalId={tab.localTabId} />
+                    </Suspense>
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-1.5 text-xs text-muted-foreground">
                       <div>
@@ -467,7 +474,9 @@ export function ProjectTerminalDock({
                     </div>
                   )
                 ) : tab.sessionId ? (
-                  <SshTerminal sessionId={tab.sessionId} connectionName={tab.connectionName} />
+                  <Suspense fallback={null}>
+                    <SshTerminal sessionId={tab.sessionId} connectionName={tab.connectionName} />
+                  </Suspense>
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
                     {t('terminalDock.connecting')}

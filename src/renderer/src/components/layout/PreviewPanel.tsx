@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Bot,
@@ -33,7 +33,6 @@ import { useChatStore } from '@renderer/stores/chat-store'
 import { useAppPluginStore } from '@renderer/stores/app-plugin-store'
 import { useGitStore } from '@renderer/stores/git-store'
 import { useSettingsStore } from '@renderer/stores/settings-store'
-import { MonacoDiffEditor } from '@renderer/components/editor/MonacoDiffEditor'
 import { useUIStore, type PreviewPanelTab } from '@renderer/stores/ui-store'
 import { useFileWatcher } from '@renderer/hooks/use-file-watcher'
 import { viewerRegistry } from '@renderer/lib/preview/viewer-registry'
@@ -56,6 +55,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@renderer/components/ui/alert-dialog'
+
+const MonacoDiffEditor = lazy(() =>
+  import('@renderer/components/editor/MonacoDiffEditor').then((m) => ({
+    default: m.MonacoDiffEditor
+  }))
+)
 
 function fileName(filePath: string): string {
   return filePath.split(/[\\/]/).pop() || filePath
@@ -640,17 +645,26 @@ export function PreviewPanel({
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {isDiff ? (
-          <MonacoDiffEditor
-            filePath={activeTab.filePath}
-            original={activeTab.diffOriginal ?? ''}
-            modified={diffModifiedValue}
-            language={activeTab.diffLanguage}
-            modifiedEditable={Boolean(activeTab.diffModifiedEditable)}
-            renderSideBySide={diffViewMode !== 'inline'}
-            isBinary={Boolean(activeTab.diffIsBinary)}
-            onModifiedChange={handleContentChange}
-            onSave={handleSave}
-          />
+          <Suspense
+            fallback={
+              <div className="flex size-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <RefreshCw className="size-4 animate-spin" />
+                Loading preview...
+              </div>
+            }
+          >
+            <MonacoDiffEditor
+              filePath={activeTab.filePath}
+              original={activeTab.diffOriginal ?? ''}
+              modified={diffModifiedValue}
+              language={activeTab.diffLanguage}
+              modifiedEditable={Boolean(activeTab.diffModifiedEditable)}
+              renderSideBySide={diffViewMode !== 'inline'}
+              isBinary={Boolean(activeTab.diffIsBinary)}
+              onModifiedChange={handleContentChange}
+              onSave={handleSave}
+            />
+          </Suspense>
         ) : isMarkdown ? (
           <div className="size-full overflow-y-auto p-6">
             <div className="prose prose-sm dark:prose-invert max-w-none">

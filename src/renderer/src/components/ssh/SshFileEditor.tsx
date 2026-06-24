@@ -4,12 +4,15 @@ import { Loader2, Save } from 'lucide-react'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { IPC } from '@renderer/lib/ipc/channels'
 import { Button } from '@renderer/components/ui/button'
-import { CodeEditor } from '@renderer/components/editor/CodeEditor'
 import { createSshWorkspace, getParentPath } from '@renderer/lib/monaco/workspace'
 import { useSshStore } from '@renderer/stores/ssh-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 import { toast } from 'sonner'
 import { cn } from '@renderer/lib/utils'
+
+const CodeEditor = React.lazy(() =>
+  import('@renderer/components/editor/CodeEditor').then((m) => ({ default: m.CodeEditor }))
+)
 
 interface SshFileEditorProps {
   connectionId: string
@@ -175,14 +178,22 @@ export function SshFileEditor({
         </Button>
       </div>
       <div className="flex-1 overflow-hidden">
-        <CodeEditor
-          filePath={filePath}
-          content={content}
-          onChange={handleChange}
-          onOpenFile={handleOpenFile}
-          onSave={handleSave}
-          workspace={workspace}
-        />
+        <React.Suspense
+          fallback={
+            <div className="flex size-full items-center justify-center">
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            </div>
+          }
+        >
+          <CodeEditor
+            filePath={filePath}
+            content={content}
+            onChange={handleChange}
+            onOpenFile={handleOpenFile}
+            onSave={handleSave}
+            workspace={workspace}
+          />
+        </React.Suspense>
       </div>
     </div>
   )

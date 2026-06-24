@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next'
 import { Code2, Eye, Loader2, RefreshCw, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@renderer/components/ui/button'
-import { CodeEditor } from '@renderer/components/editor/CodeEditor'
 import { useFileWatcher } from '@renderer/hooks/use-file-watcher'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { IPC } from '@renderer/lib/ipc/channels'
 import { viewerRegistry } from '@renderer/lib/preview/viewer-registry'
 import { createSshWorkspace, getParentPath } from '@renderer/lib/monaco/workspace'
+
+const CodeEditor = React.lazy(() =>
+  import('@renderer/components/editor/CodeEditor').then((m) => ({ default: m.CodeEditor }))
+)
 
 interface SshSftpFilePreviewProps {
   connectionId: string
@@ -150,14 +153,22 @@ export function SshSftpFilePreview({
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
         ) : viewerType === 'fallback' ? (
-          <CodeEditor
-            filePath={filePath}
-            content={content}
-            onChange={handleContentChange}
-            onSave={handleSave}
-            onOpenFile={onOpenFile}
-            workspace={workspace}
-          />
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <Loader2 className="size-5 animate-spin text-primary" />
+              </div>
+            }
+          >
+            <CodeEditor
+              filePath={filePath}
+              content={content}
+              onChange={handleContentChange}
+              onSave={handleSave}
+              onOpenFile={onOpenFile}
+              workspace={workspace}
+            />
+          </Suspense>
         ) : Viewer ? (
           <Suspense
             fallback={

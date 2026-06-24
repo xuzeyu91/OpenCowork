@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useMemo, useEffect, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTokens, getBillableTotalTokens } from '@renderer/lib/format-tokens'
+import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import {
   Plus,
   MessageSquare,
@@ -125,6 +126,23 @@ interface VisibleProjectGroup {
 }
 
 const SESSION_LIST_PAGE_SIZE = 20
+const SEARCH_DEBOUNCE_MS = 200
+
+// Build a short context snippet around the first occurrence of `query`
+// (already lowercased) within `text`. Mirrors the window the old in-renderer
+// search produced (20 chars before, 30 after).
+function buildSnippet(text: string, query: string): string {
+  const lower = text.toLowerCase()
+  const idx = lower.indexOf(query)
+  if (idx === -1) return ''
+  const start = Math.max(0, idx - 20)
+  const end = idx + query.length + 30
+  return (
+    (start > 0 ? '...' : '') +
+    text.slice(start, end).replace(/\n/g, ' ') +
+    (end < text.length ? '...' : '')
+  )
+}
 const HISTORY_AUTO_COLLAPSE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
 const RECENT_MINUTES_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -876,53 +894,50 @@ export function SessionListPanel(): React.JSX.Element {
     [hasMoreSessions, loadMoreSessions, searchQuery]
   )
 
-  const contentSearchMeta = useMemo(() => {
-    const matchedIds = new Set<string>()
-    const snippetBySessionId = new Map<string, string>()
-    if (!searchQuery) return { matchedIds, snippetBySessionId }
+  // Content search runs in the main process over the full message DB (the
+  // renderer only holds the active session's messages), debounced on input.
+  const [contentMatches, setContentMatches] = useState<{
+    matchedIds: Set<string>
+    snippetBySessionId: Map<string, string>
+  }>({ matchedIds: new Set(), snippetBySessionId: new Map() })
 
-    void sessionDigest
-    const rawSessions = useChatStore.getState().sessions
-    for (const session of rawSessions) {
-      if (
-        session.title.toLowerCase().includes(searchQuery) ||
-        session.mode.toLowerCase().includes(searchQuery)
-      ) {
-        continue
-      }
-      if (!session.messagesLoaded) continue
-      for (const message of session.messages) {
-        const text =
-          typeof message.content === 'string'
-            ? message.content
-            : Array.isArray(message.content)
-              ? message.content
-                  .filter((block) => block.type === 'text')
-                  .map((block) => block.text)
-                  .join('\n')
-              : ''
-        const lower = text.toLowerCase()
-        const idx = lower.indexOf(searchQuery)
-        if (idx === -1) continue
-        matchedIds.add(session.id)
-        const start = Math.max(0, idx - 20)
-        const snippet =
-          (start > 0 ? '...' : '') +
-          text.slice(start, idx + searchQuery.length + 30).replace(/\n/g, ' ') +
-          (idx + searchQuery.length + 30 < text.length ? '...' : '')
-        snippetBySessionId.set(session.id, snippet)
-        break
-      }
+  useEffect(() => {
+    if (!searchQuery) {
+      setContentMatches({ matchedIds: new Set(), snippetBySessionId: new Map() })
+      return
     }
-
-    return { matchedIds, snippetBySessionId }
-  }, [searchQuery, sessionDigest])
+    let cancelled = false
+    const handle = setTimeout(() => {
+      void (async () => {
+        try {
+          const rows = (await ipcClient.invoke('db:messages:search-content', {
+            query: searchQuery
+          })) as { session_id: string; snippet: string }[]
+          if (cancelled) return
+          const matchedIds = new Set<string>()
+          const snippetBySessionId = new Map<string, string>()
+          for (const row of rows) {
+            matchedIds.add(row.session_id)
+            const snippet = buildSnippet(row.snippet, searchQuery)
+            if (snippet) snippetBySessionId.set(row.session_id, snippet)
+          }
+          setContentMatches({ matchedIds, snippetBySessionId })
+        } catch (err) {
+          if (!cancelled) console.error('[SessionListPanel] content search failed:', err)
+        }
+      })()
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [searchQuery])
 
   const filteredSessions = searchQuery
     ? sortedSessions.filter((session) => {
         if (session.title.toLowerCase().includes(searchQuery)) return true
         if (session.mode.toLowerCase().includes(searchQuery)) return true
-        return contentSearchMeta.matchedIds.has(session.id)
+        return contentMatches.matchedIds.has(session.id)
       })
     : visibleSessions
 
@@ -1091,9 +1106,9 @@ export function SessionListPanel(): React.JSX.Element {
               <span className="truncate text-sm leading-4">{session.title}</span>
               {searchQuery &&
                 !session.title.toLowerCase().includes(searchQuery) &&
-                contentSearchMeta.snippetBySessionId.get(session.id) && (
+                contentMatches.snippetBySessionId.get(session.id) && (
                   <span className="truncate text-[9px] text-muted-foreground/40">
-                    {contentSearchMeta.snippetBySessionId.get(session.id)}
+                    {contentMatches.snippetBySessionId.get(session.id)}
                   </span>
                 )}
             </div>

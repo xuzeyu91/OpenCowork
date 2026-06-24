@@ -35,7 +35,6 @@ import { cn } from '@renderer/lib/utils'
 import Markdown from 'react-markdown'
 import { AnimatePresence, motion } from 'motion/react'
 import { FadeIn } from '@renderer/components/animate-ui'
-import { LocalTerminal } from '@renderer/components/terminal/LocalTerminal'
 import {
   MARKDOWN_REHYPE_PLUGINS,
   MARKDOWN_REMARK_PLUGINS
@@ -46,6 +45,10 @@ import {
   type SessionScopedAgentSelection
 } from '@renderer/lib/agent/session-scoped-agent-state'
 import { isBrowserToolName } from '@renderer/lib/app-plugin/browser-tool-names'
+
+const LocalTerminal = React.lazy(() =>
+  import('@renderer/components/terminal/LocalTerminal').then((m) => ({ default: m.LocalTerminal }))
+)
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -630,7 +633,9 @@ function TerminalDetailView({ processId }: { processId: string }): React.JSX.Ele
 
       {process.terminalId ? (
         <div className="h-[360px] overflow-hidden rounded-lg border bg-background">
-          <LocalTerminal terminalId={process.terminalId} readOnly={!isRunning} />
+          <React.Suspense fallback={null}>
+            <LocalTerminal terminalId={process.terminalId} readOnly={!isRunning} />
+          </React.Suspense>
         </div>
       ) : (
         <div className="h-[360px] overflow-auto rounded-lg border bg-zinc-950 px-3 py-2 text-[11px] font-mono text-zinc-200 whitespace-pre-wrap break-words">

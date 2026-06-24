@@ -1,27 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useTheme } from 'next-themes'
 import { useTranslation } from 'react-i18next'
 import {
+  Activity,
   ArrowDownRight,
   ArrowUpRight,
+  Copy,
   Cpu,
   HardDrive,
   Loader2,
+  Maximize2,
   MemoryStick,
+  Network,
   RefreshCw,
   Server,
   X
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { IPC } from '@renderer/lib/ipc/channels'
-import {
-  getSshChromePalette,
-  resolveAppThemeMode,
-  type SshChromePalette
-} from '@renderer/lib/theme-presets'
 import { cn } from '@renderer/lib/utils'
 import { Button } from '@renderer/components/ui/button'
-import { useSettingsStore } from '@renderer/stores/settings-store'
 
 type StatusProcess = {
   memoryKb: number
@@ -153,93 +151,92 @@ function parseSnapshot(stdout: string): StatusSnapshot {
   }
 }
 
-function MetricBar({
+// FinalShell-inspired monitoring palette — fixed (theme-independent) so the
+// sidebar keeps the dense, blue-gray FinalShell look regardless of SSH theme.
+const FS = {
+  bg: '#0f141b',
+  panel: '#161e27',
+  inner: '#1b2531',
+  track: '#243140',
+  border: '#27333f',
+  text: '#cbd5e0',
+  textStrong: '#eef4fa',
+  muted: '#7a8794',
+  blue: '#3d8bf0',
+  cyan: '#2bb6c4',
+  green: '#46c98b',
+  yellow: '#e3b341',
+  orange: '#e08a4b',
+  red: '#e5534b',
+  headerBlue: '#2b557f',
+  headerText: '#dbe7f5'
+} as const
+
+function loadColor(pct: number): string {
+  if (pct >= 90) return FS.red
+  if (pct >= 70) return FS.yellow
+  return FS.green
+}
+
+function FsBar({
   label,
   value,
   detail,
-  accent,
-  palette
+  color
 }: {
   label: string
   value: number
   detail: string
-  accent: string
-  palette: SshChromePalette
+  color?: string
 }): React.JSX.Element {
+  const pct = Math.max(0, Math.min(100, value))
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between gap-3 text-[0.78rem]">
-        <span style={{ color: palette.muted }}>{label}</span>
-        <span className="font-medium" style={{ color: palette.terminalText }}>
+      <div className="mb-1 flex items-center justify-between gap-2 text-[0.7rem]">
+        <span style={{ color: FS.muted }}>{label}</span>
+        <span className="font-mono tabular-nums" style={{ color: FS.text }}>
           {detail}
         </span>
       </div>
-      <div className="h-2 rounded-full" style={{ background: palette.panelBorder }}>
+      <div className="h-1.5 overflow-hidden rounded-[3px]" style={{ background: FS.track }}>
         <div
-          className="h-2 rounded-full transition-all"
-          style={{
-            width: `${Math.max(4, Math.min(100, value))}%`,
-            background: accent
-          }}
+          className="h-full rounded-[3px] transition-all"
+          style={{ width: `${Math.max(2, pct)}%`, background: color ?? loadColor(pct) }}
         />
       </div>
     </div>
   )
 }
 
-function HistoryBars({
+function FsSpark({
   points,
-  palette
+  color,
+  max
 }: {
-  points: RatePoint[]
-  palette: SshChromePalette
+  points: number[]
+  color: string
+  max?: number
 }): React.JSX.Element {
-  const visiblePoints = points.slice(-12)
-  const paddedPoints: Array<RatePoint | null> = [
-    ...Array.from<null>({ length: Math.max(0, 12 - visiblePoints.length) }).fill(null),
-    ...visiblePoints
+  const slots = 24
+  const visible = points.slice(-slots)
+  const padded = [
+    ...Array.from<number>({ length: Math.max(0, slots - visible.length) }).fill(0),
+    ...visible
   ]
-  const maxValue = Math.max(1, ...visiblePoints.flatMap((point) => [point.rx, point.tx]))
-
+  const peak = Math.max(1, max ?? Math.max(...visible, 1))
   return (
-    <div className="mt-3">
-      <div
-        className="flex h-20 items-end gap-1 rounded-[18px] border px-3 py-2"
-        style={{ borderColor: palette.panelBorder, background: palette.panelStrong }}
-      >
-        {paddedPoints.map((point, index) => {
-          const tx = point?.tx ?? 0
-          const rx = point?.rx ?? 0
-          const txActive = tx > 0
-          const rxActive = rx > 0
-
-          return (
-            <div
-              key={`network-rate-slot-${index}`}
-              className="flex h-full flex-1 items-end justify-center gap-0.5"
-            >
-              <div
-                className="w-1.5 rounded-full transition-[height,background-color,opacity] duration-500 ease-out"
-                style={{
-                  background: txActive ? palette.warning : palette.surfaceStrong,
-                  height: `${point ? Math.max(8, (tx / maxValue) * 100) : 14}%`,
-                  opacity: txActive ? 1 : 0.56
-                }}
-                data-slot="tx-bar"
-              />
-              <div
-                className="w-1.5 rounded-full transition-[height,background-color,opacity] duration-500 ease-out"
-                style={{
-                  background: rxActive ? palette.success : palette.surfaceStrong,
-                  height: `${point ? Math.max(8, (rx / maxValue) * 100) : 14}%`,
-                  opacity: rxActive ? 1 : 0.56
-                }}
-                data-slot="rx-bar"
-              />
-            </div>
-          )
-        })}
-      </div>
+    <div className="flex h-9 items-end gap-[2px]">
+      {padded.map((v, index) => (
+        <div
+          key={`spark-${index}`}
+          className="flex-1 rounded-[1px] transition-[height] duration-300 ease-out"
+          style={{
+            height: `${Math.max(4, (v / peak) * 100)}%`,
+            background: v > 0 ? color : FS.track,
+            opacity: v > 0 ? 1 : 0.5
+          }}
+        />
+      ))}
     </div>
   )
 }
@@ -248,30 +245,26 @@ export function SshTerminalStatusPanel({
   connectionId,
   connectionName,
   host,
-  onClose
+  onClose,
+  onExpandProcesses
 }: {
   connectionId: string
   connectionName: string
   host: string
   onClose: () => void
+  onExpandProcesses?: () => void
 }): React.JSX.Element {
   const { t } = useTranslation('ssh')
-  const { resolvedTheme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<StatusSnapshot | null>(null)
   const [rates, setRates] = useState<RatePoint[]>([])
+  const [latencies, setLatencies] = useState<number[]>([])
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null)
   const previousTotals = useRef<{ at: number; rxTotal: number; txTotal: number } | null>(null)
   const hasLoadedRef = useRef(false)
   const refreshInFlightRef = useRef(false)
   const queuedRefreshRef = useRef(false)
-  const theme = useSettingsStore((state) => state.theme)
-  const terminalThemePreset = useSettingsStore((state) => state.sshTerminalThemePreset)
-  const palette = getSshChromePalette(
-    terminalThemePreset,
-    resolveAppThemeMode(theme === 'system' ? resolvedTheme : theme)
-  )
 
   const refresh = useCallback(
     async (force = false): Promise<void> => {
@@ -284,16 +277,20 @@ export function SshTerminalStatusPanel({
 
       try {
         if (!hasLoadedRef.current) setLoading(true)
+        const startedAt = performance.now()
         const result = (await ipcClient.invoke(IPC.SSH_EXEC, {
           connectionId,
           command: STATUS_COMMAND,
           timeout: 20000
         })) as { stdout?: string; stderr?: string; exitCode?: number; error?: string }
+        const roundTripMs = Math.round(performance.now() - startedAt)
 
         if (result.error) throw new Error(result.error)
         if (result.exitCode && result.exitCode !== 0 && result.stderr) {
           throw new Error(result.stderr)
         }
+
+        setLatencies((current) => [...current.slice(-23), roundTripMs])
 
         const nextSnapshot = parseSnapshot(String(result.stdout ?? ''))
         const now = Date.now()
@@ -363,6 +360,12 @@ export function SshTerminalStatusPanel({
   const memoryPercent = snapshot ? percentOf(snapshot.memTotalKb, snapshot.memUsedKb) : 0
   const swapPercent = snapshot ? percentOf(snapshot.swapTotalKb, snapshot.swapUsedKb) : 0
   const latestRates = rates[rates.length - 1] ?? { rx: 0, tx: 0 }
+  const latestLatency = latencies[latencies.length - 1] ?? 0
+  const rxPoints = rates.map((point) => point.rx)
+  const txPoints = rates.map((point) => point.tx)
+  const netMax = Math.max(1, ...rxPoints.slice(-24), ...txPoints.slice(-24))
+  const ipText = snapshot?.ip || host
+  const statusDotColor = error ? FS.red : snapshot ? FS.green : FS.muted
   const statusSubtitle =
     loading && !lastUpdatedAt
       ? t('workspace.terminalStatus.refreshing', { defaultValue: 'Refreshing…' })
@@ -373,238 +376,184 @@ export function SshTerminalStatusPanel({
           })
         : host
 
+  const sectionStyle = { borderColor: FS.border, background: FS.panel }
+  const sectionTitleClass =
+    'flex items-center gap-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em]'
+
+  const copyIp = (): void => {
+    void navigator.clipboard?.writeText(ipText)
+    toast.success(t('workspace.terminalStatus.copied', { defaultValue: 'Copied to clipboard' }))
+  }
+
   return (
     <aside
-      className="relative flex h-full w-[340px] shrink-0 flex-col border-l"
-      style={{
-        borderColor: palette.panelBorder,
-        background: palette.panelStrong,
-        color: palette.terminalText
-      }}
+      className="relative flex h-full w-[268px] shrink-0 flex-col border-l"
+      style={{ borderColor: FS.border, background: FS.bg, color: FS.text }}
     >
+      {/* Header — connection status, IP, actions */}
       <div
-        className="flex items-center justify-between border-b px-4 py-4"
-        style={{ borderColor: palette.panelBorder }}
+        className="flex items-center justify-between border-b px-3 py-2.5"
+        style={{ borderColor: FS.border }}
       >
-        <div>
-          <div className="text-[1rem] font-semibold" style={{ color: palette.terminalText }}>
-            {t('workspace.terminalStatus.title', { defaultValue: 'Terminal status' })}
-          </div>
-          <div className="mt-1 text-[0.78rem]" style={{ color: palette.muted }}>
-            {statusSubtitle}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="size-2 shrink-0 rounded-full" style={{ background: statusDotColor }} />
+          <div className="min-w-0">
+            <div className="truncate text-[0.82rem] font-semibold" style={{ color: FS.textStrong }}>
+              {connectionName}
+            </div>
+            <div className="truncate text-[0.68rem] font-mono" style={{ color: FS.muted }}>
+              {ipText}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-0.5">
           <Button
             variant="ghost"
             size="icon-sm"
-            className="size-9 rounded-[12px] hover:opacity-85"
-            style={{ color: palette.terminalText }}
-            onClick={() => void refresh()}
-            title={t('list.refresh')}
+            className="size-7 rounded-[6px] hover:opacity-80"
+            style={{ color: FS.muted }}
+            onClick={copyIp}
+            title={t('workspace.terminalStatus.copy', { defaultValue: 'Copy IP' })}
           >
-            <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+            <Copy className="size-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon-sm"
-            className="size-9 rounded-[12px] hover:opacity-85"
-            style={{ color: palette.terminalText }}
+            className="size-7 rounded-[6px] hover:opacity-80"
+            style={{ color: FS.muted }}
+            onClick={() => void refresh(true)}
+            title={t('list.refresh')}
+          >
+            <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 rounded-[6px] hover:opacity-80"
+            style={{ color: FS.muted }}
             onClick={onClose}
             title={t('workspace.close', { defaultValue: 'Close' })}
           >
-            <X className="size-4" />
+            <X className="size-3.5" />
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
-          style={{ borderColor: palette.panelBorder, background: palette.panel }}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className="flex size-11 shrink-0 items-center justify-center rounded-[16px] shadow-[0_14px_30px_-18px_color-mix(in_srgb,var(--ssh-accent)_40%,transparent)]"
-              style={{ background: palette.accent, color: palette.accentContrast }}
-            >
-              <Server className="size-5" />
-            </div>
-            <div className="min-w-0">
-              <div
-                className="truncate text-[0.96rem] font-semibold"
-                style={{ color: palette.terminalText }}
-              >
-                {connectionName}
-              </div>
-              <div className="mt-1 text-[0.8rem]" style={{ color: palette.muted }}>
-                {snapshot?.ip || host}
-              </div>
-            </div>
+      <div className="flex-1 space-y-2.5 overflow-y-auto px-3 py-3">
+        {error ? (
+          <div
+            className="rounded-[6px] border px-2.5 py-2 text-[0.72rem]"
+            style={{ borderColor: FS.red, background: '#2a1517', color: FS.red }}
+          >
+            {error}
           </div>
+        ) : null}
 
-          {error ? (
-            <div
-              className="mt-4 rounded-[18px] border px-3 py-3 text-[0.8rem]"
-              style={{
-                borderColor: palette.danger,
-                background: palette.dangerSoft,
-                color: palette.danger
-              }}
-            >
-              {error}
-            </div>
-          ) : null}
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div
-              className="rounded-[18px] border px-3 py-3"
-              style={{ borderColor: palette.panelBorder, background: palette.panelStrong }}
-            >
-              <div
-                className="text-[0.72rem] uppercase tracking-[0.16em]"
-                style={{ color: palette.muted }}
-              >
-                IP
-              </div>
-              <div
-                className="mt-2 truncate text-[0.94rem] font-semibold"
-                style={{ color: palette.terminalText }}
-              >
-                {snapshot?.ip || host}
-              </div>
-            </div>
-            <div
-              className="rounded-[18px] border px-3 py-3"
-              style={{ borderColor: palette.panelBorder, background: palette.panelStrong }}
-            >
-              <div
-                className="text-[0.72rem] uppercase tracking-[0.16em]"
-                style={{ color: palette.muted }}
-              >
-                {t('workspace.terminalStatus.load', { defaultValue: 'Load' })}
-              </div>
-              <div
-                className="mt-2 text-[0.94rem] font-semibold"
-                style={{ color: palette.terminalText }}
-              >
-                {snapshot?.load || '--'}
-              </div>
-            </div>
+        {/* System info */}
+        <section className="rounded-[8px] border p-2.5" style={sectionStyle}>
+          <div className={sectionTitleClass} style={{ color: FS.muted }}>
+            <Server className="size-3.5" style={{ color: FS.blue }} />
+            {t('workspace.terminalStatus.systemInfo', { defaultValue: 'System' })}
           </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div
-              className="rounded-[18px] border px-3 py-3"
-              style={{ borderColor: palette.panelBorder, background: palette.panelStrong }}
-            >
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="rounded-[6px] px-2 py-1.5" style={{ background: FS.inner }}>
               <div
-                className="text-[0.72rem] uppercase tracking-[0.16em]"
-                style={{ color: palette.muted }}
+                className="text-[0.62rem] uppercase tracking-[0.1em]"
+                style={{ color: FS.muted }}
               >
                 {t('workspace.terminalStatus.uptime', { defaultValue: 'Uptime' })}
               </div>
               <div
-                className="mt-2 text-[0.88rem] font-semibold"
-                style={{ color: palette.terminalText }}
+                className="mt-0.5 truncate text-[0.78rem] font-medium"
+                style={{ color: FS.text }}
               >
                 {snapshot?.uptime || '--'}
               </div>
             </div>
-            <div
-              className="rounded-[18px] border px-3 py-3"
-              style={{ borderColor: palette.panelBorder, background: palette.panelStrong }}
-            >
+            <div className="rounded-[6px] px-2 py-1.5" style={{ background: FS.inner }}>
               <div
-                className="text-[0.72rem] uppercase tracking-[0.16em]"
-                style={{ color: palette.muted }}
+                className="text-[0.62rem] uppercase tracking-[0.1em]"
+                style={{ color: FS.muted }}
               >
-                {t('workspace.terminalStatus.cpu', { defaultValue: 'CPU' })}
+                {t('workspace.terminalStatus.load', { defaultValue: 'Load' })}
               </div>
-              <div
-                className="mt-2 text-[0.88rem] font-semibold"
-                style={{ color: palette.terminalText }}
-              >
-                {snapshot ? `${snapshot.cpuPercent.toFixed(1)}%` : '--'}
+              <div className="mt-0.5 truncate text-[0.78rem] font-mono" style={{ color: FS.text }}>
+                {snapshot?.load || '--'}
               </div>
             </div>
           </div>
         </section>
 
-        <section
-          className="space-y-3 rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
-          style={{ borderColor: palette.panelBorder, background: palette.panel }}
-        >
-          <div
-            className="flex items-center gap-2 text-[0.86rem] font-semibold"
-            style={{ color: palette.terminalText }}
-          >
-            <Cpu className="size-4" style={{ color: palette.accent }} />
-            {t('workspace.terminalStatus.resources', { defaultValue: 'System resources' })}
+        {/* CPU / Memory / Swap bars */}
+        <section className="space-y-2 rounded-[8px] border p-2.5" style={sectionStyle}>
+          <div className={sectionTitleClass} style={{ color: FS.muted }}>
+            <Cpu className="size-3.5" style={{ color: FS.blue }} />
+            {t('workspace.terminalStatus.resources', { defaultValue: 'Resources' })}
           </div>
-          <MetricBar
+          <FsBar
             label="CPU"
             value={snapshot?.cpuPercent ?? 0}
             detail={snapshot ? `${snapshot.cpuPercent.toFixed(1)}%` : '--'}
-            accent={palette.warning}
-            palette={palette}
           />
-          <MetricBar
+          <FsBar
             label={t('workspace.terminalStatus.memory', { defaultValue: 'Memory' })}
             value={memoryPercent}
             detail={
               snapshot
-                ? `${memoryPercent.toFixed(0)}% · ${formatGigabytes(snapshot.memUsedKb)}/${formatGigabytes(snapshot.memTotalKb)}`
+                ? `${memoryPercent.toFixed(0)}%  ${formatGigabytes(snapshot.memUsedKb)}/${formatGigabytes(snapshot.memTotalKb)}`
                 : '--'
             }
-            accent={palette.accent}
-            palette={palette}
           />
-          <MetricBar
+          <FsBar
             label="Swap"
             value={swapPercent}
             detail={
               snapshot
-                ? `${swapPercent.toFixed(0)}% · ${formatGigabytes(snapshot.swapUsedKb)}/${formatGigabytes(snapshot.swapTotalKb)}`
+                ? `${swapPercent.toFixed(0)}%  ${formatGigabytes(snapshot.swapUsedKb)}/${formatGigabytes(snapshot.swapTotalKb)}`
                 : '--'
             }
-            accent={palette.success}
-            palette={palette}
           />
         </section>
 
-        <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
-          style={{ borderColor: palette.panelBorder, background: palette.panel }}
-        >
-          <div
-            className="flex items-center gap-2 text-[0.86rem] font-semibold"
-            style={{ color: palette.terminalText }}
-          >
-            <MemoryStick className="size-4" style={{ color: palette.accent }} />
-            {t('workspace.terminalStatus.processes', { defaultValue: 'Process usage' })}
+        {/* Process mini table */}
+        <section className="rounded-[8px] border p-2.5" style={sectionStyle}>
+          <div className="flex items-center justify-between">
+            <div className={sectionTitleClass} style={{ color: FS.muted }}>
+              <MemoryStick className="size-3.5" style={{ color: FS.blue }} />
+              {t('workspace.terminalStatus.processes', { defaultValue: 'Processes' })}
+            </div>
+            {onExpandProcesses ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="size-6 rounded-[6px] hover:opacity-80"
+                style={{ color: FS.muted }}
+                onClick={onExpandProcesses}
+                title={t('workspace.terminalStatus.expand', { defaultValue: 'Expand' })}
+              >
+                <Maximize2 className="size-3.5" />
+              </Button>
+            ) : null}
           </div>
-          <div
-            className="mt-3 overflow-hidden rounded-[18px] border"
-            style={{ borderColor: palette.panelBorder }}
-          >
+          <div className="mt-2 overflow-hidden rounded-[6px]">
             <div
-              className="grid grid-cols-[72px_66px_1fr] gap-2 px-3 py-2 text-[0.72rem] font-semibold"
-              style={{ background: palette.accent, color: palette.accentContrast }}
+              className="grid grid-cols-[54px_50px_1fr] gap-2 px-2 py-1 text-[0.64rem] font-semibold uppercase tracking-[0.08em]"
+              style={{ background: FS.headerBlue, color: FS.headerText }}
             >
-              <span>{t('workspace.terminalStatus.memory', { defaultValue: 'Memory' })}</span>
+              <span>{t('workspace.terminalStatus.memory', { defaultValue: 'Mem' })}</span>
               <span>CPU</span>
               <span>{t('workspace.terminalStatus.command', { defaultValue: 'Command' })}</span>
             </div>
-            <div className="divide-y" style={{ borderColor: palette.panelBorder }}>
+            <div>
               {(snapshot?.processes ?? []).map((process, index) => (
                 <div
                   key={`${process.command}:${index}`}
-                  className="grid grid-cols-[72px_66px_1fr] gap-2 px-3 py-2 text-[0.78rem]"
-                  style={{ color: palette.terminalText }}
+                  className="grid grid-cols-[54px_50px_1fr] gap-2 px-2 py-1 text-[0.72rem] font-mono"
+                  style={{ color: FS.text, background: index % 2 ? FS.inner : 'transparent' }}
                 >
-                  <span>{(process.memoryKb / 1024).toFixed(1)}M</span>
-                  <span>{process.cpu.toFixed(1)}%</span>
+                  <span style={{ color: FS.orange }}>{(process.memoryKb / 1024).toFixed(0)}M</span>
+                  <span style={{ color: FS.green }}>{process.cpu.toFixed(1)}</span>
                   <span className="truncate">{process.command}</span>
                 </div>
               ))}
@@ -612,78 +561,79 @@ export function SshTerminalStatusPanel({
           </div>
         </section>
 
-        <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
-          style={{ borderColor: palette.panelBorder, background: palette.panel }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div
-              className="flex items-center gap-2 text-[0.86rem] font-semibold"
-              style={{ color: palette.terminalText }}
-            >
-              <ArrowUpRight className="size-4" style={{ color: palette.warning }} />
-              {t('workspace.terminalStatus.network', { defaultValue: 'Network throughput' })}
+        {/* Network throughput */}
+        <section className="rounded-[8px] border p-2.5" style={sectionStyle}>
+          <div className="flex items-center justify-between">
+            <div className={sectionTitleClass} style={{ color: FS.muted }}>
+              <Network className="size-3.5" style={{ color: FS.blue }} />
+              {t('workspace.terminalStatus.network', { defaultValue: 'Network' })}
             </div>
-            <div className="text-right text-[0.72rem]" style={{ color: palette.muted }}>
-              <div className="flex items-center justify-end gap-1">
-                <ArrowDownRight className="size-3.5" style={{ color: palette.success }} />
-                <span>{formatThroughput(latestRates.rx)}</span>
-              </div>
-              <div className="mt-0.5 flex items-center justify-end gap-1">
-                <ArrowUpRight className="size-3.5" style={{ color: palette.warning }} />
-                <span>{formatThroughput(latestRates.tx)}</span>
-              </div>
-            </div>
-          </div>
-          <HistoryBars points={rates.length > 0 ? rates : [{ rx: 0, tx: 0 }]} palette={palette} />
-        </section>
-
-        <section
-          className="rounded-[24px] border p-4 shadow-[0_20px_40px_-28px_color-mix(in_srgb,var(--ssh-panel-strong)_55%,transparent)]"
-          style={{ borderColor: palette.panelBorder, background: palette.panel }}
-        >
-          <div
-            className="flex items-center gap-2 text-[0.86rem] font-semibold"
-            style={{ color: palette.terminalText }}
-          >
-            <HardDrive className="size-4" style={{ color: palette.accent }} />
-            {t('workspace.terminalStatus.disks', { defaultValue: 'Disk usage' })}
-          </div>
-          <div
-            className="mt-3 overflow-hidden rounded-[18px] border"
-            style={{ borderColor: palette.panelBorder }}
-          >
-            <div
-              className="grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.14em]"
-              style={{ background: palette.panelStrong, color: palette.muted }}
-            >
-              <span>{t('workspace.terminalStatus.path', { defaultValue: 'Path' })}</span>
-              <span>
-                {t('workspace.terminalStatus.capacity', { defaultValue: 'Available/Size' })}
+            <div className="flex items-center gap-2 text-[0.7rem] font-mono">
+              <span className="flex items-center gap-0.5" style={{ color: FS.green }}>
+                <ArrowDownRight className="size-3" />
+                {formatThroughput(latestRates.rx)}
+              </span>
+              <span className="flex items-center gap-0.5" style={{ color: FS.orange }}>
+                <ArrowUpRight className="size-3" />
+                {formatThroughput(latestRates.tx)}
               </span>
             </div>
-            <div className="divide-y" style={{ borderColor: palette.panelBorder }}>
-              {(snapshot?.disks ?? []).map((disk) => (
-                <div
-                  key={disk.path}
-                  className="grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-[0.78rem]"
-                  style={{ color: palette.terminalText }}
-                >
-                  <span className="truncate">{disk.path}</span>
-                  <span>{disk.usage}</span>
-                </div>
-              ))}
-            </div>
+          </div>
+          <div className="mt-2 space-y-1">
+            <FsSpark points={rxPoints} color={FS.green} max={netMax} />
+            <FsSpark points={txPoints} color={FS.orange} max={netMax} />
           </div>
         </section>
+
+        {/* Latency */}
+        <section className="rounded-[8px] border p-2.5" style={sectionStyle}>
+          <div className="flex items-center justify-between">
+            <div className={sectionTitleClass} style={{ color: FS.muted }}>
+              <Activity className="size-3.5" style={{ color: FS.blue }} />
+              {t('workspace.terminalStatus.latency', { defaultValue: 'Latency' })}
+            </div>
+            <span className="text-[0.74rem] font-mono" style={{ color: FS.cyan }}>
+              {latestLatency}ms
+            </span>
+          </div>
+          <div className="mt-2">
+            <FsSpark points={latencies} color={FS.cyan} />
+          </div>
+        </section>
+
+        {/* Disk usage */}
+        <section className="rounded-[8px] border p-2.5" style={sectionStyle}>
+          <div className={sectionTitleClass} style={{ color: FS.muted }}>
+            <HardDrive className="size-3.5" style={{ color: FS.blue }} />
+            {t('workspace.terminalStatus.disks', { defaultValue: 'Disks' })}
+          </div>
+          <div className="mt-2 space-y-0.5">
+            {(snapshot?.disks ?? []).map((disk) => (
+              <div
+                key={disk.path}
+                className="flex items-center justify-between gap-2 px-1 text-[0.72rem] font-mono"
+                style={{ color: FS.text }}
+              >
+                <span className="truncate" style={{ color: FS.muted }}>
+                  {disk.path}
+                </span>
+                <span>{disk.usage}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="px-1 pt-1 text-center text-[0.62rem]" style={{ color: FS.muted }}>
+          {statusSubtitle}
+        </div>
       </div>
 
-      {loading ? (
+      {loading && !lastUpdatedAt ? (
         <div
-          className="pointer-events-none absolute inset-0 flex items-center justify-center backdrop-blur-[1px]"
-          style={{ background: `${palette.panelStrong}aa` }}
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          style={{ background: `${FS.bg}cc` }}
         >
-          <Loader2 className="size-5 animate-spin" style={{ color: palette.terminalText }} />
+          <Loader2 className="size-5 animate-spin" style={{ color: FS.text }} />
         </div>
       ) : null}
     </aside>

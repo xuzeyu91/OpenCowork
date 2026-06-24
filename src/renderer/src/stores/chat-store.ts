@@ -2339,7 +2339,10 @@ export const useChatStore = create<ChatStore>()(
           isInitialLoad && typeof window !== 'undefined'
             ? parseChatRoute(window.location.hash)
             : null
-        const projectRows = (await ipcClient.invoke('db:projects:list')) as ProjectRow[]
+        const [projectRows, sessionRows] = (await Promise.all([
+          ipcClient.invoke('db:projects:list'),
+          ipcClient.invoke('db:sessions:list')
+        ])) as [ProjectRow[], SessionRow[]]
         let projects = projectRows.map(rowToProject)
 
         if (projects.length === 0) {
@@ -2349,7 +2352,6 @@ export const useChatStore = create<ChatStore>()(
 
         const projectMap = new Map(projects.map((project) => [project.id, project]))
 
-        const sessionRows = (await ipcClient.invoke('db:sessions:list')) as SessionRow[]
         const sessions: Session[] = sessionRows.map((row) => {
           const session = rowToSession(row, [])
           if (session.projectId) {
@@ -2413,10 +2415,12 @@ export const useChatStore = create<ChatStore>()(
         })
 
         if (nextActiveSessionId) {
-          await get().loadRecentSessionMessages(nextActiveSessionId)
-          await useTaskStore.getState().loadTasksForSession(nextActiveSessionId)
           const planStore = usePlanStore.getState()
-          const activePlan = await planStore.loadPlanForSession(nextActiveSessionId)
+          const [, , activePlan] = await Promise.all([
+            get().loadRecentSessionMessages(nextActiveSessionId),
+            useTaskStore.getState().loadTasksForSession(nextActiveSessionId),
+            planStore.loadPlanForSession(nextActiveSessionId)
+          ])
           planStore.setActivePlan(activePlan?.id ?? null)
         } else {
           useTaskStore.getState().clearTasks()

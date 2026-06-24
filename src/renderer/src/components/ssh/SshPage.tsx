@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
 import {
@@ -35,8 +35,10 @@ import {
 } from '@renderer/components/ui/sheet'
 import { SshConnectionList } from './SshConnectionList'
 import { SshFileEditor } from './SshFileEditor'
-import { SshTerminal } from './SshTerminal'
 import { SshTerminalStatusPanel } from './SshTerminalStatusPanel'
+import { SshProcessMonitor } from './SshProcessMonitor'
+
+const SshTerminal = lazy(() => import('./SshTerminal').then((m) => ({ default: m.SshTerminal })))
 
 type ShellTone = 'library' | 'connect' | 'terminal'
 
@@ -447,6 +449,7 @@ export function SshPage(): React.JSX.Element {
   const setDetailConnectionId = useSshStore((state) => state.setDetailConnectionId)
   const setInspectorMode = useSshStore((state) => state.setInspectorMode)
   const [terminalStatusOpen, setTerminalStatusOpen] = useState(true)
+  const [processMonitorOpen, setProcessMonitorOpen] = useState(false)
 
   const uploadTaskList = Object.values(transferTasks).sort(
     (left, right) => right.updatedAt - left.updatedAt
@@ -711,7 +714,9 @@ export function SshPage(): React.JSX.Element {
                   />
                 ) : null
               ) : tab.sessionId ? (
-                <SshTerminal sessionId={tab.sessionId} connectionName={tab.connectionName} />
+                <Suspense fallback={null}>
+                  <SshTerminal sessionId={tab.sessionId} connectionName={tab.connectionName} />
+                </Suspense>
               ) : (
                 <div
                   className="flex h-full items-center justify-center"
@@ -722,6 +727,14 @@ export function SshPage(): React.JSX.Element {
               )}
             </div>
           ))}
+          {activeConnection && processMonitorOpen ? (
+            <SshProcessMonitor
+              connectionId={activeConnection.id}
+              connectionName={activeConnection.name}
+              host={activeConnection.host}
+              onClose={() => setProcessMonitorOpen(false)}
+            />
+          ) : null}
         </div>
 
         {activeConnection && effectiveTerminalStatusOpen ? (
@@ -730,6 +743,7 @@ export function SshPage(): React.JSX.Element {
             connectionName={activeConnection.name}
             host={activeConnection.host}
             onClose={() => setTerminalStatusOpen(false)}
+            onExpandProcesses={() => setProcessMonitorOpen(true)}
           />
         ) : null}
       </div>
@@ -749,6 +763,7 @@ export function SshPage(): React.JSX.Element {
     stageStatus,
     terminalConnected,
     effectiveTerminalStatusOpen,
+    processMonitorOpen,
     shellPalette
   ])
 

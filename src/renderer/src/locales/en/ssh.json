@@ -364,7 +364,25 @@
       "network": "Network Throughput",
       "disks": "Disk Usage",
       "path": "Path",
-      "capacity": "Available/Total"
+      "capacity": "Available/Total",
+      "systemInfo": "System",
+      "latency": "Latency",
+      "copy": "Copy IP",
+      "copied": "Copied to clipboard",
+      "expand": "Expand process monitor"
+    },
+    "processMonitor": {
+      "title": "Process monitor",
+      "search": "Filter by command, user or PID…",
+      "tasks": "Tasks",
+      "running": "running",
+      "kill": "Kill process",
+      "killTitle": "Kill process?",
+      "killDesc": "PID {{pid}} · {{command}}",
+      "killTerm": "Terminate",
+      "killForce": "Force kill (-9)",
+      "killed": "Sent signal to {{pid}}",
+      "empty": "No matching processes"
     },
     "nav": {
       "hosts": "Hosts",

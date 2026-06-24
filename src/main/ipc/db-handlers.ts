@@ -301,6 +301,13 @@ export function registerDbHandlers(options: RegisterDbHandlersOptions = {}): voi
     }
   )
 
+  ipcMain.handle(
+    'db:messages:search-content',
+    (_event, args: { query: string; limit?: number }) => {
+      return messagesDao.searchMessageContent(args.query, args.limit ?? 50)
+    }
+  )
+
   ipcMain.handle('db:messages:add', (_event, msg: messagesDao.MessageInput) => {
     // Ensure session exists to avoid FK constraint failure (race with fire-and-forget IPC)
     const existing = sessionsDao.getSession(msg.sessionId)

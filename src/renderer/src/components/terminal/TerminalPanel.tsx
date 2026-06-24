@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   Ellipsis,
@@ -28,9 +28,13 @@ import { useSshStore } from '@renderer/stores/ssh-store'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { IPC } from '@renderer/lib/ipc/channels'
 import { useChatStore } from '@renderer/stores/chat-store'
-import { LocalTerminal } from './LocalTerminal'
 import { SshConnectionPicker } from './SshConnectionPicker'
-import { SshTerminal } from '../ssh/SshTerminal'
+const LocalTerminal = lazy(() =>
+  import('./LocalTerminal').then((m) => ({ default: m.LocalTerminal }))
+)
+const SshTerminal = lazy(() =>
+  import('../ssh/SshTerminal').then((m) => ({ default: m.SshTerminal }))
+)
 
 function StatusDot({
   status
@@ -282,7 +286,9 @@ export function TerminalPanel(): React.JSX.Element {
             >
               {tab.type === 'local' ? (
                 tab.status === 'running' ? (
-                  <LocalTerminal terminalId={tab.localTabId} />
+                  <Suspense fallback={null}>
+                    <LocalTerminal terminalId={tab.localTabId} />
+                  </Suspense>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
                     {tab.status === 'error' ? (
@@ -299,7 +305,9 @@ export function TerminalPanel(): React.JSX.Element {
                   </div>
                 )
               ) : tab.sessionId ? (
-                <SshTerminal sessionId={tab.sessionId} connectionName={tab.connectionName} />
+                <Suspense fallback={null}>
+                  <SshTerminal sessionId={tab.sessionId} connectionName={tab.connectionName} />
+                </Suspense>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />

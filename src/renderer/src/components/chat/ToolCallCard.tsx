@@ -52,7 +52,6 @@ import { Button } from '@renderer/components/ui/button'
 import { LazySyntaxHighlighter } from './LazySyntaxHighlighter'
 import { inputSummary } from './tool-call-summary'
 import { useChatActions } from '@renderer/hooks/use-chat-actions'
-import { LocalTerminal } from '@renderer/components/terminal/LocalTerminal'
 import { ImagePreview } from './ImagePreview'
 import { ExtensionToolResultCard } from './ExtensionToolResultCard'
 import {
@@ -61,6 +60,10 @@ import {
   type CompactToolHeaderModel
 } from './CompactToolCallHeader'
 import { parseExtensionToolResult } from '@renderer/lib/extensions/extension-result'
+
+const LocalTerminal = React.lazy(() =>
+  import('@renderer/components/terminal/LocalTerminal').then((m) => ({ default: m.LocalTerminal }))
+)
 
 interface ToolCallCardProps {
   toolUseId?: string
@@ -1028,7 +1031,9 @@ function BashOutputBlock({
         {showTerminal ? (
           <div className="border-b border-border/60 bg-black/90">
             <div className="h-[320px] min-h-[220px] w-full">
-              <LocalTerminal terminalId={terminalId ?? ''} readOnly={!isProcessRunning} />
+              <React.Suspense fallback={null}>
+                <LocalTerminal terminalId={terminalId ?? ''} readOnly={!isProcessRunning} />
+              </React.Suspense>
             </div>
           </div>
         ) : (

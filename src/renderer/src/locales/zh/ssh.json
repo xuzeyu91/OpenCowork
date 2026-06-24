@@ -354,7 +354,7 @@
       "updated": "已更新",
       "updatedAt": "更新于 {{time}}",
       "refreshing": "刷新中…",
-      "load": "加载",
+      "load": "负载",
       "uptime": "运行时长",
       "cpu": "CPU",
       "resources": "系统资源",
@@ -364,7 +364,25 @@
       "network": "网络吞吐",
       "disks": "磁盘使用率",
       "path": "路径",
-      "capacity": "可用/总计"
+      "capacity": "可用/总计",
+      "systemInfo": "系统信息",
+      "latency": "延迟",
+      "copy": "复制 IP",
+      "copied": "已复制到剪贴板",
+      "expand": "展开进程监控"
+    },
+    "processMonitor": {
+      "title": "进程监控",
+      "search": "按命令、用户或 PID 过滤…",
+      "tasks": "任务",
+      "running": "运行中",
+      "kill": "结束进程",
+      "killTitle": "结束进程？",
+      "killDesc": "PID {{pid}} · {{command}}",
+      "killTerm": "结束 (TERM)",
+      "killForce": "强制结束 (-9)",
+      "killed": "已向 {{pid}} 发送信号",
+      "empty": "没有匹配的进程"
     },
     "nav": {
       "hosts": "主机",

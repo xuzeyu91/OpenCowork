@@ -20,11 +20,14 @@ import { BrowserPanel } from './BrowserPanel'
 import { PreviewPanel } from './PreviewPanel'
 import { SubAgentsPanel } from './SubAgentsPanel'
 import { SubAgentExecutionDetail } from './SubAgentExecutionDetail'
-import { LocalTerminal } from '@renderer/components/terminal/LocalTerminal'
 import { SessionChangeReviewPanel } from '@renderer/components/layout/SessionChangeReviewPanel'
 import { ipcClient } from '@renderer/lib/ipc/ipc-client'
 import { IPC } from '@renderer/lib/ipc/channels'
 import { RIGHT_PANEL_DEFAULT_WIDTH, clampRightPanelWidth } from './right-panel-defs'
+
+const LocalTerminal = React.lazy(() =>
+  import('@renderer/components/terminal/LocalTerminal').then((m) => ({ default: m.LocalTerminal }))
+)
 
 function TerminalTabContent({ processId }: { processId: string }): React.JSX.Element {
   const { t } = useTranslation('layout')
@@ -72,7 +75,9 @@ function TerminalTabContent({ processId }: { processId: string }): React.JSX.Ele
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border/60 bg-zinc-950">
         {process.terminalId ? (
-          <LocalTerminal terminalId={process.terminalId} readOnly={!isRunning} />
+          <React.Suspense fallback={null}>
+            <LocalTerminal terminalId={process.terminalId} readOnly={!isRunning} />
+          </React.Suspense>
         ) : (
           <div className="size-full overflow-auto px-3 py-2 font-mono text-[11px] leading-5 text-zinc-200 whitespace-pre-wrap break-words">
             {process.output || '[no output yet]'}

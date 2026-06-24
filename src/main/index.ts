@@ -972,24 +972,16 @@ async function createSshWindow(): Promise<void> {
   }
 
   sshWindow = new BrowserWindow({
-    width: 1680,
-
-    height: 980,
-
-    minWidth: 1280,
-
-    minHeight: 700,
-
+    width: 1280,
+    height: 820,
+    minWidth: 940,
+    minHeight: 640,
     show: false,
-
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 12, y: 12 } }
       : { frame: false }),
-
     autoHideMenuBar: true,
-
     icon: icon,
-
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

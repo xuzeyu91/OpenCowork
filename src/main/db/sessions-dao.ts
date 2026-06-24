@@ -19,9 +19,14 @@ export interface SessionRow {
   message_count?: number
 }
 
-export function listSessions(): SessionRow[] {
+export function listSessions(limit = 2000, offset = 0): SessionRow[] {
   const db = getDb()
-  return db.prepare(`SELECT * FROM sessions ORDER BY updated_at DESC`).all() as SessionRow[]
+  // Full-load by default with a high safety ceiling — the renderer needs all
+  // sessions present for project grouping and active-session preservation, so
+  // this is a guard against pathological row counts, not true pagination.
+  return db
+    .prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ? OFFSET ?`)
+    .all(limit, offset) as SessionRow[]
 }
 
 export function getSession(id: string): SessionRow | undefined {

@@ -329,3 +329,35 @@ export function getMessageCount(sessionId: string): number {
     .get(sessionId) as { cnt?: number } | undefined
   return row?.cnt ?? 0
 }
+
+export interface MessageContentMatch {
+  session_id: string
+  snippet: string
+}
+
+// Content search over message bodies, scoped to one matching message per session
+// (the earliest hit by sort_order). Used by the session list search to find
+// conversations by content without loading every session's messages into the
+// renderer. Uses LIKE rather than FTS to avoid a schema migration.
+export function searchMessageContent(query: string, limit = 50): MessageContentMatch[] {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+  const db = getDb()
+  // Escape LIKE wildcards so user input is treated literally.
+  const escaped = trimmed.replace(/[\\%_]/g, (c) => `\\${c}`)
+  const like = `%${escaped}%`
+  return db
+    .prepare(
+      `SELECT m.session_id AS session_id, m.content AS snippet
+         FROM messages m
+         JOIN (
+           SELECT session_id, MIN(sort_order) AS so
+             FROM messages
+            WHERE content LIKE ? ESCAPE '\\'
+            GROUP BY session_id
+         ) f ON f.session_id = m.session_id AND f.so = m.sort_order
+        LIMIT ?`
+    )
+    .all(like, limit) as MessageContentMatch[]
+}
+

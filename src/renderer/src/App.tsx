@@ -57,8 +57,6 @@ import { nanoid } from 'nanoid'
 import type { UnifiedMessage } from './lib/api/types'
 import { NotifyToastContainer } from './components/notify/NotifyWindow'
 import { ChangelogDialog } from './components/changelog/ChangelogDialog'
-import { parseChatRoute, readPersistedChatRoute, replaceChatRoute } from './lib/chat-route'
-import { parseSettingsRoute } from './lib/settings-route'
 import {
   installAgentRuntimeSyncListener,
   withAgentRuntimeSyncSuppressed,
@@ -297,26 +295,15 @@ function App(): React.JSX.Element {
   // Load sessions and plans from SQLite on startup
   useEffect(() => {
     void (async () => {
-      if (!sessionWindowView) {
-        const currentSettingsRoute = parseSettingsRoute(window.location.hash)
-        const currentRoute = currentSettingsRoute ? null : parseChatRoute(window.location.hash)
-        const currentRouteIsDefaultHome =
-          !!currentRoute &&
-          currentRoute.chatView === 'home' &&
-          !currentRoute.projectId &&
-          !currentRoute.sessionId
-
-        if (!currentSettingsRoute && currentRouteIsDefaultHome) {
-          const persistedRoute = await readPersistedChatRoute()
-          if (persistedRoute) {
-            replaceChatRoute(persistedRoute)
-          }
-        }
-      }
-
+      // The window always opens on the default home view (a fresh new-session
+      // compose screen) rather than restoring the previously opened route.
       await useChatStore.getState().loadFromDb()
-      await usePlanStore.getState().loadPlansFromDb()
-      await useGoalStore.getState().loadGoalsFromDb()
+      // Plans/goals full-table loads only feed downstream panels, not the
+      // homepage first paint — load them concurrently off the critical path.
+      void Promise.all([
+        usePlanStore.getState().loadPlansFromDb(),
+        useGoalStore.getState().loadGoalsFromDb()
+      ])
       if (sessionWindowView && detachedSessionId) {
         const hasDetachedSession = useChatStore
           .getState()
