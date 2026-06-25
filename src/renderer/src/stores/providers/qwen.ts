@@ -113,6 +113,24 @@ export const qwenCodingPreset: BuiltinProviderPreset = {
       }
     },
     {
+      id: 'kimi-k2-thinking',
+      name: 'Kimi K2 Thinking',
+      icon: 'kimi',
+      enabled: true,
+      contextLength: 131_072,
+      maxOutputTokens: 8_192,
+      supportsVision: false,
+      supportsFunctionCall: true,
+      inputPrice: 0.47,
+      outputPrice: 2,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
+    },
+    {
       id: 'glm-5',
       name: 'GLM 5',
       icon: 'chatglm',
@@ -145,6 +163,12 @@ export const qwenCodingPreset: BuiltinProviderPreset = {
       maxOutputTokens: 131_072,
       supportsVision: false,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.3,
       outputPrice: 1.1
     }

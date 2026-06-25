@@ -155,7 +155,13 @@ export const moonshotPreset: BuiltinProviderPreset = {
       supportsVision: false,
       supportsFunctionCall: true,
       inputPrice: 0.47,
-      outputPrice: 2
+      outputPrice: 2,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     // Moonshot V1 series (cache: 75% off input)
     {

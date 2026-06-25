@@ -8,9 +8,24 @@ export const minimaxCodingPreset: BuiltinProviderPreset = {
   homepage: 'https://platform.minimaxi.com/subscribe/coding-plan',
   apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
   defaultEnabled: false,
-  defaultModel: 'MiniMax-M2.7',
+  defaultModel: 'MiniMax-M3',
   defaultModels: [
     // Coding Plan models (official docs: same Anthropic endpoint, dedicated Coding Plan key)
+    {
+      id: 'MiniMax-M3',
+      name: 'MiniMax M3',
+      icon: 'minimax',
+      enabled: true,
+      contextLength: 1_000_000,
+      maxOutputTokens: 131_072,
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
+    },
     {
       id: 'MiniMax-M2.7',
       name: 'MiniMax M2.7',
@@ -18,7 +33,13 @@ export const minimaxCodingPreset: BuiltinProviderPreset = {
       enabled: true,
       contextLength: 204_800,
       maxOutputTokens: 131_072,
-      supportsFunctionCall: true
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'MiniMax-M2.7-highspeed',
@@ -27,7 +48,13 @@ export const minimaxCodingPreset: BuiltinProviderPreset = {
       enabled: true,
       contextLength: 204_800,
       maxOutputTokens: 131_072,
-      supportsFunctionCall: true
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'MiniMax-M2.5',
@@ -36,7 +63,13 @@ export const minimaxCodingPreset: BuiltinProviderPreset = {
       enabled: true,
       contextLength: 204_800,
       maxOutputTokens: 131_072,
-      supportsFunctionCall: true
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'MiniMax-M2.5-highspeed',
@@ -45,7 +78,13 @@ export const minimaxCodingPreset: BuiltinProviderPreset = {
       enabled: true,
       contextLength: 204_800,
       maxOutputTokens: 131_072,
-      supportsFunctionCall: true
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'MiniMax-M2.1',
@@ -54,7 +93,13 @@ export const minimaxCodingPreset: BuiltinProviderPreset = {
       enabled: true,
       contextLength: 204_800,
       maxOutputTokens: 64_000,
-      supportsFunctionCall: true
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'MiniMax-M2',
@@ -63,7 +108,13 @@ export const minimaxCodingPreset: BuiltinProviderPreset = {
       enabled: true,
       contextLength: 204_800,
       maxOutputTokens: 131_072,
-      supportsFunctionCall: true
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     }
   ]
 }
@@ -75,9 +126,28 @@ export const minimaxPreset: BuiltinProviderPreset = {
   defaultBaseUrl: 'https://api.minimaxi.com/anthropic',
   homepage: 'https://www.minimaxi.com',
   apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
-  defaultModel: 'MiniMax-M2.7',
+  defaultModel: 'MiniMax-M3',
   defaultModels: [
     // USD pricing references: https://platform.minimax.io/docs/guides/pricing-paygo
+    // Note: M3 has two tiers — ≤512k tokens (standard) and >512k (long-context, 2× price)
+    {
+      id: 'MiniMax-M3',
+      name: 'MiniMax M3',
+      icon: 'minimax',
+      enabled: true,
+      contextLength: 1_000_000,
+      maxOutputTokens: 131_072,
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
+      inputPrice: 0.29,
+      outputPrice: 1.17,
+      cacheHitPrice: 0.06
+    },
     {
       id: 'MiniMax-M2.7',
       name: 'MiniMax M2.7',
@@ -86,6 +156,12 @@ export const minimaxPreset: BuiltinProviderPreset = {
       contextLength: 204_800,
       maxOutputTokens: 131_072,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.3,
       outputPrice: 1.2,
       cacheHitPrice: 0.06,
@@ -99,6 +175,12 @@ export const minimaxPreset: BuiltinProviderPreset = {
       contextLength: 204_800,
       maxOutputTokens: 131_072,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.6,
       outputPrice: 2.4,
       cacheHitPrice: 0.06,
@@ -112,6 +194,12 @@ export const minimaxPreset: BuiltinProviderPreset = {
       contextLength: 204_800,
       maxOutputTokens: 131_072,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.3,
       outputPrice: 1.2,
       cacheHitPrice: 0.03,
@@ -125,6 +213,12 @@ export const minimaxPreset: BuiltinProviderPreset = {
       contextLength: 204_800,
       maxOutputTokens: 131_072,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.6,
       outputPrice: 2.4,
       cacheHitPrice: 0.03,
@@ -138,6 +232,12 @@ export const minimaxPreset: BuiltinProviderPreset = {
       contextLength: 204_800,
       maxOutputTokens: 64_000,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.3,
       outputPrice: 1.2,
       cacheHitPrice: 0.03,
@@ -151,6 +251,12 @@ export const minimaxPreset: BuiltinProviderPreset = {
       contextLength: 204_800,
       maxOutputTokens: 64_000,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.6,
       outputPrice: 2.4,
       cacheHitPrice: 0.03,
@@ -164,6 +270,12 @@ export const minimaxPreset: BuiltinProviderPreset = {
       contextLength: 204_800,
       maxOutputTokens: 131_072,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.3,
       outputPrice: 1.2,
       cacheHitPrice: 0.03,

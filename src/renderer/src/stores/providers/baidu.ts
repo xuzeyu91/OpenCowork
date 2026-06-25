@@ -151,8 +151,32 @@ export const baiduPreset: BuiltinProviderPreset = {
       supportsFunctionCall: true
     },
     { id: 'glm-4.7', name: 'GLM 4.7', icon: 'chatglm', enabled: true, supportsFunctionCall: true },
-    { id: 'kimi-k2.6', name: 'Kimi K2.6', icon: 'kimi', enabled: true, supportsFunctionCall: true },
-    { id: 'kimi-k2.5', name: 'Kimi K2.5', icon: 'kimi', enabled: true, supportsFunctionCall: true },
+    {
+      id: 'kimi-k2.6',
+      name: 'Kimi K2.6',
+      icon: 'kimi',
+      enabled: true,
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
+    },
+    {
+      id: 'kimi-k2.5',
+      name: 'Kimi K2.5',
+      icon: 'kimi',
+      enabled: true,
+      supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
+    },
     {
       id: 'MiniMax-M2.7',
       name: 'MiniMax M2.7',

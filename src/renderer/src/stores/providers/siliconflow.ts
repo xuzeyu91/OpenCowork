@@ -129,6 +129,12 @@ export const siliconflowPreset: BuiltinProviderPreset = {
       maxOutputTokens: 8_192,
       supportsVision: true,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.15,
       outputPrice: 0.9
     },
@@ -141,6 +147,12 @@ export const siliconflowPreset: BuiltinProviderPreset = {
       maxOutputTokens: 8_192,
       supportsVision: true,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       inputPrice: 0.23,
       outputPrice: 3.0
     },
@@ -178,6 +190,8 @@ export const siliconflowPreset: BuiltinProviderPreset = {
       maxOutputTokens: 16_384,
       supportsVision: false,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: { bodyParams: { enable_thinking: true } },
       inputPrice: 0.29,
       outputPrice: 1.2
     },
@@ -190,9 +204,24 @@ export const siliconflowPreset: BuiltinProviderPreset = {
       maxOutputTokens: 16_384,
       supportsVision: false,
       supportsFunctionCall: true,
+      supportsThinking: true,
+      thinkingConfig: { bodyParams: { enable_thinking: true } },
       inputPrice: 0.3,
       outputPrice: 1.2
     },
+    {
+      id: 'MiniMaxAI/MiniMax-M1-80k',
+      name: 'MiniMax M1 80K',
+      icon: 'minimax',
+      enabled: true,
+      contextLength: 131_072,
+      maxOutputTokens: 16_384,
+      supportsVision: false,
+      supportsFunctionCall: true,
+      inputPrice: 0.55,
+      outputPrice: 2.2
+    },
+    // ── OpenAI (开源) ──
     {
       id: 'MiniMaxAI/MiniMax-M1-80k',
       name: 'MiniMax M1 80K',

@@ -308,7 +308,13 @@ export const giteeAiPreset: BuiltinProviderPreset = {
       icon: 'kimi',
       enabled: true,
       inputPrice: 0.15,
-      outputPrice: 0.9
+      outputPrice: 0.9,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'Kimi-K2.5',
@@ -316,7 +322,13 @@ export const giteeAiPreset: BuiltinProviderPreset = {
       icon: 'kimi',
       enabled: true,
       inputPrice: 0.45,
-      outputPrice: 2.2
+      outputPrice: 2.2,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'Kimi-K2-Thinking',
@@ -324,7 +336,13 @@ export const giteeAiPreset: BuiltinProviderPreset = {
       icon: 'kimi',
       enabled: true,
       inputPrice: 0.47,
-      outputPrice: 2
+      outputPrice: 2,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     {
       id: 'kimi-k2-instruct',

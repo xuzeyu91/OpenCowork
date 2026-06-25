@@ -543,7 +543,13 @@ export const openrouterPreset: BuiltinProviderPreset = {
       supportsVision: true,
       supportsFunctionCall: true,
       inputPrice: 0.23,
-      outputPrice: 3
+      outputPrice: 3,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
 
     // ── MiniMax ──

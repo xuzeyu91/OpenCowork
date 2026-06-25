@@ -8,27 +8,8 @@ export const routinAiPreset: BuiltinProviderPreset = {
   homepage: 'https://routin.ai',
   apiKeyUrl: 'https://routin.ai/dashboard/api-keys',
   defaultEnabled: true,
-  defaultModel: 'glm-5',
+  defaultModel: 'deepseek-v4-flash',
   defaultModels: [
-    {
-      id: 'kimi-k2.6',
-      name: 'Kimi K2.6',
-      icon: 'kimi',
-      enabled: true,
-      contextLength: 262_144,
-      maxOutputTokens: 32_768,
-      supportsVision: true,
-      supportsFunctionCall: true,
-      inputPrice: 0.15,
-      outputPrice: 0.9,
-      cacheHitPrice: 0,
-      supportsThinking: true,
-      thinkingConfig: {
-        bodyParams: { thinking: { type: 'enabled' } },
-        disabledBodyParams: { thinking: { type: 'disabled' } },
-        forceTemperature: 1
-      }
-    },
     {
       id: 'kimi-k2.7-code',
       name: 'Kimi K2.7 Code',
@@ -68,6 +49,24 @@ export const routinAiPreset: BuiltinProviderPreset = {
       }
     },
     {
+      id: 'kimi-k2.6',
+      name: 'Kimi K2.6',
+      icon: 'kimi',
+      enabled: true,
+      contextLength: 262_144,
+      maxOutputTokens: 32_768,
+      supportsVision: true,
+      supportsFunctionCall: true,
+      inputPrice: 0.15,
+      outputPrice: 0.9,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
+    },
+    {
       id: 'kimi-k2.5',
       name: 'Kimi K2.5',
       icon: 'kimi',
@@ -78,7 +77,6 @@ export const routinAiPreset: BuiltinProviderPreset = {
       supportsFunctionCall: true,
       inputPrice: 0.23,
       outputPrice: 3,
-      cacheHitPrice: 0,
       supportsThinking: true,
       thinkingConfig: {
         bodyParams: { thinking: { type: 'enabled' } },
@@ -87,50 +85,22 @@ export const routinAiPreset: BuiltinProviderPreset = {
       }
     },
     {
-      id: 'K2.6-code-preview',
-      name: 'Kimi K2.6 Code Preview',
+      id: 'kimi-k2-thinking',
+      name: 'Kimi K2 Thinking',
       icon: 'kimi',
       enabled: true,
-      contextLength: 262_144,
-      maxOutputTokens: 32_768,
-      supportsVision: true,
+      contextLength: 131_072,
+      maxOutputTokens: 8_192,
+      supportsVision: false,
       supportsFunctionCall: true,
-      inputPrice: 0.6,
-      outputPrice: 3,
-      cacheHitPrice: 0.1,
+      inputPrice: 0.47,
+      outputPrice: 2,
       supportsThinking: true,
       thinkingConfig: {
         bodyParams: { thinking: { type: 'enabled' } },
         disabledBodyParams: { thinking: { type: 'disabled' } },
         forceTemperature: 1
       }
-    },
-    // ── Z.AI / GLM (智谱) ──
-    {
-      id: 'glm-5',
-      name: 'GLM 5',
-      icon: 'chatglm',
-      enabled: true,
-      contextLength: 202_752,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.72,
-      outputPrice: 2.3,
-      cacheHitPrice: 0.15
-    },
-    {
-      id: 'glm-5.1',
-      name: 'GLM 5.1',
-      icon: 'chatglm',
-      enabled: true,
-      contextLength: 202_752,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 1.395,
-      outputPrice: 4.4,
-      cacheHitPrice: 0.3
     },
     {
       id: 'glm-5.2',
@@ -141,47 +111,14 @@ export const routinAiPreset: BuiltinProviderPreset = {
       maxOutputTokens: 131_072,
       supportsVision: false,
       supportsFunctionCall: true,
+      inputPrice: 0.694,
+      outputPrice: 2.778,
+      cacheHitPrice: 0.069,
       supportsThinking: true,
       thinkingConfig: {
         bodyParams: { thinking: { type: 'enabled' } },
         disabledBodyParams: { thinking: { type: 'disabled' } }
       }
-    },
-    {
-      id: 'glm-4.5',
-      name: 'GLM 4.5',
-      icon: 'chatglm',
-      enabled: true,
-      contextLength: 1_048_576,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.07,
-      outputPrice: 0.28
-    },
-    {
-      id: 'glm-4.7',
-      name: 'GLM 4.7',
-      icon: 'chatglm',
-      enabled: true,
-      contextLength: 1_048_576,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.38,
-      outputPrice: 1.7
-    },
-    {
-      id: 'glm-4.7-flash',
-      name: 'GLM 4.7 Flash',
-      icon: 'chatglm',
-      enabled: true,
-      contextLength: 202_752,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.14,
-      outputPrice: 0.56
     },
     {
       id: 'mimo-v2.5-pro',
@@ -209,24 +146,6 @@ export const routinAiPreset: BuiltinProviderPreset = {
       contextLength: 1_000_000,
       maxOutputTokens: 131_072,
       supportsVision: true,
-      supportsFunctionCall: true,
-      inputPrice: 0.14,
-      outputPrice: 0.28,
-      cacheHitPrice: 0.0028,
-      supportsThinking: true,
-      thinkingConfig: {
-        bodyParams: { thinking: { type: 'enabled' } },
-        disabledBodyParams: { thinking: { type: 'disabled' } }
-      }
-    },
-    {
-      id: 'mimo-v2-flash',
-      name: 'MiMo V2 Flash',
-      icon: 'mimo',
-      enabled: true,
-      contextLength: 262_144,
-      maxOutputTokens: 131_072,
-      supportsVision: false,
       supportsFunctionCall: true,
       inputPrice: 0.14,
       outputPrice: 0.28,
@@ -941,6 +860,68 @@ export const routinAiPreset: BuiltinProviderPreset = {
     },
     // ── MiniMax ──
     {
+      id: 'MiniMax-M3',
+      name: 'MiniMax M3',
+      icon: 'minimax',
+      enabled: true,
+      contextLength: 1_000_000,
+      maxOutputTokens: 131_072,
+      supportsVision: false,
+      supportsFunctionCall: true,
+      inputPrice: 0.29,
+      outputPrice: 1.17,
+      cacheHitPrice: 0.06,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
+      type: 'anthropic'
+    },
+    {
+      id: 'MiniMax-M2.7',
+      name: 'MiniMax M2.7',
+      icon: 'minimax',
+      enabled: true,
+      contextLength: 204_800,
+      maxOutputTokens: 131_072,
+      supportsVision: false,
+      supportsFunctionCall: true,
+      inputPrice: 0.3,
+      outputPrice: 1.2,
+      cacheHitPrice: 0.06,
+      cacheCreationPrice: 0.375,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
+      type: 'anthropic'
+    },
+    {
+      id: 'MiniMax-M2.7-highspeed',
+      name: 'MiniMax M2.7 Highspeed',
+      icon: 'minimax',
+      enabled: true,
+      contextLength: 204_800,
+      maxOutputTokens: 131_072,
+      supportsVision: false,
+      supportsFunctionCall: true,
+      inputPrice: 0.6,
+      outputPrice: 2.4,
+      cacheHitPrice: 0.06,
+      cacheCreationPrice: 0.375,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
+      type: 'anthropic'
+    },
+    {
       id: 'MiniMax-M2.1',
       name: 'MiniMax M2.1',
       icon: 'minimax',
@@ -953,21 +934,12 @@ export const routinAiPreset: BuiltinProviderPreset = {
       outputPrice: 1.1,
       cacheHitPrice: 0.03,
       cacheCreationPrice: 0.4,
-      type: 'anthropic'
-    },
-    {
-      id: 'MiniMax-M2.1-lightning',
-      name: 'MiniMax M2.1 Lightning',
-      icon: 'minimax',
-      enabled: true,
-      contextLength: 196_608,
-      maxOutputTokens: 64_000,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.6,
-      outputPrice: 2.4,
-      cacheHitPrice: 0.06,
-      cacheCreationPrice: 0.7,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       type: 'anthropic'
     },
     {
@@ -983,6 +955,12 @@ export const routinAiPreset: BuiltinProviderPreset = {
       outputPrice: 1.1,
       cacheHitPrice: 0.03,
       cacheCreationPrice: 0.4,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      },
       type: 'anthropic'
     },
     {
@@ -998,7 +976,13 @@ export const routinAiPreset: BuiltinProviderPreset = {
       inputPrice: 0.6,
       outputPrice: 2.4,
       cacheHitPrice: 0.06,
-      cacheCreationPrice: 0.7
+      cacheCreationPrice: 0.7,
+      supportsThinking: true,
+      thinkingConfig: {
+        bodyParams: { thinking: { type: 'enabled' } },
+        disabledBodyParams: { thinking: { type: 'disabled' } },
+        forceTemperature: 1
+      }
     },
     // ── DeepSeek ──
     {
@@ -1040,22 +1024,6 @@ export const routinAiPreset: BuiltinProviderPreset = {
         bodyParams: { enable_thinking: true },
         disabledBodyParams: { enable_thinking: false }
       }
-    },
-    {
-      id: 'deepseek-v3.2',
-      name: 'DeepSeek V3.2',
-      icon: 'deepseek',
-      enabled: true,
-      contextLength: 163_840,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.26,
-      outputPrice: 0.38,
-      cacheCreationPrice: 0.26,
-      cacheHitPrice: 0.026,
-      supportsThinking: true,
-      thinkingConfig: { bodyParams: { enable_thinking: true } }
     },
     // ── Google Gemini ──
     {
@@ -1544,41 +1512,6 @@ export const routinAiPreset: BuiltinProviderPreset = {
         defaultReasoningEffort: 'medium'
       }
     },
-    // ── Qwen3 ──
-    {
-      id: 'qwen3-32b',
-      name: 'Qwen3 32B',
-      icon: 'qwen',
-      enabled: true,
-      contextLength: 32_768,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.3,
-      outputPrice: 1.2,
-      supportsThinking: true,
-      thinkingConfig: {
-        bodyParams: { enable_thinking: true },
-        disabledBodyParams: { enable_thinking: false }
-      }
-    },
-    {
-      id: 'qwen3-coder-480b',
-      name: 'Qwen3 Coder 480B',
-      icon: 'qwen',
-      enabled: true,
-      contextLength: 262_144,
-      maxOutputTokens: 8_192,
-      supportsVision: false,
-      supportsFunctionCall: true,
-      inputPrice: 0.22,
-      outputPrice: 1.0,
-      supportsThinking: true,
-      thinkingConfig: {
-        bodyParams: { enable_thinking: true },
-        disabledBodyParams: { enable_thinking: false }
-      }
-    },
     // ── Qwen3.5 ──
     {
       id: 'qwen3.5-27b',
@@ -1653,14 +1586,7 @@ export const routinAiPreset: BuiltinProviderPreset = {
 
 /** Model IDs for Routin 套餐（https://api.routin.ai/plan/v1）：Codex 全系、GPT-5.4 系、Claude 全系 */
 const ROUTIN_AI_PLAN_MODEL_ORDER = [
-  'gpt-5-codex',
-  'gpt-5.1-codex',
-  'gpt-5.1-codex-max',
-  'gpt-5.1-codex-mini',
-  'gpt-5.2-codex',
-  'gpt-5.3-codex',
   'gpt-5.3-codex-spark',
-  'gpt-5.4-nano',
   'gpt-5.4-mini',
   'gpt-5.4',
   'gpt-5.5',
@@ -1685,7 +1611,7 @@ export const routinAiPlanPreset: BuiltinProviderPreset = {
   homepage: 'https://routin.ai',
   apiKeyUrl: 'https://routin.ai/dashboard/api-keys',
   defaultEnabled: true,
-  defaultModel: 'gpt-5.5',
+  defaultModel: 'gpt-5.4',
   defaultModels: ROUTIN_AI_PLAN_MODEL_ORDER.map((id) => {
     const config = routinAiModelById.get(id)
     if (!config) {
